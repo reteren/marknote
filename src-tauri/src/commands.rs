@@ -22,6 +22,8 @@ pub enum CommandError {
     Io(#[from] std::io::Error),
     #[error("ошибка атомарной записи: {0}")]
     AtomicWrite(#[source] anyhow::Error),
+    #[error("ошибка преобразования формата: {0}")]
+    Format(#[source] anyhow::Error),
     #[error("ошибка диалога: {0}")]
     Dialog(String),
     #[error("неизвестный формат: {0}")]
@@ -60,6 +62,7 @@ pub struct SaveResult {
     pub path: String,
     pub saved_at: String,
     pub format: FormatCapabilities,
+    pub lossy_warning: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -79,7 +82,8 @@ pub fn open_file(
     let canonical = windows::canonical_path(&input_path).map_err(CommandError::InvalidPath)?;
     let metadata = fs::metadata(&canonical)?;
     let bytes = fs::read(&canonical)?;
-    let decoded = text_encoding::decode(&bytes);
+    let adapter = formats::adapter_for_path(&canonical);
+    let decoded = adapter.decode(&bytes).map_err(CommandError::Format)?;
     let format = formats::for_path(&canonical);
     let readonly = metadata.permissions().readonly() || !format.editable;
 
@@ -117,13 +121,20 @@ pub fn save_file(
         }
     }
 
+    let adapter = formats::adapter_for_path(&path);
     let format = formats::for_path(&path);
-    if !format.editable {
-        return Err(CommandError::ReadOnlyFormat(format.label));
-    }
+    ensure_editable(&format)?;
 
     state.watcher.suppress(&path);
-    let bytes = text_encoding::encode(&text, &encoding, bom, lineEnding);
+    let source = text_encoding::Decoded {
+        text: text.clone(),
+        encoding,
+        bom,
+        line_ending: lineEnding,
+    };
+    let bytes = adapter
+        .encode(&text, &source)
+        .map_err(CommandError::Format)?;
     atomic_write::write_atomic(&path, &bytes).map_err(CommandError::AtomicWrite)?;
     state.track_file(&path, window.label());
 
@@ -160,12 +171,23 @@ pub async fn save_as(
     let path = selected
         .into_path()
         .map_err(|error| CommandError::Dialog(error.to_string()))?;
-    let format = if path.extension().is_some() {
-        formats::for_path(&path)
+    let adapter = if path.extension().is_some() {
+        formats::adapter_for_path(&path)
     } else {
-        requested_format
+        formats::adapter_by_id(&requested_format.id)
+            .expect("запрошенный формат должен находиться в реестре")
     };
-    let bytes = text_encoding::encode(&text, "utf-8", false, text_encoding::LineEnding::Lf);
+    let format = adapter.caps();
+    ensure_editable(&format)?;
+    let source = text_encoding::Decoded {
+        text: text.clone(),
+        encoding: "utf-8".to_owned(),
+        bom: false,
+        line_ending: text_encoding::LineEnding::Lf,
+    };
+    let bytes = adapter
+        .encode(&text, &source)
+        .map_err(CommandError::Format)?;
     atomic_write::write_atomic(&path, &bytes).map_err(CommandError::AtomicWrite)?;
 
     Ok(Some(save_result(path, format)))
@@ -263,7 +285,16 @@ fn save_result(path: PathBuf, format: FormatCapabilities) -> SaveResult {
     SaveResult {
         path: path.to_string_lossy().into_owned(),
         saved_at: now_iso8601(),
+        lossy_warning: format.lossy,
         format,
+    }
+}
+
+fn ensure_editable(format: &FormatCapabilities) -> Result<(), CommandError> {
+    if format.editable {
+        Ok(())
+    } else {
+        Err(CommandError::ReadOnlyFormat(format.label.clone()))
     }
 }
 
@@ -356,4 +387,59 @@ fn civil_from_days(days: i64) -> (i64, i64, i64) {
     let month = month_part + if month_part < 10 { 3 } else { -9 };
     let year = year + if month <= 2 { 1 } else { 0 };
     (year, month, day)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::Path;
+
+    #[test]
+    fn read_only_format_is_rejected_before_writing() {
+        let format = FormatCapabilities {
+            id: "pdf".to_owned(),
+            label: "PDF".to_owned(),
+            default_extension: "pdf".to_owned(),
+            extensions: vec!["pdf".to_owned()],
+            editable: false,
+            creatable: false,
+            live_preview: true,
+            autosave: false,
+            lossy: false,
+            syntax_mode: None,
+            template: String::new(),
+        };
+
+        assert!(matches!(
+            ensure_editable(&format),
+            Err(CommandError::ReadOnlyFormat(label)) if label == "PDF"
+        ));
+    }
+
+    #[test]
+    fn unknown_extension_uses_plain_adapter() {
+        let adapter = formats::adapter_for_path(Path::new("note.unknown-extension"));
+        assert_eq!(adapter.caps().id, "plain");
+        assert_eq!(
+            formats::for_path(Path::new("note.unknown-extension")).id,
+            "plain"
+        );
+    }
+
+    #[test]
+    fn cp1251_crlf_round_trip_uses_format_adapter() {
+        let path = Path::new("note.unknown-extension");
+        let input = b"\xCF\xF0\xE8\xE2\xE5\xF2\r\n";
+        let adapter = formats::adapter_for_path(path);
+        let decoded = adapter.decode(input).expect("plain adapter must decode");
+
+        assert_eq!(decoded.text, "Привет\n");
+        assert_eq!(decoded.encoding, "windows-1251");
+        assert_eq!(decoded.line_ending, text_encoding::LineEnding::Crlf);
+
+        let encoded = adapter
+            .encode(&decoded.text, &decoded)
+            .expect("plain adapter must encode");
+        assert_eq!(encoded, input);
+    }
 }

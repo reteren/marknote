@@ -39,22 +39,16 @@ fn adapters() -> &'static [Box<dyn FormatAdapter>] {
         .as_slice()
 }
 
-pub fn all() -> Vec<FormatCapabilities> {
-    adapters().iter().map(|adapter| adapter.caps()).collect()
-}
-
-pub fn creatable() -> Vec<FormatCapabilities> {
-    all().into_iter().filter(|caps| caps.creatable).collect()
-}
-
-pub fn by_id(id: &str) -> Option<FormatCapabilities> {
+/// Возвращает адаптер по идентификатору формата.
+pub fn adapter_by_id(id: &str) -> Option<&'static dyn FormatAdapter> {
     adapters()
         .iter()
-        .map(|adapter| adapter.caps())
-        .find(|caps| caps.id == id)
+        .find(|adapter| adapter.caps().id == id)
+        .map(|adapter| adapter.as_ref())
 }
 
-pub fn for_extension(ext: &str) -> FormatCapabilities {
+/// Возвращает адаптер по расширению; неизвестное расширение считается plain.
+pub fn adapter_for_extension(ext: &str) -> &'static dyn FormatAdapter {
     let normalized = ext.trim().trim_start_matches('.').to_ascii_lowercase();
     adapters()
         .iter()
@@ -65,12 +59,39 @@ pub fn for_extension(ext: &str) -> FormatCapabilities {
                 .iter()
                 .any(|candidate| candidate.eq_ignore_ascii_case(&normalized))
         })
-        .map(|adapter| adapter.caps())
-        .unwrap_or_else(|| plain::PlainAdapter.caps())
+        .map(|adapter| adapter.as_ref())
+        .unwrap_or_else(|| {
+            adapters()
+                .iter()
+                .find(|adapter| adapter.caps().id == "plain")
+                .expect("реестр форматов должен содержать plain")
+                .as_ref()
+        })
+}
+
+/// Возвращает адаптер по пути; отсутствие расширения также означает plain.
+pub fn adapter_for_path(path: &Path) -> &'static dyn FormatAdapter {
+    path.extension()
+        .and_then(|extension| extension.to_str())
+        .map_or_else(|| adapter_for_extension(""), adapter_for_extension)
+}
+
+pub fn all() -> Vec<FormatCapabilities> {
+    adapters().iter().map(|adapter| adapter.caps()).collect()
+}
+
+pub fn creatable() -> Vec<FormatCapabilities> {
+    all().into_iter().filter(|caps| caps.creatable).collect()
+}
+
+pub fn by_id(id: &str) -> Option<FormatCapabilities> {
+    adapter_by_id(id).map(FormatAdapter::caps)
+}
+
+pub fn for_extension(ext: &str) -> FormatCapabilities {
+    adapter_for_extension(ext).caps()
 }
 
 pub fn for_path(path: &Path) -> FormatCapabilities {
-    path.extension()
-        .and_then(|extension| extension.to_str())
-        .map_or_else(|| for_extension(""), for_extension)
+    adapter_for_path(path).caps()
 }

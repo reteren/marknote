@@ -111,7 +111,7 @@ impl FileWatcher {
 | Команда | Аргументы | Возвращает |
 | --- | --- | --- |
 | `open_file` | `path: String` | `OpenedFile` |
-| `save_file` | `path, text, encoding, bom, lineEnding` | `SaveResult` |
+| `save_file` | `path, text, encoding, bom, lineEnding` | `SaveResult`; отказ с ошибкой, если `format.editable == false` |
 | `save_as` | `text, formatId, suggestedName` | `Option<SaveResult>` (None — отмена) |
 | `pick_file` | — | `Option<String>` |
 | `new_document` | `formatId: String` | `NewDocument` |
@@ -132,7 +132,14 @@ type OpenedFile = {
   format: FormatCapabilities;
   readonly: boolean;
 };
-type SaveResult = { path: string; savedAt: string /* ISO */; format: FormatCapabilities };
+type SaveResult = {
+  path: string;
+  savedAt: string /* ISO */;
+  format: FormatCapabilities;
+  /** true — формат сохраняется с потерями и пользователя нужно предупредить
+   *  (SPEC раздел 3.2). Для Markdown и простого текста всегда false. */
+  lossyWarning: boolean;
+};
 type NewDocument = { text: string; format: FormatCapabilities };
 ```
 
