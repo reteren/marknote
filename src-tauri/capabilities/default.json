@@ -4,8 +4,6 @@
   "description": "Разрешения основного редактора MarkNote",
   "windows": ["main", "win-*"],
   "permissions": [
-    "core:default",
-    "dialog:default",
-    "fs:default"
+    "core:default"
   ]
 }

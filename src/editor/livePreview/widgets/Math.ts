@@ -5,6 +5,12 @@ type KatexApi = typeof import("katex").default;
 const renderedMath = new Map<string, string>();
 let katexLoader: Promise<KatexApi> | null = null;
 
+// Формулы в заметках обычно намного меньше этих значений. Они оставляют
+// запас для длинных выражений, но не дают документу развернуть WebView в
+// гигантский элемент или зациклить макрорасширение.
+const KATEX_MAX_SIZE_EM = 100;
+const KATEX_MAX_EXPAND = 1_000;
+
 function escapeHtml(value: string) {
   return value.replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char] ?? char);
 }
@@ -25,7 +31,14 @@ function renderMath(source: string, displayMode: boolean, katex: KatexApi): stri
 
   let html: string;
   try {
-    html = katex.renderToString(source, { displayMode, throwOnError: false, output: "htmlAndMathml" });
+    html = katex.renderToString(source, {
+      displayMode,
+      throwOnError: false,
+      output: "htmlAndMathml",
+      trust: false,
+      maxSize: KATEX_MAX_SIZE_EM,
+      maxExpand: KATEX_MAX_EXPAND,
+    });
   } catch {
     html = `<code class="cm-marknote-math-error">${escapeHtml(source)}</code>`;
   }
@@ -67,4 +80,3 @@ export class MathWidget extends WidgetType {
 export function clearMathCache() {
   renderedMath.clear();
 }
-

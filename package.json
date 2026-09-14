@@ -1,6 +1,6 @@
 {
   "name": "marknote",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Fast Markdown editor for Windows",
   "type": "module",
   "private": true,
