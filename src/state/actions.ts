@@ -3,6 +3,7 @@ import { redo, deleteLine, moveLineDown, moveLineUp, selectAll, undo } from "@co
 import type { Command, EditorView } from "@codemirror/view";
 import { searchCommands } from "../editor/search";
 import { toggleWrapper } from "../editor/keymap";
+import { safeLinkHref } from "../editor/livePreview/inline";
 import {
   documentState,
   markSaved,
@@ -458,8 +459,17 @@ export function createActions(dependencies: ActionsDependencies = {}): AppAction
   const openReplace = (view = getView()): ActionResult => command(view, searchCommands.openReplace);
   const openLink = async (url: string): Promise<ActionResult> => {
     if (!url || !dialogs.openLink) return false;
+    // Ссылка приходит из документа, а документ пользователь получил извне.
+    // Схемы проверяются белым списком в одном месте на весь проект: data:,
+    // file: и vbscript: открывать нельзя, а перечислить всё опасное чёрным
+    // списком невозможно.
+    const href = safeLinkHref(url);
+    if (href === null) {
+      notify(`Ссылка не открыта: небезопасный адрес ${url}`);
+      return false;
+    }
     try {
-      await dialogs.openLink(url);
+      await dialogs.openLink(href);
       return true;
     } catch (error) {
       notify(error instanceof Error ? error.message : String(error));
