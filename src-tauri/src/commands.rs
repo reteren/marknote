@@ -89,6 +89,10 @@ pub fn open_file(
 
     state.watcher.watch(window.label(), &canonical);
     state.track_file(&canonical, window.label());
+    if let Some(file_name) = canonical.file_name().and_then(|name| name.to_str()) {
+        let title = format!("{file_name} — MarkNote");
+        let _ = window.set_title(&title);
+    }
 
     Ok(OpenedFile {
         path: canonical.to_string_lossy().into_owned(),
@@ -99,6 +103,15 @@ pub fn open_file(
         format,
         readonly,
     })
+}
+
+/// Returns the file queued for this window during startup, consuming it so a
+/// simultaneous event and IPC fallback cannot open it twice.
+#[tauri::command]
+pub fn take_pending_file(window: WebviewWindow, state: State<'_, AppState>) -> Option<String> {
+    state
+        .take_pending_file(window.label())
+        .map(|path| path.to_string_lossy().into_owned())
 }
 
 #[allow(non_snake_case)]

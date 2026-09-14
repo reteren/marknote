@@ -22,6 +22,7 @@ const WINDOW_LABEL_PREFIX: &str = "win-";
 pub struct AppState {
     pub(crate) open_files: Mutex<HashMap<PathBuf, String>>,
     pub(crate) empty_windows: Mutex<HashSet<String>>,
+    pending_files: Mutex<HashMap<String, PathBuf>>,
     pub(crate) next_window_id: AtomicUsize,
     pub(crate) watcher: FileWatcher,
 }
@@ -31,6 +32,7 @@ impl AppState {
         Self {
             open_files: Mutex::new(HashMap::new()),
             empty_windows: Mutex::new(HashSet::new()),
+            pending_files: Mutex::new(HashMap::new()),
             next_window_id: AtomicUsize::new(1),
             watcher: FileWatcher::new(app),
         }
@@ -58,6 +60,26 @@ impl AppState {
         }
     }
 
+    /// Stores a file until the webview has installed its event listener and
+    /// asks for the initial route through IPC.
+    pub(crate) fn set_pending_file(&self, label: &str, path: PathBuf) {
+        if let Ok(mut pending) = self.pending_files.lock() {
+            pending.insert(label.to_owned(), path);
+        }
+    }
+
+    /// Takes the pending file exactly once.  This makes the startup handoff
+    /// safe even when the event and the IPC fallback race each other.
+    pub(crate) fn take_pending_file(&self, label: &str) -> Option<PathBuf> {
+        self.pending_files.lock().ok()?.remove(label)
+    }
+
+    pub(crate) fn forget_pending_file(&self, label: &str) {
+        if let Ok(mut pending) = self.pending_files.lock() {
+            pending.remove(label);
+        }
+    }
+
     pub(crate) fn track_file(&self, path: &Path, label: &str) {
         self.reserve_file(registry_key(path), label);
     }
@@ -68,6 +90,9 @@ impl AppState {
         }
         if let Ok(mut empty) = self.empty_windows.lock() {
             empty.remove(label);
+        }
+        if let Ok(mut pending) = self.pending_files.lock() {
+            pending.remove(label);
         }
         self.watcher.unwatch(label);
     }
@@ -114,20 +139,25 @@ pub fn initialize(app: &mut tauri::App) -> tauri::Result<()> {
 /// Обработчик аргументов, которые single-instance передал уже работающему
 /// процессу.
 pub fn handle_single_instance(app: &tauri::AppHandle, argv: Vec<String>) {
-    let mut opened = false;
+    let handle = app.clone();
+    let _ = std::thread::Builder::new()
+        .name("marknote-single-instance-route".to_owned())
+        .spawn(move || {
+            let mut opened = false;
 
-    for path in argv.into_iter().skip(1).map(PathBuf::from) {
-        if path.is_file() {
-            opened = true;
-            let _ = route_file(app, &path);
-        }
-    }
+            for path in argv.into_iter().skip(1).map(PathBuf::from) {
+                if path.is_file() {
+                    opened = true;
+                    let _ = route_file(&handle, &path);
+                }
+            }
 
-    if !opened {
-        if let Some(window) = app.get_webview_window(MAIN_WINDOW_LABEL) {
-            raise_window(&window);
-        }
-    }
+            if !opened {
+                if let Some(window) = handle.get_webview_window(MAIN_WINDOW_LABEL) {
+                    raise_window(&window);
+                }
+            }
+        });
 }
 
 /// Выбирает окно по реестру и отправляет ему запрос на открытие файла.
@@ -147,13 +177,16 @@ pub fn route_file(app: &tauri::AppHandle, path: impl AsRef<Path>) -> Result<(), 
             .cloned();
 
         if let Some(label) = existing {
+            state.set_pending_file(&label, canonical.clone());
             RouteTarget::Existing(label)
         } else if let Some(label) = state.take_empty() {
             state.reserve_file(key.clone(), &label);
+            state.set_pending_file(&label, canonical.clone());
             RouteTarget::Existing(label)
         } else {
             let label = state.allocate_window_label();
             state.reserve_file(key.clone(), &label);
+            state.set_pending_file(&label, canonical.clone());
             RouteTarget::New(label)
         }
     };
@@ -164,6 +197,7 @@ pub fn route_file(app: &tauri::AppHandle, path: impl AsRef<Path>) -> Result<(), 
             None => {
                 // Окно могло закрыться между чтением реестра и маршрутизацией.
                 app.state::<AppState>().forget_file(&key, &label);
+                app.state::<AppState>().forget_pending_file(&label);
                 return route_file(app, canonical);
             }
         },
@@ -171,12 +205,16 @@ pub fn route_file(app: &tauri::AppHandle, path: impl AsRef<Path>) -> Result<(), 
             Ok(window) => window,
             Err(error) => {
                 app.state::<AppState>().forget_file(&key, &label);
+                app.state::<AppState>().forget_pending_file(&label);
                 return Err(error);
             }
         },
     };
 
     raise_window(&window);
+    // Keep the event path for already-live windows (single-instance and
+    // subsequent opens). For a window whose webview is still loading this
+    // may be missed, but the pending IPC value above remains available.
     window
         .emit(
             "open-file-request",

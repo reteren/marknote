@@ -24,6 +24,7 @@
   let editorHost: HTMLDivElement | undefined = $state();
   let editorView: EditorView | null = null;
   let autosaveController: ReturnType<typeof createAutosave> | null = null;
+  let openingPathKey: string | null = null;
   let stats = $state<EditorStats>({
     line: 1,
     col: 1,
@@ -38,6 +39,10 @@
     `${documentState.path ? documentState.path.split(/[\\/]/u).pop() || documentState.path : `Untitled.${documentState.format.defaultExtension}`} — MarkNote`,
   );
   const showStartScreen = $derived(documentState.path === null && documentState.text.length === 0);
+
+  function pathKey(path: string): string {
+    return path.replaceAll("/", "\\").toLowerCase();
+  }
 
   function rebuildEditor(): void {
     if (!editorHost) return;
@@ -58,6 +63,14 @@
 
   async function openFile(path: string): Promise<void> {
     if (!path) return;
+    const requestedPathKey = pathKey(path);
+    if (
+      openingPathKey === requestedPathKey ||
+      (documentState.path !== null && pathKey(documentState.path) === requestedPathKey)
+    ) {
+      return;
+    }
+    openingPathKey = requestedPathKey;
     try {
       const opened = await invoke<OpenedFile>("open_file", { path });
       replaceDocument(opened);
@@ -66,6 +79,8 @@
       editorView?.focus();
     } catch (error) {
       errorMessage = error instanceof Error ? error.message : String(error);
+    } finally {
+      if (openingPathKey === requestedPathKey) openingPathKey = null;
     }
   }
 
@@ -117,7 +132,12 @@
         unlistenOpen = await listen<OpenFileRequest>("open-file-request", ({ payload }) => {
           if (payload?.path) void openFile(payload.path);
         });
-        if (disposed) unlistenOpen();
+        if (disposed) {
+          unlistenOpen();
+          return;
+        }
+        const pendingPath = await invoke<string | null>("take_pending_file");
+        if (pendingPath) void openFile(pendingPath);
       } catch (error) {
         errorMessage = error instanceof Error ? error.message : String(error);
       }
