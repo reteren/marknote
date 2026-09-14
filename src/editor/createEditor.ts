@@ -237,7 +237,7 @@ function activateSyntaxMode(
         selection: view.state.selection,
       });
     } catch {
-      // EditorView may have been destroyed while the dynamic import resolved.
+      // EditorView мог быть уничтожен, пока разрешался динамический импорт.
     }
   });
 }

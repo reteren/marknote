@@ -1,25 +1,44 @@
-<#
+﻿<#
 .SYNOPSIS
     Скрипт приёмочного тестирования собранного приложения MarkNote.
 
 .DESCRIPTION
-    Запускает бинарник release\marknote.exe и проверяет приёмочные критерии вех:
-    1. Запуск без аргументов (окно, заголовок, замер времени).
-    2. Запуск с аргументом fixtures\showcase.md (заголовок, снимок).
-    3. Запуск с аргументом fixtures\cp1251.txt (заголовок, снимок).
-    4. Запуск с несуществующим путём (отсутствие краша, стартовое состояние).
-    5. Повторный запуск с тем же файлом (single-instance дедупликация).
-    6. Повторный запуск с другим файлом (второе окно в процессе).
-    7. Запуск с fixtures\big-10k.md (10 000 строк, замер времени, отзывчивость).
+    Запускает release\marknote.exe и проверяет десять критериев: запуск без
+    аргументов, открытие файлов, single-instance, большие документы, отказ
+    бинарного файла, диалог несохранённого документа и Ctrl+F. Все переходы
+    ждут наблюдаемое условие с верхним пределом, а не фиксированную паузу.
+    Каждый опрос записывается в JSONL-журнал с числом процессов, окнами,
+    заголовками, размерами, видимостью и временем.
 
-    Скрипт закрывает за собой все процессы и возвращает exit code 1 при наличии FAIL.
+    Запускать из Windows PowerShell 5.1 или PowerShell 7:
+      powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\qa\acceptance.ps1 -Runs 20
+      pwsh.exe -NoProfile -ExecutionPolicy Bypass -File .\qa\acceptance.ps1 -Runs 20
+
+.PARAMETER Runs
+    Число последовательных прогонов полного набора; по умолчанию 1.
+
+.PARAMETER BinaryPath
+    Путь к уже собранному release-бинарнику.
+
+.PARAMETER FixturesDir
+    Каталог приёмочных fixtures.
+
+.PARAMETER ShotsDir
+    Каталог PNG-снимков окон.
+
+.PARAMETER JournalPath
+    JSONL-журнал всех опросов состояния.
 
 .EXAMPLE
-    .\qa\acceptance.ps1
+    powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\qa\acceptance.ps1 -Runs 20
 #>
 
 [CmdletBinding()]
 param(
+    [Parameter(Mandatory = $false)]
+    [ValidateRange(1, 1000)]
+    [int]$Runs = 1,
+
     [Parameter(Mandatory = $false)]
     [string]$BinaryPath = "C:\marknote\src-tauri\target\release\marknote.exe",
 
@@ -27,384 +46,756 @@ param(
     [string]$FixturesDir = "C:\marknote\fixtures",
 
     [Parameter(Mandatory = $false)]
-    [string]$ShotsDir = "C:\marknote\qa\shots"
+    [string]$ShotsDir = "C:\marknote\qa\shots",
+
+    [Parameter(Mandatory = $false)]
+    [string]$JournalPath = "C:\marknote\qa\acceptance-journal.jsonl"
 )
 
 Set-StrictMode -Off
-
 $ErrorActionPreference = "Continue"
 
-Write-Host "============================================================" -ForegroundColor Cyan
-Write-Host "         MarkNote Acceptance Test Suite (QA W17)            " -ForegroundColor Cyan
-Write-Host "============================================================" -ForegroundColor Cyan
-Write-Host "Целевой бинарник: $BinaryPath"
-Write-Host "Папка fixtures:   $FixturesDir"
-Write-Host "Папка снимков:    $ShotsDir"
-Write-Host ""
-
-if (-not (Test-Path $BinaryPath)) {
+if (-not (Test-Path -LiteralPath $BinaryPath -PathType Leaf)) {
     Write-Error "Бинарник не найден по пути: $BinaryPath"
     exit 2
 }
 
-if (-not (Test-Path $ShotsDir)) {
+if (-not (Test-Path -LiteralPath $FixturesDir -PathType Container)) {
+    Write-Error "Каталог fixtures не найден: $FixturesDir"
+    exit 2
+}
+
+if (-not (Test-Path -LiteralPath $ShotsDir -PathType Container)) {
     New-Item -ItemType Directory -Path $ShotsDir -Force | Out-Null
 }
 
 $screenshotScript = Join-Path $PSScriptRoot "screenshot.ps1"
-if (-not (Test-Path $screenshotScript)) {
-    $screenshotScript = "C:\marknote\qa\screenshot.ps1"
+if (-not (Test-Path -LiteralPath $screenshotScript -PathType Leaf)) {
+    Write-Error "Скрипт снимка не найден: $screenshotScript"
+    exit 2
 }
 
-# Функция полной очистки процессов marknote
-function Stop-MarkNoteProcesses {
-    $procs = Get-Process -Name marknote -ErrorAction SilentlyContinue
-    if ($procs) {
-        $procs | Stop-Process -Force -ErrorAction SilentlyContinue
-        Start-Sleep -Milliseconds 500
+if (-not ([System.Management.Automation.PSTypeName]'MarkNote.Acceptance.Native').Type) {
+    Add-Type -TypeDefinition @"
+using System;
+using System.Collections.Generic;
+using System.Runtime.InteropServices;
+using System.Text;
+
+namespace MarkNote.Acceptance {
+    public static class Native {
+        public delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
+
+        [DllImport("user32.dll")]
+        public static extern bool EnumWindows(EnumWindowsProc callback, IntPtr lParam);
+
+        [DllImport("user32.dll")]
+        public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
+
+        [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+        public static extern int GetWindowText(IntPtr hWnd, StringBuilder text, int maxCount);
+
+        [DllImport("user32.dll")]
+        public static extern bool IsWindowVisible(IntPtr hWnd);
+
+        [DllImport("user32.dll")]
+        public static extern bool GetWindowRect(IntPtr hWnd, out RECT rect);
+
+        [DllImport("user32.dll")]
+        public static extern bool SetForegroundWindow(IntPtr hWnd);
+
+        [DllImport("user32.dll")]
+        public static extern bool SetCursorPos(int x, int y);
+
+        [DllImport("user32.dll")]
+        public static extern void mouse_event(uint flags, uint dx, uint dy, uint data, UIntPtr extra);
+
+        [StructLayout(LayoutKind.Sequential)]
+        public struct RECT {
+            public int Left;
+            public int Top;
+            public int Right;
+            public int Bottom;
+            public int Width { get { return Right - Left; } }
+            public int Height { get { return Bottom - Top; } }
+        }
+
+        public sealed class WindowInfo {
+            public IntPtr Handle;
+            public uint ProcessId;
+            public string Title;
+            public int Left;
+            public int Top;
+            public int Width;
+            public int Height;
+            public bool Visible;
+        }
+
+        public static List<WindowInfo> EnumerateWindows() {
+            var windows = new List<WindowInfo>();
+            EnumWindows((hWnd, lParam) => {
+                uint pid;
+                GetWindowThreadProcessId(hWnd, out pid);
+                if (pid == 0) return true;
+
+                RECT rect;
+                if (!GetWindowRect(hWnd, out rect)) return true;
+                if (rect.Width < 50 || rect.Height < 50) return true;
+
+                var titleBuilder = new StringBuilder(512);
+                GetWindowText(hWnd, titleBuilder, titleBuilder.Capacity);
+                var title = titleBuilder.ToString();
+                if (title.IndexOf("siw", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                    title.IndexOf("single-instance", StringComparison.OrdinalIgnoreCase) >= 0) {
+                    return true;
+                }
+
+                windows.Add(new WindowInfo {
+                    Handle = hWnd,
+                    ProcessId = pid,
+                    Title = title,
+                    Left = rect.Left,
+                    Top = rect.Top,
+                    Width = rect.Width,
+                    Height = rect.Height,
+                    Visible = IsWindowVisible(hWnd)
+                });
+                return true;
+            }, IntPtr.Zero);
+            return windows;
+        }
+    }
+}
+"@
+}
+
+$script:SessionId = [Guid]::NewGuid().ToString("N")
+$script:CurrentRun = 0
+$script:JournalPath = [IO.Path]::GetFullPath($JournalPath)
+$script:Results = @()
+$script:Utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+
+$journalParent = Split-Path -Parent $script:JournalPath
+if (-not [string]::IsNullOrWhiteSpace($journalParent) -and -not (Test-Path -LiteralPath $journalParent)) {
+    New-Item -ItemType Directory -Path $journalParent -Force | Out-Null
+}
+
+$uiAutomationAvailable = $true
+try {
+    Add-Type -AssemblyName UIAutomationClient
+    Add-Type -AssemblyName UIAutomationTypes
+    Add-Type -AssemblyName System.Windows.Forms
+} catch {
+    $uiAutomationAvailable = $false
+    Write-Warning "UI Automation/System.Windows.Forms недоступны: проверки close/search будут FAIL"
+}
+
+function Get-MarkNoteState {
+    $processes = @(Get-Process -Name marknote -ErrorAction SilentlyContinue)
+    $processInfo = @($processes | ForEach-Object {
+        [PSCustomObject]@{
+            Id = $_.Id
+            Responding = [bool]$_.Responding
+            MainWindowTitle = [string]$_.MainWindowTitle
+        }
+    })
+
+    $windows = @()
+    $rawWindows = @([MarkNote.Acceptance.Native]::EnumerateWindows())
+    foreach ($window in $rawWindows) {
+        $process = Get-Process -Id ([int]$window.ProcessId) -ErrorAction SilentlyContinue
+        if (-not $process -or $process.ProcessName -ne "marknote") { continue }
+        $windows += [PSCustomObject]@{
+            Handle = $window.Handle
+            ProcessId = [int]$window.ProcessId
+            Title = [string]$window.Title
+            Left = [int]$window.Left
+            Top = [int]$window.Top
+            Width = [int]$window.Width
+            Height = [int]$window.Height
+            Visible = [bool]$window.Visible
+            IsApplication = [bool]($window.Visible -and $window.Width -ge 200 -and $window.Height -ge 200)
+        }
+    }
+
+    [PSCustomObject]@{
+        Timestamp = (Get-Date).ToUniversalTime().ToString("o")
+        ProcessCount = $processInfo.Count
+        ProcessIds = @($processInfo | ForEach-Object { $_.Id })
+        Processes = $processInfo
+        WindowCount = @($windows | Where-Object { $_.IsApplication }).Count
+        Windows = $windows
     }
 }
 
-# Функция ожидания видимого окна процесса
-function Wait-ProcessWindow {
+function Write-StateJournal {
     param(
-        [int]$ProcessId,
-        [int]$TimeoutSec = 10,
-        [string]$TitleFilter = $null
+        [string]$Phase,
+        [string]$TestId,
+        [int]$ElapsedMs,
+        [object]$State,
+        [hashtable]$Extra = @{}
     )
 
-    $sw = [System.Diagnostics.Stopwatch]::StartNew()
-    while ($sw.Elapsed.TotalSeconds -lt $TimeoutSec) {
-        $shotInfo = & $screenshotScript -ProcessId $ProcessId -TitleFilter $TitleFilter -WarningAction SilentlyContinue -ErrorAction SilentlyContinue
-        if ($shotInfo -and $shotInfo.Success -and $shotInfo.Width -ge 200 -and $shotInfo.Height -ge 200) {
-            $sw.Stop()
+    $windowLog = @($State.Windows | ForEach-Object {
+        [ordered]@{
+            pid = $_.ProcessId
+            title = $_.Title
+            width = $_.Width
+            height = $_.Height
+            visible = $_.Visible
+            application = $_.IsApplication
+        }
+    })
+    $record = [ordered]@{
+        session = $script:SessionId
+        run = $script:CurrentRun
+        test = $TestId
+        phase = $Phase
+        timestamp = $State.Timestamp
+        elapsedMs = $ElapsedMs
+        processCount = $State.ProcessCount
+        processIds = @($State.ProcessIds)
+        processes = @($State.Processes)
+        windowCount = $State.WindowCount
+        windows = $windowLog
+    }
+    foreach ($key in $Extra.Keys) { $record[$key] = $Extra[$key] }
+    $line = $record | ConvertTo-Json -Compress -Depth 8
+    [IO.File]::AppendAllText($script:JournalPath, "$line`r`n", $script:Utf8NoBom)
+
+    $windowText = @($State.Windows | ForEach-Object {
+        "pid=$($_.ProcessId) '$($_.Title)' $($_.Width)x$($_.Height) visible=$($_.Visible)"
+    }) -join "; "
+    Write-Host ("[{0}] run={1} {2} {3}: processes={4} windows={5}; {6}" -f `
+        $State.Timestamp, $script:CurrentRun, $TestId, $Phase, $State.ProcessCount, $State.WindowCount, $windowText) -ForegroundColor DarkGray
+}
+
+function Stop-MarkNoteProcesses {
+    param([int]$TimeoutSec = 8)
+
+    $stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
+    do {
+        $running = @(Get-Process -Name marknote -ErrorAction SilentlyContinue)
+        if ($running.Count -eq 0) { break }
+        foreach ($process in $running) {
+            Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+        }
+        if ($stopwatch.Elapsed.TotalSeconds -lt $TimeoutSec) {
+            Start-Sleep -Milliseconds 50
+        }
+    } while ($stopwatch.Elapsed.TotalSeconds -lt $TimeoutSec)
+    $stopwatch.Stop()
+    return (@(Get-Process -Name marknote -ErrorAction SilentlyContinue).Count -eq 0)
+}
+
+function Wait-Until {
+    param(
+        [Parameter(Mandatory = $true)]
+        [scriptblock]$Condition,
+        [Parameter(Mandatory = $true)]
+        [string]$TestId,
+        [Parameter(Mandatory = $true)]
+        [string]$Phase,
+        [int]$TimeoutSec = 10,
+        [int]$IntervalMs = 100
+    )
+
+    $stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
+    $lastState = Get-MarkNoteState
+    do {
+        $lastState = Get-MarkNoteState
+        $elapsed = [int]$stopwatch.Elapsed.TotalMilliseconds
+        Write-StateJournal -Phase $Phase -TestId $TestId -ElapsedMs $elapsed -State $lastState
+        $conditionResult = & $Condition $lastState
+        if ([bool]$conditionResult) {
+            $stopwatch.Stop()
             return [PSCustomObject]@{
-                Found     = $true
-                Window    = $shotInfo
-                ElapsedMs = [int]$sw.Elapsed.TotalMilliseconds
+                Found = $true
+                State = $lastState
+                ElapsedMs = [int]$stopwatch.Elapsed.TotalMilliseconds
             }
         }
-        Start-Sleep -Milliseconds 200
-    }
-
-    $sw.Stop()
+        if ($stopwatch.Elapsed.TotalSeconds -lt $TimeoutSec) {
+            Start-Sleep -Milliseconds $IntervalMs
+        }
+    } while ($stopwatch.Elapsed.TotalSeconds -lt $TimeoutSec)
+    $stopwatch.Stop()
     return [PSCustomObject]@{
-        Found     = $false
-        Window    = $null
-        ElapsedMs = [int]$sw.Elapsed.TotalMilliseconds
+        Found = $false
+        State = $lastState
+        ElapsedMs = [int]$stopwatch.Elapsed.TotalMilliseconds
     }
 }
 
-$results = [System.Collections.Generic.List[PSCustomObject]]::new()
+function Start-MarkNote {
+    param([string]$Path = "")
+    if ([string]::IsNullOrWhiteSpace($Path)) {
+        return (Start-Process -FilePath $BinaryPath -PassThru)
+    }
+    return (Start-Process -FilePath $BinaryPath -ArgumentList ("`"{0}`"" -f $Path) -PassThru)
+}
+
+function Wait-MarkNoteWindow {
+    param(
+        [int]$ProcessId = 0,
+        [string]$TitleFilter = "",
+        [string]$TestId = "window",
+        [int]$TimeoutSec = 15
+    )
+
+    return Wait-Until -TestId $TestId -Phase "window" -TimeoutSec $TimeoutSec -Condition {
+        param($state)
+        $matching = @($state.Windows | Where-Object {
+            $_.IsApplication -and
+            ($ProcessId -eq 0 -or $_.ProcessId -eq $ProcessId) -and
+            ([string]::IsNullOrWhiteSpace($TitleFilter) -or $_.Title -like "*$TitleFilter*")
+        })
+        return ($matching.Count -gt 0)
+    }
+}
+
+function Wait-ProcessExit {
+    param(
+        [System.Diagnostics.Process]$Process,
+        [string]$TestId,
+        [int]$TimeoutSec = 15
+    )
+    if (-not $Process) {
+        return [PSCustomObject]@{ Found = $true; State = Get-MarkNoteState; ElapsedMs = 0 }
+    }
+    $targetPid = $Process.Id
+    return Wait-Until -TestId $TestId -Phase "process-exit-pid-$targetPid" -TimeoutSec $TimeoutSec -Condition {
+        param($state)
+        return (@($state.ProcessIds | Where-Object { $_ -eq $targetPid }).Count -eq 0)
+    }
+}
+
+function Wait-WindowCount {
+    param(
+        [int]$ExpectedCount,
+        [string]$TestId,
+        [int]$TimeoutSec = 15
+    )
+    return Wait-Until -TestId $TestId -Phase "window-count-$ExpectedCount" -TimeoutSec $TimeoutSec -Condition {
+        param($state)
+        return ($state.WindowCount -ge $ExpectedCount)
+    }
+}
+
+function Get-ApplicationWindows {
+    param([object]$State)
+    return @($State.Windows | Where-Object { $_.IsApplication })
+}
+
+function Get-WindowForProcess {
+    param([object]$State, [int]$ProcessId, [string]$TitleFilter = "")
+    return @($State.Windows | Where-Object {
+        $_.IsApplication -and
+        ($ProcessId -eq 0 -or $_.ProcessId -eq $ProcessId) -and
+        ([string]::IsNullOrWhiteSpace($TitleFilter) -or $_.Title -like "*$TitleFilter*")
+    }) | Select-Object -First 1
+}
+
+function Capture-Window {
+    param([int]$ProcessId, [string]$OutputPath, [string]$TitleFilter = "")
+    if ([string]::IsNullOrWhiteSpace($TitleFilter)) {
+        $capture = @(& $screenshotScript -ProcessId $ProcessId -OutputPath $OutputPath -WarningAction SilentlyContinue -ErrorAction SilentlyContinue)
+    } else {
+        $capture = @(& $screenshotScript -ProcessId $ProcessId -OutputPath $OutputPath -TitleFilter $TitleFilter -WarningAction SilentlyContinue -ErrorAction SilentlyContinue)
+    }
+    return ($capture | Where-Object { $_ -and $_.Success } | Select-Object -Last 1)
+}
+
+function Get-ShotPath {
+    param([string]$Name)
+    return (Join-Path $ShotsDir ("run_{0:D3}_{1}" -f $script:CurrentRun, $Name))
+}
+
+function Get-UiAutomationNames {
+    param([IntPtr]$Handle)
+    if (-not $uiAutomationAvailable -or $Handle -eq [IntPtr]::Zero) { return @() }
+    try {
+        $root = [System.Windows.Automation.AutomationElement]::FromHandle($Handle)
+        if (-not $root) { return @() }
+        $all = $root.FindAll(
+            [System.Windows.Automation.TreeScope]::Descendants,
+            [System.Windows.Automation.Condition]::TrueCondition)
+        $names = @()
+        foreach ($element in $all) {
+            if (-not [string]::IsNullOrWhiteSpace($element.Current.Name)) {
+                $names += [string]$element.Current.Name
+            }
+        }
+        return $names
+    } catch {
+        return @()
+    }
+}
+
+function Bring-WindowToFront {
+    param([object]$Window)
+    if (-not $Window) { return $false }
+    [MarkNote.Acceptance.Native]::SetForegroundWindow([IntPtr]$Window.Handle) | Out-Null
+    # Уводим указатель от пунктов меню: mouseover не должен менять активный пункт
+    # между клавишами Alt+F, Enter и Enter.
+    [MarkNote.Acceptance.Native]::SetCursorPos(0, 0) | Out-Null
+    return $true
+}
+
+function Send-WindowKeys {
+    param([string]$Keys)
+    if (-not $uiAutomationAvailable) { return $false }
+    try {
+        [System.Windows.Forms.SendKeys]::SendWait($Keys)
+        return $true
+    } catch {
+        return $false
+    }
+}
+
+function Wait-UiText {
+    param(
+        [int]$ProcessId,
+        [string]$Expected,
+        [string]$TestId,
+        [bool]$Absent = $false,
+        [int]$TimeoutSec = 10
+    )
+    return Wait-Until -TestId $TestId -Phase ("ui-text-" + $(if ($Absent) { "absent" } else { "present" })) -TimeoutSec $TimeoutSec -Condition {
+        param($state)
+        $window = Get-WindowForProcess -State $state -ProcessId $ProcessId
+        if (-not $window) { return $false }
+        $names = @(Get-UiAutomationNames -Handle ([IntPtr]$window.Handle))
+        $present = @($names | Where-Object { $_ -like "*$Expected*" }).Count -gt 0
+        return ($(if ($Absent) { -not $present } else { $present }))
+    }
+}
+
+function New-Outcome {
+    param([bool]$Passed, [string]$Details, [int]$ElapsedMs = 0, [string]$Screenshot = "")
+    return [PSCustomObject]@{
+        Passed = $Passed
+        Details = $Details
+        ElapsedMs = $ElapsedMs
+        Screenshot = $Screenshot
+    }
+}
 
 function Record-Result {
     param(
         [string]$Id,
         [string]$Name,
-        [bool]$Passed,
-        [string]$Details,
-        [int]$ElapsedMs = 0,
-        [string]$Screenshot = ""
+        [object]$Outcome
     )
-
-    $statusStr = if ($Passed) { "PASS" } else { "FAIL" }
-    $color = if ($Passed) { "Green" } else { "Red" }
-
-    Write-Host "[$statusStr] " -NoNewline -ForegroundColor $color
-    Write-Host "${Id}: $Name" -ForegroundColor White
-    if (-not [string]::IsNullOrWhiteSpace($Details)) {
-        Write-Host "       Детали: $Details" -ForegroundColor Gray
-    }
-    if ($ElapsedMs -gt 0) {
-        Write-Host "       Время:  ${ElapsedMs} мс" -ForegroundColor Gray
-    }
-    if (-not [string]::IsNullOrWhiteSpace($Screenshot)) {
-        Write-Host "       Снимок: $Screenshot" -ForegroundColor DarkGray
-    }
+    $status = if ($Outcome.Passed) { "PASS" } else { "FAIL" }
+    $color = if ($Outcome.Passed) { "Green" } else { "Red" }
+    Write-Host "[$status] run=$script:CurrentRun $Id`: $Name" -ForegroundColor $color
+    Write-Host "       Детали: $($Outcome.Details)" -ForegroundColor Gray
+    if ($Outcome.ElapsedMs -gt 0) { Write-Host "       Время: $($Outcome.ElapsedMs) мс" -ForegroundColor Gray }
+    if (-not [string]::IsNullOrWhiteSpace($Outcome.Screenshot)) { Write-Host "       Снимок: $($Outcome.Screenshot)" -ForegroundColor DarkGray }
     Write-Host ""
-
-    $results.Add([PSCustomObject]@{
-        Id         = $Id
-        Name       = $Name
-        Status     = $statusStr
-        Passed     = $Passed
-        Details    = $Details
-        ElapsedMs  = $ElapsedMs
-        Screenshot = $Screenshot
-    })
-}
-
-# -----------------------------------------------------------------------------
-# Тест 1: Запуск без аргументов
-# -----------------------------------------------------------------------------
-Stop-MarkNoteProcesses
-$sw = [System.Diagnostics.Stopwatch]::StartNew()
-$proc = Start-Process -FilePath $BinaryPath -PassThru
-$winResult = Wait-ProcessWindow -ProcessId $proc.Id -TimeoutSec 10
-$sw.Stop()
-$shotPath = Join-Path $ShotsDir "01_no_args.png"
-
-if ($winResult.Found) {
-    & $screenshotScript -ProcessId $proc.Id -OutputPath $shotPath | Out-Null
-    $title = $winResult.Window.WindowTitle
-    $hasTitle = $title -like "*MarkNote*"
-    Record-Result -Id "TC-01" `
-                  -Name "Запуск без аргументов: окно появляется, заголовок MarkNote" `
-                  -Passed $hasTitle `
-                  -Details "Заголовок: '$title', размер: $($winResult.Window.Width)x$($winResult.Window.Height)" `
-                  -ElapsedMs $winResult.ElapsedMs `
-                  -Screenshot $shotPath
-} else {
-    Record-Result -Id "TC-01" `
-                  -Name "Запуск без аргументов: окно появляется, заголовок MarkNote" `
-                  -Passed $false `
-                  -Details "Окно не появилось за 10 секунд" `
-                  -ElapsedMs $sw.ElapsedMilliseconds
-}
-Stop-MarkNoteProcesses
-
-# -----------------------------------------------------------------------------
-# Тест 2: Запуск с аргументом fixtures\showcase.md
-# -----------------------------------------------------------------------------
-Stop-MarkNoteProcesses
-$showcaseFile = Join-Path $FixturesDir "showcase.md"
-$shotPath = Join-Path $ShotsDir "02_showcase.png"
-$sw = [System.Diagnostics.Stopwatch]::StartNew()
-$proc = Start-Process -FilePath $BinaryPath -ArgumentList "`"$showcaseFile`"" -PassThru
-$winResult = Wait-ProcessWindow -ProcessId $proc.Id -TimeoutSec 10
-$sw.Stop()
-
-if ($winResult.Found) {
-    & $screenshotScript -ProcessId $proc.Id -OutputPath $shotPath | Out-Null
-    $title = $winResult.Window.WindowTitle
-    $hasFile = $title -like "*showcase.md*"
-    $details = if ($hasFile) {
-        "Заголовок корректен: '$title'"
-    } else {
-        "ДЕФЕКТ: заголовок '$title' не содержит 'showcase.md' (аргумент командной строки потерян при старте)"
+    $script:Results += [PSCustomObject]@{
+        Run = $script:CurrentRun
+        Id = $Id
+        Name = $Name
+        Passed = [bool]$Outcome.Passed
+        Details = $Outcome.Details
+        ElapsedMs = $Outcome.ElapsedMs
+        Screenshot = $Outcome.Screenshot
     }
-    Record-Result -Id "TC-02" `
-                  -Name "Запуск с аргументом showcase.md: заголовок 'showcase.md — MarkNote'" `
-                  -Passed $hasFile `
-                  -Details $details `
-                  -ElapsedMs $winResult.ElapsedMs `
-                  -Screenshot $shotPath
-} else {
-    Record-Result -Id "TC-02" `
-                  -Name "Запуск с аргументом showcase.md: заголовок 'showcase.md — MarkNote'" `
-                  -Passed $false `
-                  -Details "Окно не появилось за 10 секунд" `
-                  -ElapsedMs $sw.ElapsedMilliseconds
 }
-Stop-MarkNoteProcesses
 
-# -----------------------------------------------------------------------------
-# Тест 3: Запуск с аргументом fixtures\cp1251.txt
-# -----------------------------------------------------------------------------
-Stop-MarkNoteProcesses
-$cp1251File = Join-Path $FixturesDir "cp1251.txt"
-$shotPath = Join-Path $ShotsDir "03_cp1251.png"
-$sw = [System.Diagnostics.Stopwatch]::StartNew()
-$proc = Start-Process -FilePath $BinaryPath -ArgumentList "`"$cp1251File`"" -PassThru
-$winResult = Wait-ProcessWindow -ProcessId $proc.Id -TimeoutSec 10
-$sw.Stop()
-
-if ($winResult.Found) {
-    & $screenshotScript -ProcessId $proc.Id -OutputPath $shotPath | Out-Null
-    $title = $winResult.Window.WindowTitle
-    $hasFile = $title -like "*cp1251.txt*"
-    $details = if ($hasFile) {
-        "Заголовок корректен: '$title'"
-    } else {
-        "ДЕФЕКТ: заголовок '$title' не содержит 'cp1251.txt' (аргумент командной строки потерян при старте)"
+function Invoke-Scenario {
+    param(
+        [string]$Id,
+        [string]$Name,
+        [scriptblock]$Body
+    )
+    [void](Stop-MarkNoteProcesses)
+    $outcome = $null
+    try {
+        $outcome = & $Body
+        if (-not $outcome) {
+            $outcome = New-Outcome -Passed $false -Details "Сценарий не вернул результат"
+        }
+    } catch {
+        $outcome = New-Outcome -Passed $false -Details ("Исключение QA: " + $_.Exception.Message)
+    } finally {
+        [void](Stop-MarkNoteProcesses)
     }
-    Record-Result -Id "TC-03" `
-                  -Name "Запуск с аргументом cp1251.txt: заголовок 'cp1251.txt — MarkNote'" `
-                  -Passed $hasFile `
-                  -Details $details `
-                  -ElapsedMs $winResult.ElapsedMs `
-                  -Screenshot $shotPath
-} else {
-    Record-Result -Id "TC-03" `
-                  -Name "Запуск с аргументом cp1251.txt: заголовок 'cp1251.txt — MarkNote'" `
-                  -Passed $false `
-                  -Details "Окно не появилось за 10 секунд" `
-                  -ElapsedMs $sw.ElapsedMilliseconds
+    Record-Result -Id $Id -Name $Name -Outcome $outcome
 }
-Stop-MarkNoteProcesses
 
-# -----------------------------------------------------------------------------
-# Тест 4: Запуск с несуществующим путём
-# -----------------------------------------------------------------------------
-Stop-MarkNoteProcesses
-$nonexistentFile = Join-Path $FixturesDir "nonexistent_file_definitely_absent_12345.md"
-$shotPath = Join-Path $ShotsDir "04_nonexistent.png"
-$sw = [System.Diagnostics.Stopwatch]::StartNew()
-$proc = Start-Process -FilePath $BinaryPath -ArgumentList "`"$nonexistentFile`"" -PassThru
-Start-Sleep -Seconds 2
-$isAlive = $false
-try {
-    $checkProc = Get-Process -Id $proc.Id -ErrorAction SilentlyContinue
-    if ($checkProc -and -not $checkProc.HasExited) {
-        $isAlive = $true
+function Test-NoArguments {
+    $watch = [System.Diagnostics.Stopwatch]::StartNew()
+    $process = Start-MarkNote
+    $windowWait = Wait-MarkNoteWindow -ProcessId $process.Id -TitleFilter "MarkNote" -TestId "TC-01" -TimeoutSec 15
+    $watch.Stop()
+    $window = Get-WindowForProcess -State $windowWait.State -ProcessId $process.Id -TitleFilter "MarkNote"
+    $screenshot = ""
+    if ($windowWait.Found) {
+        $shot = Capture-Window -ProcessId $process.Id -OutputPath (Get-ShotPath "01_no_args.png") -TitleFilter "MarkNote"
+        if ($shot) { $screenshot = $shot.OutputPath }
     }
-} catch {
-    $isAlive = $false
-}
-$winResult = Wait-ProcessWindow -ProcessId $proc.Id -TimeoutSec 5
-$sw.Stop()
-
-if ($winResult.Found) {
-    & $screenshotScript -ProcessId $proc.Id -OutputPath $shotPath | Out-Null
+    $passed = $windowWait.Found -and $window -and ($window.Title -like "*MarkNote*")
+    $details = if ($passed) { "Окно '$($window.Title)', размер $($window.Width)x$($window.Height), visible=$($window.Visible)" } else { "Окно MarkNote не найдено за $($windowWait.ElapsedMs) мс" }
+    return New-Outcome -Passed $passed -Details $details -ElapsedMs $watch.ElapsedMilliseconds -Screenshot $screenshot
 }
 
-$passed = $isAlive -and $winResult.Found
-$details = if ($passed) {
-    "Процесс работает (PID $($proc.Id)), не упал, показал окно: '$($winResult.Window.WindowTitle)'"
-} else {
-    "Процесс упал или не показал окно (isAlive=$isAlive, windowFound=$($winResult.Found))"
-}
-
-Record-Result -Id "TC-04" `
-              -Name "Запуск с несуществующим путём: программа не падает, окно живо" `
-              -Passed $passed `
-              -Details $details `
-              -ElapsedMs $sw.ElapsedMilliseconds `
-              -Screenshot $shotPath
-Stop-MarkNoteProcesses
-
-# -----------------------------------------------------------------------------
-# Тест 5: Повторный запуск с тем же файлом (дедупликация)
-# -----------------------------------------------------------------------------
-Stop-MarkNoteProcesses
-$showcaseFile = Join-Path $FixturesDir "showcase.md"
-$shotPath = Join-Path $ShotsDir "05_same_file.png"
-
-# Запуск 1
-$p1 = Start-Process -FilePath $BinaryPath -ArgumentList "`"$showcaseFile`"" -PassThru
-$win1 = Wait-ProcessWindow -ProcessId $p1.Id -TimeoutSec 8
-
-# Запуск 2 (тот же файл)
-$p2 = Start-Process -FilePath $BinaryPath -ArgumentList "`"$showcaseFile`"" -PassThru
-Start-Sleep -Seconds 3
-
-$runningMarknote = Get-Process -Name marknote -ErrorAction SilentlyContinue
-$procCount = ($runningMarknote | Measure-Object).Count
-& $screenshotScript -ProcessId $p1.Id -OutputPath $shotPath | Out-Null
-
-$singleInstanceWorking = ($procCount -le 1)
-$details = if ($singleInstanceWorking) {
-    "Второй процесс завершился, остался ровно 1 основной процесс marknote (PID $($p1.Id))"
-} else {
-    "ДЕФЕКТ: обнаружено $procCount одновременных процессов marknote (второй процесс не передал управление первому и не закрылся)"
-}
-
-Record-Result -Id "TC-05" `
-              -Name "Повторный запуск с тем же файлом: дедупликация (1 процесс)" `
-              -Passed $singleInstanceWorking `
-              -Details $details `
-              -Screenshot $shotPath
-
-# -----------------------------------------------------------------------------
-# Тест 6: Повторный запуск с другим файлом (второе окно в том же процессе)
-# -----------------------------------------------------------------------------
-# p1 всё ещё запущен с предыдущего теста
-$crlfFile = Join-Path $FixturesDir "crlf.md"
-$shotPath = Join-Path $ShotsDir "06_second_window.png"
-
-$p3 = Start-Process -FilePath $BinaryPath -ArgumentList "`"$crlfFile`"" -PassThru
-Start-Sleep -Seconds 3
-
-# Проверяем видимые окна процесса p1
-$allWindows = [Win32.ScreenCapturer]::EnumerateWindows(0, $null)
-$marknoteWindows = $allWindows | Where-Object {
-    $wPid = $_.ProcessId
-    $p = Get-Process -Id $wPid -ErrorAction SilentlyContinue
-    $p -and $p.ProcessName -eq "marknote" -and $_.Width -ge 200 -and $_.Height -ge 200
-}
-
-$winCount = ($marknoteWindows | Measure-Object).Count
-& $screenshotScript -OutputPath $shotPath | Out-Null
-
-$hasMultipleWindows = ($winCount -ge 2)
-$details = if ($hasMultipleWindows) {
-    "Открыто $winCount окон в приложении marknote: " + (($marknoteWindows | ForEach-Object { "'$($_.Title)'" }) -join ", ")
-} else {
-    "ДЕФЕКТ: обнаружено только $winCount окно (ожидалось >= 2 для двух разных файлов)"
-}
-
-Record-Result -Id "TC-06" `
-              -Name "Повторный запуск с другим файлом: открытие второго окна" `
-              -Passed $hasMultipleWindows `
-              -Details $details `
-              -Screenshot $shotPath
-Stop-MarkNoteProcesses
-
-# -----------------------------------------------------------------------------
-# Тест 7: Запуск с fixtures\big-10k.md (10 000 строк / 1 МБ)
-# -----------------------------------------------------------------------------
-Stop-MarkNoteProcesses
-$bigFile = Join-Path $FixturesDir "big-10k.md"
-$shotPath = Join-Path $ShotsDir "07_big_10k.png"
-
-$sw = [System.Diagnostics.Stopwatch]::StartNew()
-$proc = Start-Process -FilePath $BinaryPath -ArgumentList "`"$bigFile`"" -PassThru
-$winResult = Wait-ProcessWindow -ProcessId $proc.Id -TimeoutSec 12
-$sw.Stop()
-
-$isResponsive = $false
-try {
-    $checkProc = Get-Process -Id $proc.Id -ErrorAction SilentlyContinue
-    if ($checkProc) {
-        $isResponsive = $checkProc.Responding
+function Test-Showcase {
+    $path = Join-Path $FixturesDir "showcase.md"
+    $process = Start-MarkNote -Path $path
+    $windowWait = Wait-MarkNoteWindow -ProcessId $process.Id -TitleFilter "showcase.md" -TestId "TC-02" -TimeoutSec 15
+    $window = Get-WindowForProcess -State $windowWait.State -ProcessId $process.Id -TitleFilter "showcase.md"
+    $screenshot = ""
+    if ($windowWait.Found) {
+        $shot = Capture-Window -ProcessId $process.Id -OutputPath (Get-ShotPath "02_showcase.png") -TitleFilter "showcase.md"
+        if ($shot) { $screenshot = $shot.OutputPath }
     }
-} catch {
-    $isResponsive = $false
+    $passed = $windowWait.Found -and $window -and ($window.Title -like "*showcase.md*")
+    $details = if ($passed) { "Заголовок '$($window.Title)', размер $($window.Width)x$($window.Height), visible=$($window.Visible)" } else { "Заголовок showcase.md не появился за $($windowWait.ElapsedMs) мс" }
+    return New-Outcome -Passed $passed -Details $details -ElapsedMs $windowWait.ElapsedMs -Screenshot $screenshot
 }
 
-if ($winResult.Found) {
-    & $screenshotScript -ProcessId $proc.Id -OutputPath $shotPath | Out-Null
-    $passed = $isResponsive -and ($winResult.ElapsedMs -lt 10000)
-    Record-Result -Id "TC-07" `
-                  -Name "Запуск с big-10k.md: окно появляется вовремя, процесс не завис" `
-                  -Passed $passed `
-                  -Details "Время появления: $($winResult.ElapsedMs) мс, Отзывчив: $isResponsive, Заголовок: '$($winResult.Window.WindowTitle)'" `
-                  -ElapsedMs $winResult.ElapsedMs `
-                  -Screenshot $shotPath
-} else {
-    Record-Result -Id "TC-07" `
-                  -Name "Запуск с big-10k.md: окно появляется вовремя, процесс не завис" `
-                  -Passed $false `
-                  -Details "Окно не появилось за 12 секунд (Responding=$isResponsive)" `
-                  -ElapsedMs $sw.ElapsedMilliseconds
+function Test-Cp1251 {
+    $path = Join-Path $FixturesDir "cp1251.txt"
+    $process = Start-MarkNote -Path $path
+    $windowWait = Wait-MarkNoteWindow -ProcessId $process.Id -TitleFilter "cp1251.txt" -TestId "TC-03" -TimeoutSec 15
+    $window = Get-WindowForProcess -State $windowWait.State -ProcessId $process.Id -TitleFilter "cp1251.txt"
+    $screenshot = ""
+    if ($windowWait.Found) {
+        $shot = Capture-Window -ProcessId $process.Id -OutputPath (Get-ShotPath "03_cp1251.png") -TitleFilter "cp1251.txt"
+        if ($shot) { $screenshot = $shot.OutputPath }
+    }
+    $passed = $windowWait.Found -and $window -and ($window.Title -like "*cp1251.txt*")
+    $details = if ($passed) { "Заголовок '$($window.Title)', размер $($window.Width)x$($window.Height), visible=$($window.Visible)" } else { "Заголовок cp1251.txt не появился за $($windowWait.ElapsedMs) мс" }
+    return New-Outcome -Passed $passed -Details $details -ElapsedMs $windowWait.ElapsedMs -Screenshot $screenshot
 }
-Stop-MarkNoteProcesses
 
-# -----------------------------------------------------------------------------
-# Сводка результатов
-# -----------------------------------------------------------------------------
-$total = $results.Count
-$passedCount = ($results | Where-Object { $_.Passed }).Count
-$failedCount = ($results | Where-Object { -not $_.Passed }).Count
+function Test-Nonexistent {
+    $path = Join-Path $FixturesDir "nonexistent_file_definitely_absent_12345.md"
+    $process = Start-MarkNote -Path $path
+    $windowWait = Wait-MarkNoteWindow -ProcessId $process.Id -TestId "TC-04" -TimeoutSec 15
+    $state = $windowWait.State
+    $alive = @($state.ProcessIds | Where-Object { $_ -eq $process.Id }).Count -gt 0
+    $screenshot = ""
+    if ($windowWait.Found) {
+        $shot = Capture-Window -ProcessId $process.Id -OutputPath (Get-ShotPath "04_nonexistent.png")
+        if ($shot) { $screenshot = $shot.OutputPath }
+    }
+    $passed = $windowWait.Found -and $alive
+    $windows = @(Get-ApplicationWindows -State $state)
+    $details = "processAlive=$alive, окна=$($windows.Count): " + (($windows | ForEach-Object { "'$($_.Title)' $($_.Width)x$($_.Height) visible=$($_.Visible)" }) -join "; ")
+    return New-Outcome -Passed $passed -Details $details -ElapsedMs $windowWait.ElapsedMs -Screenshot $screenshot
+}
+
+function Test-SameFile {
+    $path = Join-Path $FixturesDir "showcase.md"
+    $p1 = Start-MarkNote -Path $path
+    $first = Wait-MarkNoteWindow -ProcessId $p1.Id -TitleFilter "showcase.md" -TestId "TC-05-main" -TimeoutSec 15
+    $p2 = Start-MarkNote -Path $path
+    $secondExit = Wait-ProcessExit -Process $p2 -TestId "TC-05-second" -TimeoutSec 15
+    $countWait = Wait-Until -TestId "TC-05" -Phase "single-instance-process-count" -TimeoutSec 10 -Condition {
+        param($state)
+        return ($state.ProcessCount -le 1)
+    }
+    $state = $countWait.State
+    $shot = Capture-Window -ProcessId $p1.Id -OutputPath (Get-ShotPath "05_same_file.png") -TitleFilter "showcase.md"
+    $screenshot = if ($shot) { $shot.OutputPath } else { "" }
+    $passed = $first.Found -and $secondExit.Found -and ($state.ProcessCount -le 1)
+    $details = "firstWindow=$($first.Found), secondExited=$($secondExit.Found), processes=$($state.ProcessCount), pids=" + ((@($state.ProcessIds) -join ","))
+    return New-Outcome -Passed $passed -Details $details -ElapsedMs ($first.ElapsedMs + $secondExit.ElapsedMs + $countWait.ElapsedMs) -Screenshot $screenshot
+}
+
+function Test-SecondWindow {
+    $firstPath = Join-Path $FixturesDir "showcase.md"
+    $secondPath = Join-Path $FixturesDir "crlf.md"
+    $p1 = Start-MarkNote -Path $firstPath
+    $first = Wait-MarkNoteWindow -ProcessId $p1.Id -TitleFilter "showcase.md" -TestId "TC-06-main" -TimeoutSec 15
+    $p2 = Start-MarkNote -Path $secondPath
+    $secondExit = Wait-ProcessExit -Process $p2 -TestId "TC-06-second" -TimeoutSec 15
+    $windowWait = Wait-WindowCount -ExpectedCount 2 -TestId "TC-06" -TimeoutSec 15
+    $state = $windowWait.State
+    $windows = @(Get-ApplicationWindows -State $state)
+    $shot = Capture-Window -ProcessId $p1.Id -OutputPath (Get-ShotPath "06_second_window.png") -TitleFilter "showcase.md"
+    $screenshot = if ($shot) { $shot.OutputPath } else { "" }
+    $titles = ($windows | ForEach-Object { "'$($_.Title)' $($_.Width)x$($_.Height) visible=$($_.Visible)" }) -join "; "
+    $passed = $first.Found -and $secondExit.Found -and $windowWait.Found
+    $details = "firstWindow=$($first.Found), secondExited=$($secondExit.Found), windows=$($windows.Count), processes=$($state.ProcessCount): $titles"
+    return New-Outcome -Passed $passed -Details $details -ElapsedMs ($first.ElapsedMs + $secondExit.ElapsedMs + $windowWait.ElapsedMs) -Screenshot $screenshot
+}
+
+function Test-BigDocument {
+    $path = Join-Path $FixturesDir "big-10k.md"
+    $process = Start-MarkNote -Path $path
+    $windowWait = Wait-MarkNoteWindow -ProcessId $process.Id -TestId "TC-07" -TimeoutSec 20
+    $state = $windowWait.State
+    $processInfo = @($state.Processes | Where-Object { $_.Id -eq $process.Id } | Select-Object -First 1)
+    $responsive = $processInfo -and $processInfo.Responding
+    $screenshot = ""
+    if ($windowWait.Found) {
+        $shot = Capture-Window -ProcessId $process.Id -OutputPath (Get-ShotPath "07_big_10k.png")
+        if ($shot) { $screenshot = $shot.OutputPath }
+    }
+    $passed = $windowWait.Found -and $responsive
+    $details = "window=$($windowWait.Found), responding=$responsive, elapsed=$($windowWait.ElapsedMs) мс, processes=$($state.ProcessCount)"
+    return New-Outcome -Passed $passed -Details $details -ElapsedMs $windowWait.ElapsedMs -Screenshot $screenshot
+}
+
+function Test-BinaryRejected {
+    $path = Join-Path $FixturesDir "logo.png"
+    $process = Start-MarkNote -Path $path
+    $windowWait = Wait-MarkNoteWindow -ProcessId $process.Id -TestId "TC-08-window" -TimeoutSec 15
+    $noticeWait = Wait-UiText -ProcessId $process.Id -Expected "двоичный файл нельзя открыть как текст" -TestId "TC-08" -TimeoutSec 15
+    $state = $noticeWait.State
+    $alive = @($state.ProcessIds | Where-Object { $_ -eq $process.Id }).Count -gt 0
+    $shot = Capture-Window -ProcessId $process.Id -OutputPath (Get-ShotPath "08_binary_rejected.png")
+    $screenshot = if ($shot) { $shot.OutputPath } else { "" }
+    $passed = $windowWait.Found -and $noticeWait.Found -and $alive
+    $details = "binaryNotice=$($noticeWait.Found), processAlive=$alive, title=" + (($state.Windows | Where-Object { $_.IsApplication } | Select-Object -First 1).Title)
+    return New-Outcome -Passed $passed -Details $details -ElapsedMs ($windowWait.ElapsedMs + $noticeWait.ElapsedMs) -Screenshot $screenshot
+}
+
+function Test-UnsavedClose {
+    $process = Start-MarkNote
+    $windowWait = Wait-MarkNoteWindow -ProcessId $process.Id -TestId "TC-09-window" -TimeoutSec 15
+    if (-not $windowWait.Found) {
+        return New-Outcome -Passed $false -Details "Окно без аргументов не появилось" -ElapsedMs $windowWait.ElapsedMs
+    }
+    $window = Get-WindowForProcess -State $windowWait.State -ProcessId $process.Id
+    [void](Bring-WindowToFront -Window $window)
+    if (-not (Send-WindowKeys -Keys "%f")) {
+        return New-Outcome -Passed $false -Details "SendKeys Alt+F недоступен" -ElapsedMs $windowWait.ElapsedMs
+    }
+    # StartScreen also exposes "New file" immediately, so wait for the
+    # keyboard menu's complete accessible label instead of a substring that
+    # would let Enter race the menu render.
+    $newMenu = Wait-UiText -ProcessId $process.Id -Expected "New Ctrl+Shift+N" -TestId "TC-09-file-menu" -TimeoutSec 8
+    if (-not $newMenu.Found) {
+        return New-Outcome -Passed $false -Details "Меню File/New не появилось" -ElapsedMs $newMenu.ElapsedMs
+    }
+    [void](Send-WindowKeys -Keys "{ENTER}")
+    $markdownMenu = Wait-UiText -ProcessId $process.Id -Expected "Markdown" -TestId "TC-09-format-menu" -TimeoutSec 8
+    if (-not $markdownMenu.Found) {
+        return New-Outcome -Passed $false -Details "Подменю New не появилось" -ElapsedMs ($newMenu.ElapsedMs + $markdownMenu.ElapsedMs)
+    }
+    [void](Send-WindowKeys -Keys "{ENTER}")
+    $startGone = Wait-UiText -ProcessId $process.Id -Expected "New file" -Absent $true -TestId "TC-09-new-document" -TimeoutSec 10
+    [void](Bring-WindowToFront -Window (Get-WindowForProcess -State $startGone.State -ProcessId $process.Id))
+    [void](Send-WindowKeys -Keys "qa-unsaved")
+    $typed = Wait-UiText -ProcessId $process.Id -Expected "qa-unsaved" -TestId "TC-09-typed" -TimeoutSec 5
+    if (-not $typed.Found) {
+        return New-Outcome -Passed $false -Details "Текст не появился в новом документе; startScreenGone=$($startGone.Found)" -ElapsedMs ($newMenu.ElapsedMs + $markdownMenu.ElapsedMs + $typed.ElapsedMs)
+    }
+    [void](Send-WindowKeys -Keys "%{F4}")
+    $prompt = Wait-UiText -ProcessId $process.Id -Expected "Save changes?" -TestId "TC-09-close-prompt" -TimeoutSec 5
+    $shot = Capture-Window -ProcessId $process.Id -OutputPath (Get-ShotPath "09_unsaved_close_prompt.png")
+    $screenshot = if ($shot) { $shot.OutputPath } else { "" }
+    if (-not $prompt.Found) {
+        return New-Outcome -Passed $false -Details "Диалог Save changes? не появился после Alt+F4" -ElapsedMs $prompt.ElapsedMs -Screenshot $screenshot
+    }
+    $watchdog = Wait-ProcessExit -Process $process -TestId "TC-09-watchdog" -TimeoutSec 8
+    $passed = $watchdog.Found
+    $details = "prompt=$($prompt.Found), watchdogClosed=$($watchdog.Found), watchdogWait=$($watchdog.ElapsedMs) мс без ответа"
+    return New-Outcome -Passed $passed -Details $details -ElapsedMs ($newMenu.ElapsedMs + $markdownMenu.ElapsedMs + $typed.ElapsedMs + $prompt.ElapsedMs + $watchdog.ElapsedMs) -Screenshot $screenshot
+}
+
+function Test-SearchShortcut {
+    $path = Join-Path $FixturesDir "showcase.md"
+    $process = Start-MarkNote -Path $path
+    $windowWait = Wait-MarkNoteWindow -ProcessId $process.Id -TitleFilter "showcase.md" -TestId "TC-10-window" -TimeoutSec 15
+    if (-not $windowWait.Found) {
+        return New-Outcome -Passed $false -Details "showcase окно не появилось" -ElapsedMs $windowWait.ElapsedMs
+    }
+    $window = Get-WindowForProcess -State $windowWait.State -ProcessId $process.Id -TitleFilter "showcase.md"
+    [void](Bring-WindowToFront -Window $window)
+    [void](Send-WindowKeys -Keys "^{f}")
+    $panel = Wait-UiText -ProcessId $process.Id -Expected "Строка поиска" -TestId "TC-10" -TimeoutSec 8
+    $state = $panel.State
+    $alive = @($state.ProcessIds | Where-Object { $_ -eq $process.Id }).Count -gt 0
+    $shot = Capture-Window -ProcessId $process.Id -OutputPath (Get-ShotPath "10_search.png")
+    $screenshot = if ($shot) { $shot.OutputPath } else { "" }
+    $passed = $panel.Found -and $alive
+    $details = "searchPanel=$($panel.Found), processAlive=$alive, windows=$($state.WindowCount)"
+    return New-Outcome -Passed $passed -Details $details -ElapsedMs ($windowWait.ElapsedMs + $panel.ElapsedMs) -Screenshot $screenshot
+}
+
+Write-Host "============================================================" -ForegroundColor Cyan
+Write-Host "       MarkNote Acceptance Test Suite (W42)                 " -ForegroundColor Cyan
+Write-Host "============================================================" -ForegroundColor Cyan
+Write-Host "Запускать PowerShell 5.1 или PowerShell 7; Runs=$Runs"
+Write-Host "Целевой бинарник: $BinaryPath"
+Write-Host "Папка fixtures:   $FixturesDir"
+Write-Host "Папка снимков:    $ShotsDir"
+Write-Host "JSONL-журнал:     $script:JournalPath"
+Write-Host "Сессия:           $script:SessionId"
+Write-Host ""
+
+for ($run = 1; $run -le $Runs; $run += 1) {
+    $script:CurrentRun = $run
+    Write-Host "====================== ПРОГОН $run/$Runs ======================" -ForegroundColor Cyan
+    Invoke-Scenario -Id "TC-01" -Name "Запуск без аргументов: окно и заголовок MarkNote" -Body { Test-NoArguments }
+    Invoke-Scenario -Id "TC-02" -Name "Запуск showcase.md: корректный заголовок" -Body { Test-Showcase }
+    Invoke-Scenario -Id "TC-03" -Name "Запуск cp1251.txt: корректный заголовок" -Body { Test-Cp1251 }
+    Invoke-Scenario -Id "TC-04" -Name "Несуществующий путь: процесс жив и окно показано" -Body { Test-Nonexistent }
+    Invoke-Scenario -Id "TC-05" -Name "Повторный запуск с тем же файлом: один процесс" -Body { Test-SameFile }
+    Invoke-Scenario -Id "TC-06" -Name "Повторный запуск с другим файлом: второе окно" -Body { Test-SecondWindow }
+    Invoke-Scenario -Id "TC-07" -Name "big-10k.md: окно появляется и процесс отзывчив" -Body { Test-BigDocument }
+    Invoke-Scenario -Id "TC-08" -Name "logo.png: бинарный файл отклонён с сообщением" -Body { Test-BinaryRejected }
+    Invoke-Scenario -Id "TC-09" -Name "Несохранённый документ: close prompt и watchdog" -Body { Test-UnsavedClose }
+    Invoke-Scenario -Id "TC-10" -Name "Ctrl+F: панель поиска открывается" -Body { Test-SearchShortcut }
+    $runResults = @($script:Results | Where-Object { $_.Run -eq $run })
+    $runPassed = @($runResults | Where-Object { $_.Passed }).Count
+    Write-Host "Прогон ${run}: $runPassed/$($runResults.Count) PASS" -ForegroundColor $(if ($runPassed -eq $runResults.Count) { "Green" } else { "Red" })
+    Write-Host ""
+}
+
+[void](Stop-MarkNoteProcesses)
+$allResults = @($script:Results)
+$totalRuns = $Runs
+$testsPerRun = 10
+$fullyGreen = 0
+for ($run = 1; $run -le $totalRuns; $run += 1) {
+    if (@($allResults | Where-Object { $_.Run -eq $run -and $_.Passed }).Count -eq $testsPerRun) { $fullyGreen += 1 }
+}
+$passedTests = @($allResults | Where-Object { $_.Passed }).Count
+$failedTests = @($allResults | Where-Object { -not $_.Passed }).Count
 
 Write-Host "============================================================" -ForegroundColor Cyan
 Write-Host "                     ИТОГИ ПРИЁМКИ                          " -ForegroundColor Cyan
 Write-Host "============================================================" -ForegroundColor Cyan
-Write-Host "Всего тестов:     $total"
-Write-Host "Пройдено (PASS):  $passedCount" -ForegroundColor Green
-Write-Host "Провалено (FAIL): $failedCount" -ForegroundColor $(if ($failedCount -gt 0) { "Red" } else { "Green" })
-Write-Host ""
+Write-Host "Прогонов:          $totalRuns"
+Write-Host "Тестов в прогоне:  $testsPerRun"
+Write-Host "Полностью зелёных:  $fullyGreen/$totalRuns" -ForegroundColor $(if ($fullyGreen -eq $totalRuns) { "Green" } else { "Red" })
+Write-Host "Тестов PASS:       $passedTests/$($allResults.Count)" -ForegroundColor Green
+Write-Host "Тестов FAIL:       $failedTests/$($allResults.Count)" -ForegroundColor $(if ($failedTests -gt 0) { "Red" } else { "Green" })
 
-if ($failedCount -gt 0) {
-    Write-Host "Список упавших критериев:" -ForegroundColor Yellow
-    foreach ($r in ($results | Where-Object { -not $_.Passed })) {
-        Write-Host "  - [$($r.Id)] $($r.Name)" -ForegroundColor Red
-        Write-Host "    Причина: $($r.Details)" -ForegroundColor Gray
-    }
-    Write-Host ""
+$failuresByTest = @($allResults | Where-Object { -not $_.Passed } | Group-Object Id | Sort-Object Name)
+if ($failuresByTest.Count -gt 0) {
+    Write-Host "Плавающие/упавшие тесты:" -ForegroundColor Yellow
+    foreach ($group in $failuresByTest) { Write-Host "  $($group.Name): $($group.Count)" -ForegroundColor Red }
+}
+
+$summaryPath = Join-Path (Split-Path -Parent $script:JournalPath) "acceptance-summary.json"
+$summary = [ordered]@{
+    session = $script:SessionId
+    runs = $totalRuns
+    testsPerRun = $testsPerRun
+    fullyGreen = $fullyGreen
+    passedTests = $passedTests
+    failedTests = $failedTests
+    failuresByTest = @($failuresByTest | ForEach-Object { [ordered]@{ id = $_.Name; count = $_.Count } })
+    results = $allResults
+}
+[IO.File]::WriteAllText($summaryPath, ($summary | ConvertTo-Json -Depth 10), $script:Utf8NoBom)
+Write-Host "Подробный журнал:  $script:JournalPath"
+Write-Host "Сводка JSON:       $summaryPath"
+Write-Host "Остаток процессов marknote: $(@(Get-Process -Name marknote -ErrorAction SilentlyContinue).Count)"
+
+if ($failedTests -gt 0 -or $fullyGreen -ne $totalRuns) {
     Write-Host "Приёмка завершена со статусом FAILED." -ForegroundColor Red
     exit 1
-} else {
-    Write-Host "Все критерии приёмки успешно выполнены (PASSED)!" -ForegroundColor Green
-    exit 0
 }
+Write-Host "Все $totalRuns прогонов полностью PASSED." -ForegroundColor Green
+exit 0

@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Снятие снимка окна процесса MarkNote в PNG через System.Drawing и Win32 API.
 
@@ -6,9 +6,10 @@
     Ищет главное видимое окно процесса marknote по PID (или имени процесса),
     игнорируя служебные и невидимые окна (включая служебное окно плагина single-instance
     размером 16x16 вида 'dev.marknote.app-siw'). Сохраняет снимок окна в PNG.
+    Совместим с Windows PowerShell 5.1 и PowerShell 7 (кодировка UTF-8 с BOM).
 
 .PARAMETER ProcessId
-    Идентификатор целевого процесса. Если не задан, ищется первый запущенный процесс 'marknote'.
+    Идентификатор целевого процесса. Если не задан, ищется окно среди запущенных процессов 'marknote'.
 
 .PARAMETER ProcessName
     Имя процесса для поиска, по умолчанию 'marknote'.
@@ -154,22 +155,36 @@ namespace Win32 {
     Add-Type -TypeDefinition $csharpCode -Language CSharp
 }
 
-# Определяем целевой PID, если не передан явно
+# Определяем целевой PID и ищем подходящие окна
+$candidates = $null
 if ($ProcessId -eq 0) {
-    $procs = Get-Process -Name $ProcessName -ErrorAction SilentlyContinue
-    if (-not $procs) {
-        Write-Error "Процесс '$ProcessName' не найден."
-        return $null
+    # Сначала проверяем все существующие окна для процессов с именем ProcessName
+    $allWins = [Win32.ScreenCapturer]::EnumerateWindows(0, $TitleFilter)
+    $filtered = $allWins | Where-Object {
+        $p = Get-Process -Id $_.ProcessId -ErrorAction SilentlyContinue
+        $p -and $p.ProcessName -eq $ProcessName -and $_.Width -ge 200 -and $_.Height -ge 200
     }
-    # Берём процесс с наибольшим WorkingSet или MainWindowHandle
-    $proc = $procs | Sort-Object -Property @{ Expression = { $_.MainWindowHandle -ne 0 }; Descending = $true }, WorkingSet -Descending | Select-Object -First 1
-    $ProcessId = $proc.Id
+
+    if ($filtered) {
+        $candidates = @($filtered)
+        # Назначаем ProcessId процессу найденного окна
+        $targetWin = $candidates | Sort-Object -Property @{ Expression = { -not [string]::IsNullOrWhiteSpace($_.Title) }; Descending = $true }, @{ Expression = { $_.Width * $_.Height }; Descending = $true } | Select-Object -First 1
+        $ProcessId = $targetWin.ProcessId
+    } else {
+        $procs = Get-Process -Name $ProcessName -ErrorAction SilentlyContinue
+        if (-not $procs) {
+            Write-Error "Процесс '$ProcessName' не найден."
+            return $null
+        }
+        $proc = $procs | Sort-Object -Property @{ Expression = { $_.MainWindowHandle -ne 0 }; Descending = $true }, WorkingSet -Descending | Select-Object -First 1
+        $ProcessId = $proc.Id
+        $candidates = [Win32.ScreenCapturer]::EnumerateWindows([uint32]$ProcessId, $TitleFilter)
+    }
+} else {
+    $candidates = [Win32.ScreenCapturer]::EnumerateWindows([uint32]$ProcessId, $TitleFilter)
 }
 
-# Ищем подходящие видимые окна
-$candidates = [Win32.ScreenCapturer]::EnumerateWindows([uint32]$ProcessId, $TitleFilter)
-
-if ($candidates.Count -eq 0) {
+if (-not $candidates -or $candidates.Count -eq 0) {
     # Если конкретный PID не дал окон, пробуем поискать среди всех процессов с таким именем
     $allPids = Get-Process -Name $ProcessName -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Id
     foreach ($p in $allPids) {
@@ -184,7 +199,7 @@ if ($candidates.Count -eq 0) {
     }
 }
 
-if ($candidates.Count -eq 0) {
+if (-not $candidates -or $candidates.Count -eq 0) {
     Write-Warning "Не найдено подходящих окон для PID $ProcessId."
     return $null
 }
@@ -221,7 +236,6 @@ if ([string]::IsNullOrWhiteSpace($OutputPath)) {
 
 # Делаем окно активным перед захватом
 [Win32.ScreenCapturer]::SetForegroundWindow($hwnd) | Out-Null
-Start-Sleep -Milliseconds 100
 
 # Создаем Bitmap и Graphics
 $bmp = New-Object System.Drawing.Bitmap($w, $h, [System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
