@@ -1,4 +1,4 @@
-import { type EditorState } from "@codemirror/state";
+import { type EditorState, type Range } from "@codemirror/state";
 import { syntaxTree } from "@codemirror/language";
 import {
   Decoration,
@@ -10,7 +10,10 @@ import {
 import type { SyntaxNode } from "@lezer/common";
 import { isNodeActive } from "./isNodeActive";
 import { decorationsForBlockNode } from "./blocks";
+import { codeBlockBuilder } from "./codeBlocks";
+import { tableBuilder } from "./tables";
 import { decorationsForInlineNode, type DecorationSpec } from "./inline";
+import type { BlockBuilder, BuilderContext } from "./types";
 import type { ImageResolver } from "./widgets/Image";
 
 export interface LivePreviewOptions {
@@ -54,19 +57,60 @@ function asRanges(specs: DecorationSpec[]) {
   return Decoration.set(valid, true);
 }
 
+function asDecorationRanges(ranges: readonly Range<Decoration>[]) {
+  const valid = ranges.filter((range) => range.to > range.from);
+  return Decoration.set(valid, true);
+}
+
 /**
- * Чистая часть построения предпросмотра. Она принимает только состояние и
- * видимые диапазоны, поэтому легко проверяется в Node/Vitest без браузера.
+ * Block builders are intentionally registered in one place.  A builder is
+ * allowed to own a node completely, in which case traversal of its children
+ * is skipped.  `tables.ts` is not listed until its owner fixes the currently
+ * known type error; missing optional modules are therefore not part of this
+ * module's import graph.
  */
-export function buildDecorationSets(
+export const livePreviewBlockBuilders: readonly BlockBuilder[] = [tableBuilder, codeBlockBuilder];
+
+function runBlockBuilders(
+  view: EditorView,
+  node: SyntaxNode,
+  active: boolean,
+  specs: DecorationSpec[],
+  atomicRanges: Array<Range<Decoration>>,
+): boolean {
+  const context: BuilderContext = {
+    view,
+    node,
+    active,
+    add: (range) => specs.push({ from: range.from, to: range.to, decoration: range.value }),
+    atomic: (range) => atomicRanges.push(range),
+  };
+  for (const builder of livePreviewBlockBuilders) {
+    if (builder(context)) return true;
+  }
+  return false;
+}
+
+function uniqueSpecs(specs: readonly DecorationSpec[]) {
+  const unique = new Map<string, DecorationSpec>();
+  for (const spec of specs) {
+    const key = `${spec.from}:${spec.to}:${spec.decoration.spec.class ?? spec.decoration.spec.widget?.constructor?.name ?? "replace"}`;
+    if (!unique.has(key)) unique.set(key, spec);
+  }
+  return [...unique.values()];
+}
+
+function buildDecorationSetsInternal(
   state: EditorState,
   visibleRanges: readonly { from: number; to: number }[],
-  options: LivePreviewOptions = {},
+  options: LivePreviewOptions,
+  view?: EditorView,
 ): PreviewBuildResult {
   const maxBytes = options.maxBytes ?? 5 * 1024 * 1024;
   if (byteLength(state) > maxBytes) return { decorations: Decoration.none, atomicRanges: Decoration.none, disabled: true };
 
   const specs: DecorationSpec[] = [];
+  const builderAtomicRanges: Array<Range<Decoration>> = [];
   const seen = new Set<string>();
   const tree = syntaxTree(state);
   for (const visible of visibleRanges) {
@@ -81,6 +125,8 @@ export function buildDecorationSets(
         seen.add(key);
 
         const active = isNodeActive(node, state.selection, state.doc);
+        if (view && runBlockBuilders(view, node, active, specs, builderAtomicRanges)) return false;
+
         const nodeSpecs = isBlockNode(node)
           ? decorationsForBlockNode(node, active, state)
           : decorationsForInlineNode(node, active, state, options.resolveImage);
@@ -89,17 +135,35 @@ export function buildDecorationSets(
     });
   }
 
-  const unique = new Map<string, DecorationSpec>();
-  for (const spec of specs) {
-    const key = `${spec.from}:${spec.to}:${spec.decoration.spec.class ?? spec.decoration.spec.widget?.constructor?.name ?? "replace"}`;
-    if (!unique.has(key)) unique.set(key, spec);
-  }
-  const all = [...unique.values()];
+  const all = uniqueSpecs(specs);
+  const decorationRanges = asRanges(all);
+  const atomicSpecs = asRanges(all.filter((spec) => spec.atomic));
+  const builderAtomic = asDecorationRanges(builderAtomicRanges);
   return {
-    decorations: asRanges(all),
-    atomicRanges: asRanges(all.filter((spec) => spec.atomic)),
+    decorations: decorationRanges,
+    atomicRanges: builderAtomic.size ? Decoration.set([...decorationRangesToArray(builderAtomic), ...decorationRangesToArray(atomicSpecs)], true) : atomicSpecs,
     disabled: false,
   };
+}
+
+function decorationRangesToArray(set: DecorationSet): Array<Range<Decoration>> {
+  const ranges: Array<Range<Decoration>> = [];
+  set.between(0, Number.MAX_SAFE_INTEGER, (from, to, value) => {
+    ranges.push({ from, to, value });
+  });
+  return ranges;
+}
+
+/**
+ * Чистая часть построения предпросмотра. Она принимает только состояние и
+ * видимые диапазоны, поэтому легко проверяется в Node/Vitest без браузера.
+ */
+export function buildDecorationSets(
+  state: EditorState,
+  visibleRanges: readonly { from: number; to: number }[],
+  options: LivePreviewOptions = {},
+): PreviewBuildResult {
+  return buildDecorationSetsInternal(state, visibleRanges, options);
 }
 
 export class LivePreviewValue {
@@ -120,10 +184,10 @@ export class LivePreviewValue {
   }
 
   private rebuild(view: EditorView) {
-    const result = buildDecorationSets(view.state, view.visibleRanges, {
+    const result = buildDecorationSetsInternal(view.state, view.visibleRanges, {
       maxBytes: this.maxBytes,
       resolveImage: this.resolveImage,
-    });
+    }, view);
     this.disabled = result.disabled;
     this.decorations = result.decorations;
     this.atomicRanges = result.atomicRanges;

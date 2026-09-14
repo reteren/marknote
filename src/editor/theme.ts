@@ -1,0 +1,60 @@
+import { EditorView } from "@codemirror/view";
+
+/** CodeMirror использует только токены общей тёмной темы MarkNote. */
+export const marknoteTheme = EditorView.theme(
+  {
+    "&": {
+      color: "var(--text-normal)",
+      backgroundColor: "var(--bg-primary)",
+      fontFamily: "var(--font-text)",
+      fontSize: "var(--font-size-text)",
+      lineHeight: "var(--line-height-text)",
+      maxWidth: "var(--line-width)",
+      margin: "0 auto",
+      minHeight: "100%",
+    },
+    ".cm-scroller": {
+      overflow: "auto",
+      padding: "var(--editor-padding) 0",
+      fontFamily: "var(--font-text)",
+    },
+    ".cm-content": {
+      padding: "0",
+      caretColor: "var(--caret-color)",
+      fontFamily: "var(--font-text)",
+      fontSize: "var(--font-size-text)",
+      lineHeight: "var(--line-height-text)",
+    },
+    ".cm-line": {
+      padding: "0",
+    },
+    ".cm-cursor, .cm-dropCursor": {
+      borderLeftColor: "var(--caret-color)",
+      borderLeftWidth: "2px",
+    },
+    "&.cm-focused": {
+      outline: "none",
+    },
+    ".cm-selectionBackground, ::selection": {
+      backgroundColor: "var(--text-selection)",
+    },
+    "&.cm-focused .cm-selectionBackground, &.cm-focused ::selection": {
+      backgroundColor: "var(--text-selection)",
+    },
+    ".cm-activeLine": {
+      backgroundColor: "var(--bg-primary-alt)",
+    },
+    ".cm-gutters": {
+      display: "none",
+      backgroundColor: "var(--bg-primary)",
+      color: "var(--text-faint)",
+      border: "0",
+    },
+    ".cm-tooltip": {
+      backgroundColor: "var(--bg-secondary)",
+      color: "var(--text-normal)",
+      border: "1px solid var(--bg-modifier-border)",
+    },
+  },
+  { dark: true },
+);

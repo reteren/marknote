@@ -1,6 +1,8 @@
 import type { Extension } from "@codemirror/state";
 import { livePreviewPlugin } from "./plugin";
 import { livePreviewTheme } from "./blocks";
+import { codeBlockTheme } from "./codeBlocks";
+import { tableTheme } from "./tables";
 
 export function livePreview(opts?: {
   /** Выше этого размера документа предпросмотр выключается. По умолчанию 5 МБ. */
@@ -8,7 +10,7 @@ export function livePreview(opts?: {
   /** Отдаёт data-URL для картинки, относительной к документу. */
   resolveImage?: (src: string) => Promise<string>;
 }): Extension {
-  return [livePreviewPlugin.of(opts ?? {}), livePreviewTheme];
+  return [livePreviewPlugin.of(opts ?? {}), livePreviewTheme, codeBlockTheme, tableTheme];
 }
 
 export { livePreviewPlugin } from "./plugin";

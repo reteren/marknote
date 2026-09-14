@@ -84,6 +84,14 @@ describe("codeBlockBuilder", () => {
     expect(rangesByClass(decorations, "cm-marknote-code-block")).toHaveLength(1);
   });
 
+  it("keeps an unknown language as a plain monospaced block", () => {
+    const state = codeState(`${fence}made-up-language\nplain text\n${fence}\n`);
+    expect(() => buildCode(state)).not.toThrow();
+    const { decorations } = buildCode(state);
+    expect(rangesByClass(decorations, "cm-marknote-code-block")).toHaveLength(1);
+    expect(decorations.some(({ value }) => value.spec.class?.includes("cm-marknote-code-token"))).toBe(false);
+  });
+
   it("keeps all source decorations visible while the cursor is inside", () => {
     const state = codeState(`${fence}\nplain text\n${fence}\n`);
     const { decorations, atomic } = buildCode(state, true);
@@ -91,4 +99,3 @@ describe("codeBlockBuilder", () => {
     expect(atomic).toHaveLength(0);
   });
 });
-
