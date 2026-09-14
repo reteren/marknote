@@ -20,3 +20,6 @@ desktop.ini
 *.pfx
 .env
 .env.local
+
+# Снимки приёмки — результат прогона, а не исходник
+qa/shots/
