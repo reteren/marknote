@@ -3,6 +3,7 @@ import { markdownFormat } from "./formats.svelte";
 
 export type LineEnding = "lf" | "crlf";
 export type SaveStatus = "unsaved" | "pending" | "saved" | "readonly";
+export type ExternalChangeStatus = "none" | "changed" | "deleted";
 
 export type OpenedFile = {
   path: string;
@@ -36,6 +37,9 @@ export type DocumentState = {
   text: string;
   dirty: boolean;
   readonly: boolean;
+  /** Состояние watcher-событий, которое App отображает полосой уведомления. */
+  externalChange: ExternalChangeStatus;
+  externalChangePath: string | null;
 };
 
 export const documentState = $state<DocumentState>({
@@ -49,19 +53,24 @@ export const documentState = $state<DocumentState>({
   text: "",
   dirty: false,
   readonly: false,
+  externalChange: "none",
+  externalChangePath: null,
 });
 
 export function replaceDocument(opened: OpenedFile): void {
+  const readonly = opened.readonly || !opened.format.editable;
   documentState.path = opened.path;
   documentState.format = opened.format;
-  documentState.saveStatus = opened.readonly ? "readonly" : "saved";
+  documentState.saveStatus = readonly ? "readonly" : "saved";
   documentState.lastSavedAt = null;
   documentState.encoding = opened.encoding;
   documentState.bom = opened.bom;
   documentState.lineEnding = opened.lineEnding;
   documentState.text = opened.text;
   documentState.dirty = false;
-  documentState.readonly = opened.readonly;
+  documentState.readonly = readonly;
+  documentState.externalChange = "none";
+  documentState.externalChangePath = null;
 }
 
 export function resetDocument(format: FormatCapabilities = markdownFormat, text = ""): void {
@@ -74,7 +83,28 @@ export function resetDocument(format: FormatCapabilities = markdownFormat, text 
   documentState.lineEnding = "lf";
   documentState.text = text;
   documentState.dirty = text.length > 0;
-  documentState.readonly = false;
+  documentState.readonly = !format.editable;
+  documentState.saveStatus = documentState.readonly ? "readonly" : "unsaved";
+  documentState.externalChange = "none";
+  documentState.externalChangePath = null;
+}
+
+/**
+ * Меняет только возможности формата, не трогая текст документа. Сохранённый
+ * документ становится грязным: новый тип требует отдельного Save as.
+ */
+export function setDocumentFormat(format: FormatCapabilities): void {
+  const changed = documentState.format.id !== format.id;
+  documentState.format = format;
+  documentState.readonly = !format.editable;
+
+  if (documentState.readonly) {
+    documentState.saveStatus = "readonly";
+    return;
+  }
+
+  if (changed && documentState.path !== null) documentState.dirty = true;
+  documentState.saveStatus = documentState.dirty || documentState.path === null ? "unsaved" : "saved";
 }
 
 export function setDocumentText(text: string): void {
@@ -95,11 +125,42 @@ export function markSaved(result: SaveResult, snapshotText = documentState.text)
   documentState.path = result.path;
   documentState.format = result.format;
   documentState.lastSavedAt = new Date(result.savedAt);
-  documentState.saveStatus = documentState.text === snapshotText ? "saved" : "unsaved";
+  documentState.saveStatus = !result.format.editable
+    ? "readonly"
+    : documentState.text === snapshotText
+      ? "saved"
+      : "unsaved";
   documentState.dirty = documentState.text !== snapshotText;
-  documentState.readonly = false;
+  documentState.readonly = !result.format.editable;
+  documentState.externalChange = "none";
+  documentState.externalChangePath = null;
 }
 
 export function markSaveFailed(): void {
   if (!documentState.readonly) documentState.saveStatus = "unsaved";
+}
+
+/** Устанавливает конфликт с внешним изменением для текущего файла. */
+export function markExternalChange(path: string): boolean {
+  if (documentState.path === null || !samePath(documentState.path, path)) return false;
+  documentState.externalChange = "changed";
+  documentState.externalChangePath = path;
+  return true;
+}
+
+/** Помечает удалённый файл, сохраняя текст и путь для последующего Save. */
+export function markFileDeleted(path: string): boolean {
+  if (documentState.path === null || !samePath(documentState.path, path)) return false;
+  documentState.externalChange = "deleted";
+  documentState.externalChangePath = path;
+  return true;
+}
+
+export function clearExternalChange(): void {
+  documentState.externalChange = "none";
+  documentState.externalChangePath = null;
+}
+
+function samePath(left: string, right: string): boolean {
+  return left.replaceAll("/", "\\").toLowerCase() === right.replaceAll("/", "\\").toLowerCase();
 }

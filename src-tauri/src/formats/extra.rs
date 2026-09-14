@@ -1,0 +1,171 @@
+use super::code;
+use super::json;
+use super::FormatAdapter;
+
+/// Возвращает все дополнительные адаптеры форматов вехи M6 (JSON и класс «Код и данные»)
+/// в порядке их отображения на стартовом экране.
+pub fn adapters() -> Vec<Box<dyn FormatAdapter>> {
+    let mut list: Vec<Box<dyn FormatAdapter>> = Vec::new();
+    list.push(Box::new(json::JsonAdapter));
+    list.extend(code::code_adapters());
+    list
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashSet;
+    use std::path::Path;
+
+    #[test]
+    fn test_adapters_order_and_count() {
+        let all = adapters();
+        // 1 (JSON) + 14 (Code formats) = 15 адаптеров
+        assert_eq!(all.len(), 15);
+
+        let ids: Vec<String> = all.iter().map(|a| a.caps().id).collect();
+        assert_eq!(ids[0], "json");
+        assert_eq!(ids[1], "yaml");
+        assert_eq!(ids[2], "toml");
+        assert_eq!(ids[3], "html");
+        assert_eq!(ids[4], "xml");
+        assert_eq!(ids[5], "css");
+        assert_eq!(ids[6], "javascript");
+        assert_eq!(ids[7], "typescript");
+        assert_eq!(ids[8], "python");
+        assert_eq!(ids[9], "rust");
+        assert_eq!(ids[10], "go");
+        assert_eq!(ids[11], "c");
+        assert_eq!(ids[12], "cpp");
+        assert_eq!(ids[13], "shell");
+        assert_eq!(ids[14], "jsonc");
+    }
+
+    #[test]
+    fn test_all_adapters_have_valid_capabilities() {
+        for adapter in adapters() {
+            let caps = adapter.caps();
+            assert!(!caps.id.is_empty());
+            assert!(!caps.label.is_empty());
+            assert!(!caps.default_extension.is_empty());
+            assert!(!caps.extensions.is_empty());
+            assert!(caps.editable);
+            assert!(caps.creatable);
+            assert!(!caps.live_preview);
+            assert!(caps.autosave);
+            assert!(!caps.lossy);
+            assert!(caps.syntax_mode.is_some());
+        }
+    }
+
+    #[test]
+    fn test_registry_integration_all_and_creatable() {
+        let all = crate::formats::all();
+        let creatable = crate::formats::creatable();
+
+        // 2 встроенных (markdown, plain) + 15 из extra = 17 форматов
+        assert_eq!(all.len(), 17);
+        assert_eq!(creatable.len(), 17);
+
+        // Первым должен идти markdown, вторым plain, третьим json
+        assert_eq!(all[0].id, "markdown");
+        assert_eq!(all[1].id, "plain");
+        assert_eq!(all[2].id, "json");
+    }
+
+    #[test]
+    fn test_no_duplicate_extensions_in_registry() {
+        let all = crate::formats::all();
+        let mut seen = HashSet::new();
+
+        for format in all {
+            for ext in format.extensions {
+                let normalized = ext.to_ascii_lowercase();
+                assert!(
+                    seen.insert(normalized.clone()),
+                    "Обнаружен конфликт: расширение '{}' дублируется в формате '{}'",
+                    normalized,
+                    format.id
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_no_extra_format_intercepts_markdown_or_plain() {
+        let reserved_markdown = ["md", "markdown", "mdown", "mkd"];
+        let reserved_plain = ["txt", "log", "ini", "env", "text"];
+
+        for ext in reserved_markdown {
+            let caps = crate::formats::for_extension(ext);
+            assert_eq!(
+                caps.id, "markdown",
+                "Расширение '{}' должно принадлежать формату markdown",
+                ext
+            );
+        }
+
+        for ext in reserved_plain {
+            let caps = crate::formats::for_extension(ext);
+            assert_eq!(
+                caps.id, "plain",
+                "Расширение '{}' должно принадлежать формату plain",
+                ext
+            );
+        }
+    }
+
+    #[test]
+    fn test_unknown_extension_falls_back_to_plain() {
+        assert_eq!(crate::formats::for_extension("unknown_xyz").id, "plain");
+        assert_eq!(crate::formats::for_extension("foo_bar_123").id, "plain");
+        assert_eq!(crate::formats::for_extension("").id, "plain");
+
+        assert_eq!(crate::formats::for_path(Path::new("Makefile")).id, "plain");
+        assert_eq!(
+            crate::formats::for_path(Path::new("config.unknown")).id,
+            "plain"
+        );
+    }
+
+    #[test]
+    fn test_known_extra_extensions_resolve_via_registry() {
+        let samples = [
+            ("json", "json"),
+            ("yaml", "yaml"),
+            ("yml", "yaml"),
+            ("toml", "toml"),
+            ("html", "html"),
+            ("htm", "html"),
+            ("xml", "xml"),
+            ("css", "css"),
+            ("js", "javascript"),
+            ("ts", "typescript"),
+            ("py", "python"),
+            ("rs", "rust"),
+            ("go", "go"),
+            ("c", "c"),
+            ("cpp", "cpp"),
+            ("sh", "shell"),
+            ("jsonc", "jsonc"),
+        ];
+
+        for (ext, expected_id) in samples {
+            assert_eq!(
+                crate::formats::for_extension(ext).id,
+                expected_id,
+                "Расширение '{}' должно разрешаться в '{}'",
+                ext,
+                expected_id
+            );
+            let path_str = format!("test/file.{}", ext);
+            assert_eq!(
+                crate::formats::for_path(Path::new(&path_str)).id,
+                expected_id,
+                "Путь '{}' должен разрешаться в '{}'",
+                path_str,
+                expected_id
+            );
+        }
+    }
+}

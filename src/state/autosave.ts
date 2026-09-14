@@ -3,10 +3,14 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import {
   documentState,
+  markExternalChange,
+  markFileDeleted,
   markPending,
   markSaved,
   markSaveFailed,
+  replaceDocument,
   type DocumentState,
+  type OpenedFile,
   type SaveResult,
 } from "./document.svelte";
 
@@ -39,6 +43,8 @@ export function createAutosave(options: AutosaveOptions = {}): AutosaveControlle
   let timer: ReturnType<typeof setTimeout> | undefined;
   let focusUnlisten: UnlistenFn | undefined;
   let closeUnlisten: UnlistenFn | undefined;
+  let externalChangeUnlisten: UnlistenFn | undefined;
+  let fileDeletedUnlisten: UnlistenFn | undefined;
   let saving = false;
   let queued = false;
   let disposed = false;
@@ -48,7 +54,13 @@ export function createAutosave(options: AutosaveOptions = {}): AutosaveControlle
     const current = getState();
 
     // path === null — единственное безусловное отключение автосохранения.
-    if (current.path === null || current.readonly || (!current.format.autosave && !force) || !current.dirty) {
+    if (
+      current.path === null ||
+      current.readonly ||
+      current.externalChange === "changed" ||
+      (!current.format.autosave && !force) ||
+      !current.dirty
+    ) {
       return null;
     }
 
@@ -100,6 +112,37 @@ export function createAutosave(options: AutosaveOptions = {}): AutosaveControlle
     if (!focused) void save();
   };
 
+  const samePath = (left: string, right: string): boolean =>
+    left.replaceAll("/", "\\").toLowerCase() === right.replaceAll("/", "\\").toLowerCase();
+
+  const handleExternalChange = async (event: { payload?: { path?: string } }): Promise<void> => {
+    const path = event.payload?.path;
+    const current = getState();
+    if (!path || current.path === null || !samePath(current.path, path)) return;
+
+    if (current.dirty) {
+      markExternalChange(path);
+      return;
+    }
+
+    try {
+      const opened = await invoke<OpenedFile>("open_file", { path });
+      const latest = getState();
+      // A local edit may have happened while open_file was in flight. Never
+      // overwrite that newer buffer with an external reload.
+      if (latest.path !== null && samePath(latest.path, path) && !latest.dirty) replaceDocument(opened);
+    } catch (error) {
+      markExternalChange(path);
+      options.onError?.(error);
+    }
+  };
+
+  const handleFileDeleted = (event: { payload?: { path?: string } }): void => {
+    const path = event.payload?.path;
+    const current = getState();
+    if (path && current.path !== null && samePath(current.path, path)) markFileDeleted(path);
+  };
+
   const start = async (): Promise<void> => {
     if (disposed) return;
 
@@ -108,9 +151,16 @@ export function createAutosave(options: AutosaveOptions = {}): AutosaveControlle
       const currentWindow = getCurrentWindow();
       focusUnlisten = await currentWindow.onFocusChanged(({ payload }) => handleFocus(payload));
       closeUnlisten = await listen("save-before-close", () => void save());
+      externalChangeUnlisten = await listen<{ path: string }>(
+        "file-changed-externally",
+        (event) => void handleExternalChange(event),
+      );
+      fileDeletedUnlisten = await listen<{ path: string }>("file-deleted", handleFileDeleted);
       if (disposed) {
         focusUnlisten?.();
         closeUnlisten?.();
+        externalChangeUnlisten?.();
+        fileDeletedUnlisten?.();
       }
     } catch {
       // В обычном браузере Tauri-события отсутствуют, но DOM blur всё равно работает.
@@ -124,8 +174,12 @@ export function createAutosave(options: AutosaveOptions = {}): AutosaveControlle
     globalThis.removeEventListener("blur", handleBlur);
     focusUnlisten?.();
     closeUnlisten?.();
+    externalChangeUnlisten?.();
+    fileDeletedUnlisten?.();
     focusUnlisten = undefined;
     closeUnlisten = undefined;
+    externalChangeUnlisten = undefined;
+    fileDeletedUnlisten = undefined;
   };
 
   return {

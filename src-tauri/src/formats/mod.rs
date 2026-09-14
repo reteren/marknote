@@ -24,6 +24,9 @@ pub trait FormatAdapter: Send + Sync {
     fn encode(&self, text: &str, src: &crate::encoding::Decoded) -> anyhow::Result<Vec<u8>>;
 }
 
+pub mod code;
+pub mod extra;
+pub mod json;
 pub mod markdown;
 pub mod plain;
 
@@ -31,10 +34,15 @@ fn adapters() -> &'static [Box<dyn FormatAdapter>] {
     static ADAPTERS: OnceLock<Vec<Box<dyn FormatAdapter>>> = OnceLock::new();
     ADAPTERS
         .get_or_init(|| {
-            vec![
+            // Порядок важен: он же определяет порядок плиток на стартовом экране
+            // и пунктов в меню File / New. Родной формат первым, простой текст
+            // вторым, остальные — из реестра вехи M6.
+            let mut list: Vec<Box<dyn FormatAdapter>> = vec![
                 Box::new(markdown::MarkdownAdapter),
                 Box::new(plain::PlainAdapter),
-            ]
+            ];
+            list.extend(extra::adapters());
+            list
         })
         .as_slice()
 }
