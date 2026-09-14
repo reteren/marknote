@@ -1,18 +1,18 @@
 {
-  "session": "808aab1de8ac4cad962a896bdd00a1e6",
-  "runs": 2,
+  "session": "491f1b51121342abbc9ed192f4e2deeb",
+  "runs": 1,
   "testsPerRun": 10,
   "fullyGreen": 0,
-  "passedTests": 17,
-  "failedTests": 3,
+  "passedTests": 8,
+  "failedTests": 2,
   "failuresByTest": [
     {
-      "id": "TC-06",
+      "id": "TC-09",
       "count": 1
     },
     {
-      "id": "TC-09",
-      "count": 2
+      "id": "TC-10",
+      "count": 1
     }
   ],
   "results": [
@@ -22,7 +22,7 @@
       "Name": "Запуск без аргументов: окно и заголовок MarkNote",
       "Passed": true,
       "Details": "Окно 'MarkNote', размер 916x739, visible=True",
-      "ElapsedMs": 1235,
+      "ElapsedMs": 2250,
       "Screenshot": "C:\\marknote\\qa\\shots\\run_001_01_no_args.png"
     },
     {
@@ -31,7 +31,7 @@
       "Name": "Запуск showcase.md: корректный заголовок",
       "Passed": true,
       "Details": "Заголовок 'showcase.md — MarkNote', размер 916x739, visible=True",
-      "ElapsedMs": 1874,
+      "ElapsedMs": 1829,
       "Screenshot": "C:\\marknote\\qa\\shots\\run_001_02_showcase.png"
     },
     {
@@ -40,7 +40,7 @@
       "Name": "Запуск cp1251.txt: корректный заголовок",
       "Passed": true,
       "Details": "Заголовок 'cp1251.txt — MarkNote', размер 916x739, visible=True",
-      "ElapsedMs": 1382,
+      "ElapsedMs": 1810,
       "Screenshot": "C:\\marknote\\qa\\shots\\run_001_03_cp1251.png"
     },
     {
@@ -49,7 +49,7 @@
       "Name": "Несуществующий путь: процесс жив и окно показано",
       "Passed": true,
       "Details": "processAlive=True, окна=1: 'MarkNote' 916x739 visible=True",
-      "ElapsedMs": 1218,
+      "ElapsedMs": 2162,
       "Screenshot": "C:\\marknote\\qa\\shots\\run_001_04_nonexistent.png"
     },
     {
@@ -57,17 +57,17 @@
       "Id": "TC-05",
       "Name": "Повторный запуск с тем же файлом: один процесс",
       "Passed": true,
-      "Details": "firstWindow=True, secondExited=True, processes=1, pids=21796",
-      "ElapsedMs": 3345,
+      "Details": "firstWindow=True, secondExited=True, processes=1, pids=23068",
+      "ElapsedMs": 6859,
       "Screenshot": "C:\\marknote\\qa\\shots\\run_001_05_same_file.png"
     },
     {
       "Run": 1,
       "Id": "TC-06",
       "Name": "Повторный запуск с другим файлом: второе окно",
-      "Passed": false,
-      "Details": "firstWindow=True, secondExited=True, windows=0, processes=0: ",
-      "ElapsedMs": 17871,
+      "Passed": true,
+      "Details": "firstWindow=True, secondExited=True, windows=2, processes=1: 'crlf.md — MarkNote' 916x739 visible=True; 'crlf.md — MarkNote' 916x739 visible=True",
+      "ElapsedMs": 5490,
       "Screenshot": ""
     },
     {
@@ -75,8 +75,8 @@
       "Id": "TC-07",
       "Name": "big-10k.md: окно появляется и процесс отзывчив",
       "Passed": true,
-      "Details": "window=True, responding=True, elapsed=1917 мс, processes=1",
-      "ElapsedMs": 1917,
+      "Details": "window=True, responding=True, elapsed=2034 мс, processes=1",
+      "ElapsedMs": 2034,
       "Screenshot": "C:\\marknote\\qa\\shots\\run_001_07_big_10k.png"
     },
     {
@@ -85,7 +85,7 @@
       "Name": "logo.png: бинарный файл отклонён с сообщением",
       "Passed": true,
       "Details": "binaryNotice=True, processAlive=True, title=MarkNote",
-      "ElapsedMs": 3959,
+      "ElapsedMs": 4670,
       "Screenshot": "C:\\marknote\\qa\\shots\\run_001_08_binary_rejected.png"
     },
     {
@@ -93,108 +93,18 @@
       "Id": "TC-09",
       "Name": "Несохранённый документ: close prompt и watchdog",
       "Passed": false,
-      "Details": "Меню File/New не появилось",
-      "ElapsedMs": 8107,
+      "Details": "Текст не появился в новом документе; startScreenClosed=False",
+      "ElapsedMs": 21985,
       "Screenshot": ""
     },
     {
       "Run": 1,
       "Id": "TC-10",
       "Name": "Ctrl+F: панель поиска открывается",
-      "Passed": true,
-      "Details": "searchPanel=True, processAlive=True, windows=1",
-      "ElapsedMs": 3074,
-      "Screenshot": "C:\\marknote\\qa\\shots\\run_001_10_search.png"
-    },
-    {
-      "Run": 2,
-      "Id": "TC-01",
-      "Name": "Запуск без аргументов: окно и заголовок MarkNote",
-      "Passed": true,
-      "Details": "Окно 'MarkNote', размер 916x739, visible=True",
-      "ElapsedMs": 1265,
-      "Screenshot": "C:\\marknote\\qa\\shots\\run_002_01_no_args.png"
-    },
-    {
-      "Run": 2,
-      "Id": "TC-02",
-      "Name": "Запуск showcase.md: корректный заголовок",
-      "Passed": true,
-      "Details": "Заголовок 'showcase.md — MarkNote', размер 916x739, visible=True",
-      "ElapsedMs": 1230,
-      "Screenshot": "C:\\marknote\\qa\\shots\\run_002_02_showcase.png"
-    },
-    {
-      "Run": 2,
-      "Id": "TC-03",
-      "Name": "Запуск cp1251.txt: корректный заголовок",
-      "Passed": true,
-      "Details": "Заголовок 'cp1251.txt — MarkNote', размер 916x739, visible=True",
-      "ElapsedMs": 1003,
-      "Screenshot": "C:\\marknote\\qa\\shots\\run_002_03_cp1251.png"
-    },
-    {
-      "Run": 2,
-      "Id": "TC-04",
-      "Name": "Несуществующий путь: процесс жив и окно показано",
-      "Passed": true,
-      "Details": "processAlive=True, окна=1: 'MarkNote' 916x739 visible=True",
-      "ElapsedMs": 931,
-      "Screenshot": "C:\\marknote\\qa\\shots\\run_002_04_nonexistent.png"
-    },
-    {
-      "Run": 2,
-      "Id": "TC-05",
-      "Name": "Повторный запуск с тем же файлом: один процесс",
-      "Passed": true,
-      "Details": "firstWindow=True, secondExited=True, processes=1, pids=28924",
-      "ElapsedMs": 3024,
-      "Screenshot": "C:\\marknote\\qa\\shots\\run_002_05_same_file.png"
-    },
-    {
-      "Run": 2,
-      "Id": "TC-06",
-      "Name": "Повторный запуск с другим файлом: второе окно",
-      "Passed": true,
-      "Details": "firstWindow=True, secondExited=True, windows=2, processes=1: 'crlf.md — MarkNote' 916x739 visible=True; 'crlf.md — MarkNote' 916x739 visible=True",
-      "ElapsedMs": 3486,
-      "Screenshot": ""
-    },
-    {
-      "Run": 2,
-      "Id": "TC-07",
-      "Name": "big-10k.md: окно появляется и процесс отзывчив",
-      "Passed": true,
-      "Details": "window=True, responding=True, elapsed=1186 мс, processes=1",
-      "ElapsedMs": 1186,
-      "Screenshot": "C:\\marknote\\qa\\shots\\run_002_07_big_10k.png"
-    },
-    {
-      "Run": 2,
-      "Id": "TC-08",
-      "Name": "logo.png: бинарный файл отклонён с сообщением",
-      "Passed": true,
-      "Details": "binaryNotice=True, processAlive=True, title=MarkNote",
-      "ElapsedMs": 2446,
-      "Screenshot": "C:\\marknote\\qa\\shots\\run_002_08_binary_rejected.png"
-    },
-    {
-      "Run": 2,
-      "Id": "TC-09",
-      "Name": "Несохранённый документ: close prompt и watchdog",
       "Passed": false,
-      "Details": "Текст не появился в новом документе; menuClosed=False",
-      "ElapsedMs": 7514,
-      "Screenshot": ""
-    },
-    {
-      "Run": 2,
-      "Id": "TC-10",
-      "Name": "Ctrl+F: панель поиска открывается",
-      "Passed": true,
-      "Details": "searchPanel=True, processAlive=True, windows=1",
-      "ElapsedMs": 2911,
-      "Screenshot": "C:\\marknote\\qa\\shots\\run_002_10_search.png"
+      "Details": "searchPanel=False, processAlive=True, windows=1",
+      "ElapsedMs": 9727,
+      "Screenshot": "C:\\marknote\\qa\\shots\\run_001_10_search.png"
     }
   ]
 }

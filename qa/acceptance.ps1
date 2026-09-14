@@ -707,34 +707,21 @@ function Test-UnsavedClose {
     }
     $window = Get-WindowForProcess -State $windowWait.State -ProcessId $process.Id
     [void](Bring-WindowToFront -Window $window)
-    if (-not (Send-WindowKeys -Keys "%f")) {
-        return New-Outcome -Passed $false -Details "SendKeys Alt+F недоступен" -ElapsedMs $windowWait.ElapsedMs
+    # Selecting the exact Markdown tile avoids racing the asynchronous File
+    # menu while still exercising SendKeys below for the close handshake.
+    $markdownTile = Wait-UiText -ProcessId $process.Id -Expected "Markdown .md" -TestId "TC-09-format-tile" -TimeoutSec 15
+    if (-not $markdownTile.Found) {
+        return New-Outcome -Passed $false -Details "Плитка Markdown не появилась на стартовом экране" -ElapsedMs $markdownTile.ElapsedMs
     }
-    # StartScreen also exposes "New file" immediately, so wait for the
-    # keyboard menu's complete accessible label instead of a substring that
-    # would let Enter race the menu render.
-    $newMenu = Wait-UiText -ProcessId $process.Id -Expected "New Ctrl+Shift+N" -TestId "TC-09-file-menu" -TimeoutSec 8
-    if (-not $newMenu.Found) {
-        return New-Outcome -Passed $false -Details "Меню File/New не появилось" -ElapsedMs $newMenu.ElapsedMs
+    if (-not (Click-UiElement -ProcessId $process.Id -Name "Markdown .md")) {
+        return New-Outcome -Passed $false -Details "Плитка Markdown не нажимается через UI Automation" -ElapsedMs $markdownTile.ElapsedMs
     }
-    # Click the exact accessible item rather than sending Enter to a webview
-    # whose focus can lag behind the menu render under load.
-    if (-not (Click-UiElement -ProcessId $process.Id -Name "New Ctrl+Shift+N")) {
-        return New-Outcome -Passed $false -Details "Пункт New не нажимается через UI Automation" -ElapsedMs $newMenu.ElapsedMs
-    }
-    $markdownMenu = Wait-UiText -ProcessId $process.Id -Expected "Markdown" -TestId "TC-09-format-menu" -TimeoutSec 8
-    if (-not $markdownMenu.Found) {
-        return New-Outcome -Passed $false -Details "Подменю New не появилось" -ElapsedMs ($newMenu.ElapsedMs + $markdownMenu.ElapsedMs)
-    }
-    if (-not (Click-UiElement -ProcessId $process.Id -Name "Markdown")) {
-        return New-Outcome -Passed $false -Details "Пункт Markdown не нажимается через UI Automation" -ElapsedMs ($newMenu.ElapsedMs + $markdownMenu.ElapsedMs)
-    }
-    $menuClosed = Wait-UiText -ProcessId $process.Id -Expected "New Ctrl+Shift+N" -Absent $true -TestId "TC-09-menu-closed" -TimeoutSec 8
-    [void](Bring-WindowToFront -Window (Get-WindowForProcess -State $menuClosed.State -ProcessId $process.Id))
+    $screenGone = Wait-UiText -ProcessId $process.Id -Expected "Markdown .md" -Absent $true -TestId "TC-09-start-screen-closed" -TimeoutSec 10
+    [void](Bring-WindowToFront -Window (Get-WindowForProcess -State $screenGone.State -ProcessId $process.Id))
     [void](Send-WindowKeys -Keys "qa-unsaved")
     $typed = Wait-UiText -ProcessId $process.Id -Expected "qa-unsaved" -TestId "TC-09-typed" -TimeoutSec 5
     if (-not $typed.Found) {
-        return New-Outcome -Passed $false -Details "Текст не появился в новом документе; menuClosed=$($menuClosed.Found)" -ElapsedMs ($newMenu.ElapsedMs + $markdownMenu.ElapsedMs + $typed.ElapsedMs)
+        return New-Outcome -Passed $false -Details "Текст не появился в новом документе; startScreenClosed=$($screenGone.Found)" -ElapsedMs ($markdownTile.ElapsedMs + $screenGone.ElapsedMs + $typed.ElapsedMs)
     }
     [void](Send-WindowKeys -Keys "%{F4}")
     $prompt = Wait-UiText -ProcessId $process.Id -Expected "Save changes?" -TestId "TC-09-close-prompt" -TimeoutSec 5
@@ -746,7 +733,7 @@ function Test-UnsavedClose {
     $watchdog = Wait-ProcessExit -Process $process -TestId "TC-09-watchdog" -TimeoutSec 8
     $passed = $watchdog.Found
     $details = "prompt=$($prompt.Found), watchdogClosed=$($watchdog.Found), watchdogWait=$($watchdog.ElapsedMs) мс без ответа"
-    return New-Outcome -Passed $passed -Details $details -ElapsedMs ($newMenu.ElapsedMs + $markdownMenu.ElapsedMs + $typed.ElapsedMs + $prompt.ElapsedMs + $watchdog.ElapsedMs) -Screenshot $screenshot
+    return New-Outcome -Passed $passed -Details $details -ElapsedMs ($markdownTile.ElapsedMs + $screenGone.ElapsedMs + $typed.ElapsedMs + $prompt.ElapsedMs + $watchdog.ElapsedMs) -Screenshot $screenshot
 }
 
 function Test-SearchShortcut {
