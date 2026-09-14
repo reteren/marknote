@@ -5,7 +5,10 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-use serde::{ser::Serializer, Serialize};
+use serde::{
+    ser::{SerializeMap, Serializer},
+    Serialize,
+};
 use tauri::{AppHandle, State, WebviewWindow};
 use tauri_plugin_dialog::DialogExt;
 use thiserror::Error;
@@ -13,8 +16,10 @@ use thiserror::Error;
 use crate::{
     atomic_write, binary, encoding as text_encoding,
     formats::{self, FormatCapabilities},
-    windows::{self, AppState},
+    windows::{self, AppState, FileSnapshot},
 };
+
+const MAX_IMAGE_BYTES: u64 = 16 * 1024 * 1024;
 
 #[derive(Debug, Error)]
 pub enum CommandError {
@@ -32,6 +37,10 @@ pub enum CommandError {
     ReadOnlyFormat(String),
     #[error("двоичный файл нельзя открыть как текст: {0}")]
     BinaryFile(String),
+    #[error("файл изменился на диске после открытия: {0}")]
+    FileConflict(String),
+    #[error("изображение слишком большое (лимит 16 MiB): {0}")]
+    ImageTooLarge(String),
     #[error("недопустимый путь: {0}")]
     InvalidPath(String),
     #[error("ошибка окна: {0}")]
@@ -42,6 +51,13 @@ pub enum CommandError {
 
 impl Serialize for CommandError {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        if let Self::FileConflict(path) = self {
+            let mut map = serializer.serialize_map(Some(3))?;
+            map.serialize_entry("code", "file-conflict")?;
+            map.serialize_entry("path", path)?;
+            map.serialize_entry("message", &self.to_string())?;
+            return map.end();
+        }
         serializer.serialize_str(&self.to_string())
     }
 }
@@ -96,6 +112,7 @@ pub fn open_file(
 
     state.watcher.watch(window.label(), &canonical);
     state.track_file(&canonical, window.label());
+    state.remember_file_snapshot(&canonical, &metadata);
     if let Some(file_name) = canonical.file_name().and_then(|name| name.to_str()) {
         let title = format!("{file_name} — MarkNote");
         let _ = window.set_title(&title);
@@ -162,6 +179,23 @@ pub fn save_file(
         }
     }
 
+    if let Some(expected) = state.file_snapshot(&path) {
+        match fs::metadata(&path) {
+            Ok(metadata) if FileSnapshot::from_metadata(&metadata) != expected => {
+                return Err(CommandError::FileConflict(
+                    path.to_string_lossy().into_owned(),
+                ));
+            }
+            Ok(_) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                return Err(CommandError::FileConflict(
+                    path.to_string_lossy().into_owned(),
+                ));
+            }
+            Err(error) => return Err(CommandError::Io(error)),
+        }
+    }
+
     let adapter = formats::adapter_for_path(&path);
     let format = formats::for_path(&path);
     ensure_editable(&format)?;
@@ -178,6 +212,9 @@ pub fn save_file(
         .map_err(CommandError::Format)?;
     atomic_write::write_atomic(&path, &bytes).map_err(CommandError::AtomicWrite)?;
     state.track_file(&path, window.label());
+    if let Ok(metadata) = fs::metadata(&path) {
+        state.remember_file_snapshot(&path, &metadata);
+    }
 
     Ok(save_result(path, format))
 }
@@ -186,6 +223,8 @@ pub fn save_file(
 #[tauri::command]
 pub async fn save_as(
     app: AppHandle,
+    window: WebviewWindow,
+    state: State<'_, AppState>,
     text: String,
     formatId: String,
     suggestedName: String,
@@ -230,6 +269,11 @@ pub async fn save_as(
         .encode(&text, &source)
         .map_err(CommandError::Format)?;
     atomic_write::write_atomic(&path, &bytes).map_err(CommandError::AtomicWrite)?;
+    state.watcher.watch(window.label(), &path);
+    state.track_file(&path, window.label());
+    if let Ok(metadata) = fs::metadata(&path) {
+        state.remember_file_snapshot(&path, &metadata);
+    }
 
     Ok(Some(save_result(path, format)))
 }
@@ -280,17 +324,51 @@ pub fn read_image(docPath: Option<String>, src: String) -> Result<String, Comman
         return Ok(src);
     }
 
+    if src.is_empty() || src.bytes().any(|byte| byte == 0) || has_uri_scheme(&src) {
+        return Err(CommandError::InvalidPath(
+            "путь к изображению должен быть относительным путём".to_owned(),
+        ));
+    }
+
     let source_path = PathBuf::from(&src);
-    let path = if source_path.is_absolute() {
-        source_path
-    } else {
-        let document_directory = docPath
-            .as_deref()
-            .map(Path::new)
-            .and_then(Path::parent)
-            .unwrap_or_else(|| Path::new("."));
-        document_directory.join(source_path)
-    };
+    if source_path.is_absolute() || is_windows_device_path(&source_path) {
+        return Err(CommandError::InvalidPath(
+            "абсолютные и device-пути к изображениям запрещены".to_owned(),
+        ));
+    }
+
+    let document_path = docPath.ok_or_else(|| {
+        CommandError::InvalidPath("для относительного изображения нужен путь документа".to_owned())
+    })?;
+    let document_path =
+        windows::canonical_path(Path::new(&document_path)).map_err(CommandError::InvalidPath)?;
+    if is_windows_device_path(&document_path) {
+        return Err(CommandError::InvalidPath(
+            "путь документа указывает на device".to_owned(),
+        ));
+    }
+    let document_directory = document_path.parent().ok_or_else(|| {
+        CommandError::InvalidPath("у документа нет родительского каталога".to_owned())
+    })?;
+    let path = windows::canonical_path(&document_directory.join(source_path))
+        .map_err(CommandError::InvalidPath)?;
+    if !path_is_within(document_directory, &path) || is_windows_device_path(&path) {
+        return Err(CommandError::InvalidPath(
+            "путь к изображению выходит за каталог документа".to_owned(),
+        ));
+    }
+
+    let metadata = fs::metadata(&path)?;
+    if !metadata.is_file() {
+        return Err(CommandError::InvalidPath(
+            "путь к изображению не является обычным файлом".to_owned(),
+        ));
+    }
+    if metadata.len() > MAX_IMAGE_BYTES {
+        return Err(CommandError::ImageTooLarge(
+            path.to_string_lossy().into_owned(),
+        ));
+    }
 
     let bytes = fs::read(&path)?;
     let mime = image_mime(&path);
@@ -369,6 +447,51 @@ fn image_mime(path: &Path) -> &'static str {
     }
 }
 
+fn has_uri_scheme(value: &str) -> bool {
+    let Some((scheme, _)) = value.split_once(':') else {
+        return false;
+    };
+    !scheme.is_empty()
+        && scheme.chars().enumerate().all(|(index, character)| {
+            if index == 0 {
+                character.is_ascii_alphabetic()
+            } else {
+                character.is_ascii_alphanumeric() || matches!(character, '+' | '-' | '.')
+            }
+        })
+}
+
+fn is_windows_device_path(path: &Path) -> bool {
+    let value = path.to_string_lossy();
+    let normalized = value.replace('/', "\\").to_ascii_lowercase();
+    if normalized.starts_with(r"\\.\") || normalized.starts_with(r"\\?\globalroot\") {
+        return true;
+    }
+
+    let component = normalized
+        .trim_start_matches('\\')
+        .split('\\')
+        .next()
+        .unwrap_or_default()
+        .trim_end_matches('.')
+        .split(':')
+        .next()
+        .unwrap_or_default();
+    let device_name = component.split('.').next().unwrap_or_default();
+    matches!(device_name, "con" | "prn" | "aux" | "nul")
+        || (device_name.len() == 4
+            && (device_name.starts_with("com") || device_name.starts_with("lpt"))
+            && device_name.as_bytes()[3].is_ascii_digit())
+}
+
+fn path_is_within(root: &Path, candidate: &Path) -> bool {
+    let root = root.to_string_lossy().replace('/', "\\");
+    let candidate = candidate.to_string_lossy().replace('/', "\\");
+    let root = root.trim_end_matches('\\').to_ascii_lowercase();
+    let candidate = candidate.to_ascii_lowercase();
+    candidate == root || candidate.starts_with(&(root + "\\"))
+}
+
 fn base64_encode(bytes: &[u8]) -> String {
     const TABLE: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     let mut output = String::with_capacity(bytes.len().div_ceil(3) * 4);
@@ -433,6 +556,7 @@ fn civil_from_days(days: i64) -> (i64, i64, i64) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs;
     use std::path::Path;
 
     #[test]
@@ -482,5 +606,76 @@ mod tests {
             .encode(&decoded.text, &decoded)
             .expect("plain adapter must encode");
         assert_eq!(encoded, input);
+    }
+
+    #[test]
+    fn image_path_helpers_reject_escape_and_devices() {
+        assert!(path_is_within(
+            Path::new(r"C:\docs"),
+            Path::new(r"C:\docs\images\logo.png")
+        ));
+        assert!(!path_is_within(
+            Path::new(r"C:\docs"),
+            Path::new(r"C:\docs-other\logo.png")
+        ));
+        assert!(is_windows_device_path(Path::new("NUL")));
+        assert!(is_windows_device_path(Path::new("COM1.png")));
+        assert!(!is_windows_device_path(Path::new(r"C:\docs\logo.png")));
+        assert!(has_uri_scheme("file://C:/secret.txt"));
+        assert!(!has_uri_scheme("images/logo.png"));
+    }
+
+    #[test]
+    fn read_image_stays_inside_document_directory() {
+        let directory = tempfile::tempdir().expect("temp directory");
+        let outside = tempfile::tempdir().expect("outside directory");
+        let document = directory.path().join("note.md");
+        let image = directory.path().join("logo.png");
+        let secret = outside.path().join("secret.png");
+        fs::write(&document, b"![](logo.png)").expect("document");
+        fs::write(&image, [0x89, b'P', b'N', b'G']).expect("image");
+        fs::write(&secret, b"secret").expect("outside image");
+
+        let image_url = read_image(
+            Some(document.to_string_lossy().into_owned()),
+            "logo.png".to_owned(),
+        )
+        .expect("image inside document directory");
+        assert!(image_url.starts_with("data:image/png;base64,"));
+
+        let escaped = read_image(
+            Some(document.to_string_lossy().into_owned()),
+            format!(
+                "../{}/secret.png",
+                outside.path().file_name().unwrap().to_string_lossy()
+            ),
+        );
+        assert!(matches!(escaped, Err(CommandError::InvalidPath(_))));
+    }
+
+    #[test]
+    fn read_image_rejects_files_over_limit_before_reading() {
+        let directory = tempfile::tempdir().expect("temp directory");
+        let document = directory.path().join("note.md");
+        let image = directory.path().join("huge.png");
+        fs::write(&document, b"![](huge.png)").expect("document");
+        let file = fs::File::create(&image).expect("image");
+        file.set_len(MAX_IMAGE_BYTES + 1).expect("sparse image");
+
+        assert!(matches!(
+            read_image(
+                Some(document.to_string_lossy().into_owned()),
+                "huge.png".to_owned(),
+            ),
+            Err(CommandError::ImageTooLarge(_))
+        ));
+    }
+
+    #[test]
+    fn conflict_error_has_machine_readable_code() {
+        let value = serde_json::to_value(CommandError::FileConflict("note.md".to_owned()))
+            .expect("serializable conflict");
+        assert_eq!(value["code"], "file-conflict");
+        assert_eq!(value["path"], "note.md");
     }
 }

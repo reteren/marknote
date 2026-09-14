@@ -6,6 +6,7 @@ use std::{
         atomic::{AtomicU64, AtomicUsize, Ordering},
         Mutex,
     },
+    time::SystemTime,
 };
 
 use tauri::{
@@ -24,11 +25,29 @@ pub struct AppState {
     pub(crate) open_files: Mutex<HashMap<PathBuf, String>>,
     pub(crate) empty_windows: Mutex<HashSet<String>>,
     pending_files: Mutex<HashMap<String, PathBuf>>,
+    file_snapshots: Mutex<HashMap<PathBuf, FileSnapshot>>,
     pending_closes: Mutex<HashMap<String, u64>>,
     approved_closes: Mutex<HashSet<String>>,
     pub(crate) next_window_id: AtomicUsize,
     next_close_id: AtomicU64,
     pub(crate) watcher: FileWatcher,
+}
+
+/// The on-disk state observed when a document was opened or last saved.
+/// mtime plus size catches ordinary external edits without hashing every save.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct FileSnapshot {
+    pub(crate) modified: Option<SystemTime>,
+    pub(crate) len: u64,
+}
+
+impl FileSnapshot {
+    pub(crate) fn from_metadata(metadata: &std::fs::Metadata) -> Self {
+        Self {
+            modified: metadata.modified().ok(),
+            len: metadata.len(),
+        }
+    }
 }
 
 impl AppState {
@@ -37,6 +56,7 @@ impl AppState {
             open_files: Mutex::new(HashMap::new()),
             empty_windows: Mutex::new(HashSet::new()),
             pending_files: Mutex::new(HashMap::new()),
+            file_snapshots: Mutex::new(HashMap::new()),
             pending_closes: Mutex::new(HashMap::new()),
             approved_closes: Mutex::new(HashSet::new()),
             next_window_id: AtomicUsize::new(1),
@@ -141,9 +161,36 @@ impl AppState {
         self.reserve_file(registry_key(path), label);
     }
 
+    pub(crate) fn remember_file_snapshot(&self, path: &Path, metadata: &std::fs::Metadata) {
+        if let Ok(mut snapshots) = self.file_snapshots.lock() {
+            snapshots.insert(registry_key(path), FileSnapshot::from_metadata(metadata));
+        }
+    }
+
+    pub(crate) fn file_snapshot(&self, path: &Path) -> Option<FileSnapshot> {
+        self.file_snapshots
+            .lock()
+            .ok()
+            .and_then(|snapshots| snapshots.get(&registry_key(path)).copied())
+    }
+
     fn forget_window(&self, label: &str) {
+        let owned_paths = self
+            .open_files
+            .lock()
+            .map(|open_files| {
+                open_files
+                    .iter()
+                    .filter(|(_, owner)| owner.as_str() == label)
+                    .map(|(path, _)| path.clone())
+                    .collect::<HashSet<_>>()
+            })
+            .unwrap_or_default();
         if let Ok(mut open_files) = self.open_files.lock() {
             open_files.retain(|_, owner| owner != label);
+        }
+        if let Ok(mut snapshots) = self.file_snapshots.lock() {
+            snapshots.retain(|path, _| !owned_paths.contains(path));
         }
         if let Ok(mut empty) = self.empty_windows.lock() {
             empty.remove(label);
@@ -162,6 +209,9 @@ impl AppState {
         if let Ok(mut open_files) = self.open_files.lock() {
             if open_files.get(key).is_some_and(|owner| owner == label) {
                 open_files.remove(key);
+                if let Ok(mut snapshots) = self.file_snapshots.lock() {
+                    snapshots.remove(key);
+                }
             }
         }
     }
@@ -373,16 +423,14 @@ fn raise_window(window: &WebviewWindow) {
 
 pub(crate) fn canonical_path(path: &Path) -> Result<PathBuf, String> {
     std::fs::canonicalize(path)
-        .map(strip_extended_prefix)
+        .map(preserve_extended_path)
         .map_err(|error| format!("не удалось определить путь '{}': {error}", path.display()))
 }
 
-fn strip_extended_prefix(path: PathBuf) -> PathBuf {
-    let path = path.to_string_lossy();
-    match path.strip_prefix(r"\\?\") {
-        Some(path) => PathBuf::from(path),
-        None => PathBuf::from(path.as_ref()),
-    }
+/// `canonicalize` already returns the Win32 extended form when needed.  Keep
+/// it intact: stripping `\\?\` breaks long local paths and `\\?\UNC\...`.
+fn preserve_extended_path(path: PathBuf) -> PathBuf {
+    path
 }
 
 fn registry_key(path: &Path) -> PathBuf {
@@ -424,3 +472,22 @@ pub fn apply_dark_titlebar(window: &WebviewWindow) {
 
 #[cfg(not(windows))]
 pub fn apply_dark_titlebar(_window: &WebviewWindow) {}
+
+#[cfg(test)]
+mod tests {
+    use super::preserve_extended_path;
+    use std::path::PathBuf;
+
+    #[test]
+    fn extended_unc_path_keeps_unc_prefix() {
+        let path = PathBuf::from(r"\\?\UNC\server\share\folder\note.md");
+        assert_eq!(preserve_extended_path(path.clone()), path);
+    }
+
+    #[test]
+    fn extended_long_local_path_keeps_prefix() {
+        let path = PathBuf::from(format!(r"\\?\C:\{}\note.md", "nested\\".repeat(80)));
+        assert!(path.to_string_lossy().starts_with(r"\\?\C:\"));
+        assert_eq!(preserve_extended_path(path.clone()), path);
+    }
+}
