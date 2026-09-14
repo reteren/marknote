@@ -120,6 +120,7 @@ impl FileWatcher {
 | `read_image` | `docPath: Option<String>, src: String` | `String` (data-URL) |
 | `open_in_new_window` | `path: String` | `()` |
 | `reveal_in_explorer` | `path: String` | `()` |
+| `take_pending_file` | — | `Option<String>` — путь, отложенный для этого окна |
 
 ```ts
 // то, что видит фронтенд (serde camelCase)
@@ -145,6 +146,15 @@ type NewDocument = { text: string; format: FormatCapabilities };
 
 Событие `open-file-request` с payload `{ "path": String }` — окно просят
 открыть файл (аргумент командной строки, второй запуск, проводник).
+
+**Важно про старт.** Событием пользоваться можно только для окон, которые
+уже живут. При первом запуске `setup` отрабатывает раньше, чем webview
+загрузит Svelte, а события Tauri не буферизуются — отправленное в этот
+момент событие теряется, и файл из аргумента не открывается. Поэтому путь,
+предназначенный окну, складывается на стороне Rust, а фронтенд забирает его
+командой `take_pending_file` сразу после того, как подписался на событие.
+Открытие обязано быть идемпотентным: если путь придёт и событием, и
+командой, файл открывается один раз.
 
 ## 6. Frontend: границы W3 ↔ W4
 
@@ -187,9 +197,27 @@ export function createEditor(opts: {
   parent: HTMLElement;
   doc: string;
   format: FormatCapabilities;
+  /** Нужен для разрешения относительных ссылок на картинки. null — документ
+   *  ещё не сохранён, относительные ссылки разрешить нельзя. */
+  path?: string | null;
   onChange: (doc: string) => void;
   onStats: (stats: EditorStats) => void;
 }): import("@codemirror/view").EditorView;
+
+/** Меняет путь у живого редактора без пересборки расширений: после
+ *  «Сохранить как» ссылки должны разрешаться относительно новой папки. */
+export function setEditorDocumentPath(
+  view: import("@codemirror/view").EditorView,
+  path: string | null,
+): void;
+
+// src/editor/imageResolver.ts
+/** data: и http(s) отдаются как есть; относительный путь читается командой
+ *  read_image. Кэш по паре «путь документа + ссылка», сбрасывается при
+ *  смене документа. */
+export function createImageResolver(
+  docPath: string | null,
+): (src: string) => Promise<string>;
 ```
 
 ## 7. Общие правила
