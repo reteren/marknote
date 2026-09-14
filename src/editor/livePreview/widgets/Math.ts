@@ -1,17 +1,28 @@
-import katex from "katex";
 import { WidgetType, type EditorView } from "@codemirror/view";
 
+type KatexApi = typeof import("katex").default;
+
 const renderedMath = new Map<string, string>();
+let katexLoader: Promise<KatexApi> | null = null;
 
 function escapeHtml(value: string) {
   return value.replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char] ?? char);
 }
 
-/** KaTeX вызывается только тогда, когда виджет реально попал в DOM. */
-function renderMath(source: string, displayMode: boolean): string {
+function loadKatex(): Promise<KatexApi> {
+  if (!katexLoader) {
+    // Движок и его шрифты со стилями попадают в отдельный чанк и грузятся
+    // только при фактическом появлении формулы в предпросмотре.
+    katexLoader = Promise.all([import("katex"), import("katex/dist/katex.min.css")]).then(([module]) => module.default);
+  }
+  return katexLoader;
+}
+
+function renderMath(source: string, displayMode: boolean, katex: KatexApi): string {
   const key = `${displayMode ? "display" : "inline"}:${source}`;
   const cached = renderedMath.get(key);
-  if (cached) return cached;
+  if (cached !== undefined) return cached;
+
   let html: string;
   try {
     html = katex.renderToString(source, { displayMode, throwOnError: false, output: "htmlAndMathml" });
@@ -22,6 +33,7 @@ function renderMath(source: string, displayMode: boolean): string {
   return html;
 }
 
+/** Виджет формулы с ленивой загрузкой KaTeX и кэшем по исходному тексту. */
 export class MathWidget extends WidgetType {
   constructor(
     readonly source: string,
@@ -37,7 +49,17 @@ export class MathWidget extends WidgetType {
   toDOM(_view: EditorView): HTMLElement {
     const element = document.createElement(this.displayMode ? "div" : "span");
     element.className = `cm-marknote-math${this.displayMode ? " cm-marknote-math-display" : ""}`;
-    element.innerHTML = renderMath(this.source, this.displayMode);
+    // Пока KaTeX и его CSS грузятся, оставляем редактируемый исходник на месте.
+    element.textContent = this.source;
+
+    void loadKatex().then(
+      (katex) => {
+        element.innerHTML = renderMath(this.source, this.displayMode, katex);
+      },
+      () => {
+        // При сбое динамического импорта исходный текст остаётся видимым.
+      },
+    );
     return element;
   }
 }
@@ -45,3 +67,4 @@ export class MathWidget extends WidgetType {
 export function clearMathCache() {
   renderedMath.clear();
 }
+

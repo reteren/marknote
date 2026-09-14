@@ -12,6 +12,8 @@ import { isNodeActive } from "./isNodeActive";
 import { decorationsForBlockNode } from "./blocks";
 import { codeBlockBuilder } from "./codeBlocks";
 import { tableBuilder } from "./tables";
+import { calloutBuilder } from "./callouts";
+import { footnoteBuilder } from "./footnotes";
 import { decorationsForInlineNode, type DecorationSpec } from "./inline";
 import type { BlockBuilder, BuilderContext } from "./types";
 import type { ImageResolver } from "./widgets/Image";
@@ -63,13 +65,17 @@ function asDecorationRanges(ranges: readonly Range<Decoration>[]) {
 }
 
 /**
- * Block builders are intentionally registered in one place.  A builder is
+ * Block builders are intentionally registered in one place. A builder is
  * allowed to own a node completely, in which case traversal of its children
- * is skipped.  `tables.ts` is not listed until its owner fixes the currently
- * known type error; missing optional modules are therefore not part of this
- * module's import graph.
+ * is skipped. The order mirrors the M4 contract: table and code builders are
+ * followed by callouts and footnotes, before the legacy block fallback.
  */
-export const livePreviewBlockBuilders: readonly BlockBuilder[] = [tableBuilder, codeBlockBuilder];
+export const livePreviewBlockBuilders: readonly BlockBuilder[] = [
+  tableBuilder,
+  codeBlockBuilder,
+  calloutBuilder,
+  footnoteBuilder,
+];
 
 function runBlockBuilders(
   view: EditorView,
