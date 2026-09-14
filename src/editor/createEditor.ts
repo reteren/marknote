@@ -3,7 +3,10 @@ import { EditorState, StateEffect, StateField, type Extension } from "@codemirro
 import { EditorView, highlightActiveLine } from "@codemirror/view";
 import { marknoteMarkdown } from "./markdownExtensions";
 import { livePreview } from "./livePreview";
-import { marknoteKeymap } from "./keymap";
+import { createMarknoteKeymap, type MarknoteKeymapHandlers } from "./keymap";
+import { marknoteSearch } from "./search";
+import { tableKeymap } from "./livePreview/tables";
+import { keymap } from "@codemirror/view";
 import { marknoteTheme } from "./theme";
 import { createImageResolver } from "./imageResolver";
 import type { FormatCapabilities } from "../state/formats.svelte";
@@ -90,6 +93,9 @@ export function createEditor(opts: {
   doc: string;
   path?: string | null;
   format: FormatCapabilities;
+  /** Команды оболочки: сохранение, открытие, окна, масштаб. Приходят из
+   *  src/state/actions.ts — редактор их не реализует, только вызывает. */
+  handlers?: MarknoteKeymapHandlers;
   onChange: (doc: string) => void;
   onStats: (stats: EditorStats) => void;
 }): EditorView {
@@ -110,7 +116,11 @@ export function createEditor(opts: {
 
   const extensions: Extension[] = [
     documentPathField,
-    marknoteKeymap,
+    // Таблица обрабатывает Tab раньше общего keymap, иначе сработает
+    // отступ списка вместо перехода к следующей ячейке.
+    keymap.of(tableKeymap),
+    createMarknoteKeymap({ handlers: opts.handlers }),
+    marknoteSearch(),
     EditorView.lineWrapping,
     highlightActiveLine(),
     markdown({ extensions: marknoteMarkdown, addKeymap: false }),
