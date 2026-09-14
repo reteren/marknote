@@ -1,10 +1,11 @@
 import { markdown } from "@codemirror/lang-markdown";
-import { EditorState, type Extension } from "@codemirror/state";
+import { EditorState, StateEffect, StateField, type Extension } from "@codemirror/state";
 import { EditorView, highlightActiveLine } from "@codemirror/view";
 import { marknoteMarkdown } from "./markdownExtensions";
 import { livePreview } from "./livePreview";
 import { marknoteKeymap } from "./keymap";
 import { marknoteTheme } from "./theme";
+import { createImageResolver } from "./imageResolver";
 import type { FormatCapabilities } from "../state/formats.svelte";
 
 export type EditorStats = {
@@ -72,14 +73,43 @@ export function getEditorStats(state: EditorState): EditorStats {
   };
 }
 
+const setEditorDocumentPathEffect = StateEffect.define<string | null>();
+
+/** Обновляет путь документа без пересоздания редактора и его расширений. */
+export function setEditorDocumentPath(view: EditorView, path: string | null): void {
+  // selection в спецификации транзакции заставляет ViewPlugin пересобрать
+  // декорации сразу после обновления StateField.
+  view.dispatch({
+    effects: setEditorDocumentPathEffect.of(path),
+    selection: view.state.selection,
+  });
+}
+
 export function createEditor(opts: {
   parent: HTMLElement;
   doc: string;
+  path?: string | null;
   format: FormatCapabilities;
   onChange: (doc: string) => void;
   onStats: (stats: EditorStats) => void;
 }): EditorView {
+  const imageResolver = createImageResolver(opts.path ?? null);
+  const documentPathField = StateField.define<string | null>({
+    create: () => opts.path ?? null,
+    update(path, transaction) {
+      let nextPath = path;
+      for (const effect of transaction.effects) {
+        if (effect.is(setEditorDocumentPathEffect)) {
+          imageResolver.setDocumentPath(effect.value);
+          nextPath = effect.value;
+        }
+      }
+      return nextPath;
+    },
+  });
+
   const extensions: Extension[] = [
+    documentPathField,
     marknoteKeymap,
     EditorView.lineWrapping,
     highlightActiveLine(),
@@ -91,7 +121,7 @@ export function createEditor(opts: {
     }),
   ];
 
-  if (opts.format.livePreview) extensions.push(livePreview());
+  if (opts.format.livePreview) extensions.push(livePreview({ resolveImage: imageResolver }));
 
   const view = new EditorView({
     state: EditorState.create({ doc: opts.doc, extensions }),
