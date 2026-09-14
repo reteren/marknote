@@ -1,6 +1,6 @@
 {
   "name": "marknote",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Fast Markdown editor for Windows",
   "type": "module",
   "private": true,
@@ -30,6 +30,9 @@
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^7.3.0",
     "@tauri-apps/cli": "^2.11.4",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/svelte": "^5.4.2",
+    "jsdom": "^26.1.0",
     "svelte": "^5.57.0",
     "svelte-check": "^4.0.0",
     "typescript": "^6.0.3",
