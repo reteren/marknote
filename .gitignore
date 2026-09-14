@@ -1,0 +1,22 @@
+# Node
+node_modules/
+dist/
+.vite/
+
+# Rust / Tauri
+src-tauri/target/
+src-tauri/gen/
+
+# Редакторы и ОС
+.vscode/*
+!.vscode/extensions.json
+.idea/
+Thumbs.db
+desktop.ini
+
+# Сборка и подпись
+*.exe
+*.msi
+*.pfx
+.env
+.env.local

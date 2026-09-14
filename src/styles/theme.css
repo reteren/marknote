@@ -1,0 +1,151 @@
+/*
+ * MarkNote — тёмная тема.
+ * Значения сняты «на глаз» с темы Obsidian по умолчанию. Перед релизом стоит
+ * сверить пипеткой со скриншотом Obsidian: в M2 расхождение будет заметно.
+ * Единственная тема в программе, светлой не предусмотрено.
+ */
+
+:root {
+  /* Поверхности */
+  --bg-primary: #1e1e1e;          /* область текста */
+  --bg-primary-alt: #1a1a1a;      /* подсветка активной строки */
+  --bg-secondary: #161616;        /* меню, строка состояния */
+  --bg-secondary-alt: #0f0f0f;    /* вложенные панели */
+  --bg-modifier-border: #2f2f2f;
+  --bg-modifier-border-hover: #3d3d3d;
+  --bg-modifier-hover: rgba(255, 255, 255, 0.055);
+  --bg-modifier-active: rgba(255, 255, 255, 0.09);
+
+  /* Текст */
+  --text-normal: #dadada;
+  --text-muted: #999999;
+  --text-faint: #666666;
+  --text-on-accent: #ffffff;
+  --text-error: #e35d5d;
+  --text-success: #6bb96b;
+
+  /* Акцент */
+  --accent: #7c6cf0;
+  --accent-hover: #8b7cf5;
+  --text-accent: #a292f5;
+
+  /* Выделение и курсор */
+  --text-selection: rgba(80, 100, 155, 0.38);
+  --text-highlight-bg: rgba(255, 208, 0, 0.34);   /* ==подсветка== */
+  --search-match-bg: rgba(255, 177, 80, 0.28);
+  --search-match-current-bg: rgba(255, 177, 80, 0.55);
+  --caret-color: #dadada;
+
+  /* Код */
+  --code-bg: #2a2a2a;
+  --code-text: #d98e7f;
+  --code-block-bg: #161616;
+
+  /* Типографика */
+  --font-ui: "Inter", "Segoe UI Variable", "Segoe UI", sans-serif;
+  --font-text: "Inter", "Segoe UI Variable", "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", "Cascadia Code", Consolas, monospace;
+
+  --font-size-ui: 13px;
+  --font-size-text: 16px;
+  --font-size-mono: 14px;
+  --line-height-text: 1.6;
+  --line-height-ui: 1.4;
+
+  /* Заголовки: масштаб Obsidian по умолчанию */
+  --h1-size: 1.802em;
+  --h2-size: 1.602em;
+  --h3-size: 1.424em;
+  --h4-size: 1.266em;
+  --h5-size: 1.125em;
+  --h6-size: 1em;
+  --h1-weight: 700;
+  --h2-weight: 600;
+  --h3-weight: 600;
+  --h4-weight: 600;
+  --h5-weight: 600;
+  --h6-weight: 600;
+  --h1-color: var(--text-normal);
+  --h2-color: var(--text-normal);
+  --h3-color: var(--text-normal);
+  --h4-color: var(--text-normal);
+  --h5-color: var(--text-normal);
+  --h6-color: var(--text-muted);
+
+  /* Раскладка */
+  --line-width: 81ch;        /* ширина колонки текста, см. SPEC 4.2 */
+  --editor-padding: 32px;
+  --menubar-height: 30px;
+  --statusbar-height: 24px;
+  --radius-s: 4px;
+  --radius-m: 6px;
+
+  /* Цвета callout-блоков */
+  --callout-note: 122, 162, 247;
+  --callout-tip: 78, 201, 176;
+  --callout-info: 122, 162, 247;
+  --callout-success: 107, 185, 107;
+  --callout-question: 224, 175, 104;
+  --callout-warning: 224, 175, 104;
+  --callout-danger: 227, 93, 93;
+  --callout-example: 162, 146, 245;
+  --callout-quote: 153, 153, 153;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg-primary);
+  color: var(--text-normal);
+  font-family: var(--font-ui);
+  font-size: var(--font-size-ui);
+  line-height: var(--line-height-ui);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Выделение текста не должно ничего перекрашивать — только подложку */
+::selection {
+  background: var(--text-selection);
+}
+
+/* Полосы прокрутки в тон теме */
+::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--bg-modifier-border);
+  border: 3px solid var(--bg-primary);
+  border-radius: 6px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--bg-modifier-border-hover);
+}
+
+/* Клавиатурный фокус виден всегда: в программе без настроек это единственный
+   способ понять, где ты находишься */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
