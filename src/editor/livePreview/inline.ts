@@ -4,6 +4,33 @@ import type { SyntaxNode } from "@lezer/common";
 import { ImageWidget, type ImageResolver } from "./widgets/Image";
 import { MathWidget } from "./widgets/Math";
 
+const SAFE_LINK_PROTOCOLS = new Set(["http:", "https:", "mailto:"]);
+
+/**
+ * Returns a normalized URL only for schemes that make sense for a note.
+ *
+ * Deliberately use the platform URL parser rather than a string blacklist:
+ * it canonicalizes the scheme (including case and C0 whitespace handling),
+ * rejects malformed/relative destinations, and does not treat percent- or
+ * Unicode-encoded text as a protocol. Relative links are left to a future
+ * file-link action instead of being opened in the WebView's URL context.
+ */
+export function safeLinkHref(raw: string): string | null {
+  if (!raw) return null;
+
+  let parsed: URL;
+  try {
+    // No base URL is supplied on purpose: relative and protocol-relative
+    // links must not become an https URL merely because the editor has a
+    // synthetic origin.
+    parsed = new URL(raw);
+  } catch {
+    return null;
+  }
+
+  return SAFE_LINK_PROTOCOLS.has(parsed.protocol) ? parsed.href : null;
+}
+
 export interface DecorationSpec {
   from: number;
   to: number;

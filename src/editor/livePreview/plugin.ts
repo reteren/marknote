@@ -14,7 +14,7 @@ import { codeBlockBuilder } from "./codeBlocks";
 import { tableBuilder } from "./tables";
 import { calloutBuilder } from "./callouts";
 import { footnoteBuilder } from "./footnotes";
-import { decorationsForInlineNode, type DecorationSpec } from "./inline";
+import { decorationsForInlineNode, safeLinkHref, type DecorationSpec } from "./inline";
 import type { BlockBuilder, BuilderContext } from "./types";
 import type { ImageResolver } from "./widgets/Image";
 
@@ -214,9 +214,10 @@ function openLinkOnCtrlClick(event: MouseEvent, view: EditorView) {
   const url = link?.getChild("URL");
   if (!url) return false;
   const href = view.state.doc.sliceString(url.from, url.to).replace(/^<|>$/g, "");
-  if (!href || /^javascript:/i.test(href)) return false;
+  const safeHref = safeLinkHref(href);
+  if (!safeHref) return false;
   event.preventDefault();
-  if (typeof window !== "undefined") window.open(href, "_blank", "noopener,noreferrer");
+  if (typeof window !== "undefined") window.open(safeHref, "_blank", "noopener,noreferrer");
   return true;
 }
 

@@ -17,6 +17,8 @@ desktop.ini
 # Сборка и подпись
 *.exe
 *.msi
+*.pdb
+*.ilk
 *.pfx
 .env
 .env.local
