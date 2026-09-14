@@ -17,5 +17,15 @@ export default defineConfig({
     target: "chrome105", // WebView2 на поддерживаемых Windows 10
     minify: "esbuild",
     sourcemap: false,
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          const moduleId = id.replaceAll("\\", "/");
+          // KaTeX нужен только редактору, в котором встретилась формула.
+          if (moduleId.includes("/node_modules/katex/")) return "katex";
+          return undefined;
+        },
+      },
+    },
   },
 });
