@@ -1,6 +1,6 @@
 [package]
 name = "marknote"
-version = "1.0.1"
+version = "1.0.2"
 description = "Fast Markdown editor for Windows"
 edition = "2021"
 rust-version = "1.77"
@@ -8,6 +8,12 @@ rust-version = "1.77"
 [lib]
 name = "marknote_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
+
+[features]
+# Без этой feature релизная сборка берёт фронтенд с dev-сервера, а не из
+# встроенного dist: собранный exe показывает «localhost refused to connect».
+# tauri build подставляет её сам, но cargo build --release — нет.
+custom-protocol = ["tauri/custom-protocol"]
 
 [build-dependencies]
 tauri-build = { version = "2.6.3", features = [] }
