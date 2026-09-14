@@ -25,10 +25,13 @@ pub trait FormatAdapter: Send + Sync {
 }
 
 pub mod code;
+pub mod docx;
 pub mod extra;
 pub mod json;
 pub mod markdown;
+pub mod pdf;
 pub mod plain;
+pub mod rtf;
 
 fn adapters() -> &'static [Box<dyn FormatAdapter>] {
     static ADAPTERS: OnceLock<Vec<Box<dyn FormatAdapter>>> = OnceLock::new();

@@ -1,5 +1,8 @@
 use super::code;
+use super::docx;
 use super::json;
+use super::pdf;
+use super::rtf;
 use super::FormatAdapter;
 
 /// Возвращает все дополнительные адаптеры форматов вехи M6 (JSON и класс «Код и данные»)
@@ -8,6 +11,11 @@ pub fn adapters() -> Vec<Box<dyn FormatAdapter>> {
     let mut list: Vec<Box<dyn FormatAdapter>> = Vec::new();
     list.push(Box::new(json::JsonAdapter));
     list.extend(code::code_adapters());
+    // Классы D и E из docs/FORMATS.md идут последними: RTF сохраняется с
+    // потерями, PDF и DOCX открываются только на чтение.
+    list.extend(rtf::adapters());
+    list.extend(pdf::adapters());
+    list.extend(docx::adapters());
     list
 }
 
@@ -20,8 +28,8 @@ mod tests {
     #[test]
     fn test_adapters_order_and_count() {
         let all = adapters();
-        // 1 (JSON) + 14 (Code formats) = 15 адаптеров
-        assert_eq!(all.len(), 15);
+        // 1 (JSON) + 14 (код и данные) + 3 (RTF, PDF, DOCX) = 18 адаптеров
+        assert_eq!(all.len(), 18);
 
         let ids: Vec<String> = all.iter().map(|a| a.caps().id).collect();
         assert_eq!(ids[0], "json");
@@ -39,6 +47,11 @@ mod tests {
         assert_eq!(ids[12], "cpp");
         assert_eq!(ids[13], "shell");
         assert_eq!(ids[14], "jsonc");
+        // Классы D и E идут последними: сначала всё, что редактируется без
+        // потерь, затем конвертируемый RTF и форматы только для чтения.
+        assert_eq!(ids[15], "rtf");
+        assert_eq!(ids[16], "pdf");
+        assert_eq!(ids[17], "docx");
     }
 
     #[test]
@@ -49,12 +62,35 @@ mod tests {
             assert!(!caps.label.is_empty());
             assert!(!caps.default_extension.is_empty());
             assert!(!caps.extensions.is_empty());
-            assert!(caps.editable);
-            assert!(caps.creatable);
-            assert!(!caps.live_preview);
-            assert!(caps.autosave);
-            assert!(!caps.lossy);
-            assert!(caps.syntax_mode.is_some());
+
+            // Требования зависят от класса формата (docs/FORMATS.md).
+            match caps.id.as_str() {
+                // Класс E: только чтение. Сохранять нельзя, создавать нечего,
+                // автосохранение бессмысленно, содержимое приходит с потерями.
+                "pdf" | "docx" => {
+                    assert!(!caps.editable, "{} обязан быть только для чтения", caps.id);
+                    assert!(!caps.creatable);
+                    assert!(!caps.autosave);
+                    assert!(caps.lossy);
+                }
+                // Класс D: правится, но сохраняется с потерями оформления,
+                // поэтому автосохранение выключено — ROADMAP числит это риском.
+                "rtf" => {
+                    assert!(caps.editable);
+                    assert!(!caps.creatable);
+                    assert!(!caps.autosave, "автосохранение RTF обязано быть выключено");
+                    assert!(caps.lossy);
+                }
+                // Классы B и C: правятся и сохраняются байт в байт.
+                _ => {
+                    assert!(caps.editable);
+                    assert!(caps.creatable);
+                    assert!(!caps.live_preview);
+                    assert!(caps.autosave);
+                    assert!(!caps.lossy);
+                    assert!(caps.syntax_mode.is_some());
+                }
+            }
         }
     }
 
@@ -63,8 +99,9 @@ mod tests {
         let all = crate::formats::all();
         let creatable = crate::formats::creatable();
 
-        // 2 встроенных (markdown, plain) + 15 из extra = 17 форматов
-        assert_eq!(all.len(), 17);
+        // 2 встроенных (markdown, plain) + 18 из extra = 20 форматов
+        assert_eq!(all.len(), 20);
+        // PDF, DOCX и RTF с нуля не создаются: их нет на стартовом экране.
         assert_eq!(creatable.len(), 17);
 
         // Первым должен идти markdown, вторым plain, третьим json
