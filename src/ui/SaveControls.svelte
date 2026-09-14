@@ -80,13 +80,16 @@
   async function handleSave(): Promise<void> {
     if (saveDisabled) return;
 
-    if (onSave) {
-      await onSave();
+    // An untitled document always follows the Save As flow.  Check this
+    // before the generic save callback so a parent exposing both callbacks
+    // cannot accidentally invoke two different save paths.
+    if (path === null) {
+      await handleSaveAs();
       return;
     }
 
-    if (path === null) {
-      await handleSaveAs();
+    if (onSave) {
+      await onSave();
       return;
     }
 

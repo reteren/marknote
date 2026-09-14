@@ -20,10 +20,11 @@ describe("SaveControls state and actions", () => {
     expect(document.body.textContent).toMatch(/Saved\s+\d{1,2}:\d{2}/u);
   });
 
-  it("blocks both save actions for a read-only format", () => {
+  it("blocks Save but keeps Save as Markdown available for a read-only format", () => {
     render(SaveControls, { props: { path: "report.pdf", format: format("pdf", { label: "PDF", editable: false }) } });
-    const buttons = Array.from(document.querySelectorAll<HTMLButtonElement>("button"));
-    expect(buttons.every((button) => button.disabled)).toBe(true);
+    expect(document.querySelector<HTMLButtonElement>(".save-btn")?.disabled).toBe(true);
+    expect(document.querySelector<HTMLButtonElement>(".save-as-btn")?.disabled).toBe(false);
+    expect(document.body.textContent).toContain("Save as Markdown…");
   });
 
   it("routes Save for an untitled document to Save As", async () => {
