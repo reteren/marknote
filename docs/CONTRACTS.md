@@ -213,3 +213,54 @@ export function createEditor(opts: {
   Проверки: `cargo check`, `npx tsc --noEmit`, `npm run build`, `npx vitest run`.
 - Ошибка компиляции в чужом файле — это не твоя задача. Убедись, что твои файлы
   чисты, и упомяни чужую ошибку в отчёте.
+
+## 9. Подключаемые построители декораций (веха M4)
+
+Блочные элементы M4 пишутся отдельными модулями параллельно с плагином M2.
+Общий тип — в `src/editor/livePreview/types.ts` (владелец: координатор).
+
+```ts
+export type DecoSink = (deco: Range<Decoration>) => void;
+export type BuilderContext = {
+  view: EditorView;
+  node: SyntaxNode;
+  active: boolean;   // результат isNodeActive, своего правила не изобретать
+  add: DecoSink;     // replace / mark / widget
+  atomic: DecoSink;  // диапазоны для EditorView.atomicRanges
+};
+export type BlockBuilder = (ctx: BuilderContext) => boolean; // true — узел обработан
+```
+
+Модули и их владельцы:
+
+| Файл | Экспорт | Владелец |
+| --- | --- | --- |
+| `src/editor/livePreview/tables.ts` | `tableBuilder: BlockBuilder` | W5 |
+| `src/editor/livePreview/codeBlocks.ts` | `codeBlockBuilder: BlockBuilder` | W5 |
+| `src/editor/livePreview/callouts.ts` | `calloutBuilder: BlockBuilder` | W6 |
+| `src/editor/livePreview/footnotes.ts` | `footnoteBuilder: BlockBuilder` | W6 |
+
+`plugin.ts` (владелец W4) при обходе дерева зовёт построители по порядку и
+останавливается на первом, вернувшем `true`. Если построитель ещё не создан —
+его просто нет в списке; сборка от этого не ломается.
+
+## 10. Поиск и замена (веха M5)
+
+| Файл | Экспорт | Владелец |
+| --- | --- | --- |
+| `src/editor/search.ts` | `marknoteSearch(): Extension`, `searchCommands` | W7 |
+| `src/ui/FindPanel.svelte` | компонент панели | W7 |
+
+Исключение из владения W3: эти два файла его не касаются, остальной `src/ui/**`
+по-прежнему за ним.
+
+## 11. Адаптеры форматов сверх реестра M3 (веха M6)
+
+| Файл | Экспорт | Владелец |
+| --- | --- | --- |
+| `src-tauri/src/formats/extra.rs` | `pub fn adapters() -> Vec<Box<dyn FormatAdapter>>` | W8 |
+| `src-tauri/src/formats/code.rs` | адаптер «код и данные» | W8 |
+| `src-tauri/src/formats/json.rs` | адаптер JSON | W8 |
+
+Реестр в `formats/mod.rs` (владелец W2) подмешивает `extra::adapters()` к своим
+двум встроенным адаптерам. Пока файла нет — реестр работает на двух форматах.
