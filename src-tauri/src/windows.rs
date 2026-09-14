@@ -3,7 +3,7 @@ use std::{
     env,
     path::{Path, PathBuf},
     sync::{
-        atomic::{AtomicUsize, Ordering},
+        atomic::{AtomicU64, AtomicUsize, Ordering},
         Mutex,
     },
 };
@@ -17,13 +17,17 @@ use crate::watcher::FileWatcher;
 
 const MAIN_WINDOW_LABEL: &str = "main";
 const WINDOW_LABEL_PREFIX: &str = "win-";
+const CLOSE_RESPONSE_TIMEOUT_SECS: u64 = 5;
 
 /// Общее состояние процесса: реестр файлов, свободные стартовые окна и watcher.
 pub struct AppState {
     pub(crate) open_files: Mutex<HashMap<PathBuf, String>>,
     pub(crate) empty_windows: Mutex<HashSet<String>>,
     pending_files: Mutex<HashMap<String, PathBuf>>,
+    pending_closes: Mutex<HashMap<String, u64>>,
+    approved_closes: Mutex<HashSet<String>>,
     pub(crate) next_window_id: AtomicUsize,
+    next_close_id: AtomicU64,
     pub(crate) watcher: FileWatcher,
 }
 
@@ -33,7 +37,10 @@ impl AppState {
             open_files: Mutex::new(HashMap::new()),
             empty_windows: Mutex::new(HashSet::new()),
             pending_files: Mutex::new(HashMap::new()),
+            pending_closes: Mutex::new(HashMap::new()),
+            approved_closes: Mutex::new(HashSet::new()),
             next_window_id: AtomicUsize::new(1),
+            next_close_id: AtomicU64::new(1),
             watcher: FileWatcher::new(app),
         }
     }
@@ -80,6 +87,56 @@ impl AppState {
         }
     }
 
+    /// Starts one close handshake for a window.  A second native close while
+    /// the first one is awaiting the frontend response is deliberately
+    /// ignored; the original request remains authoritative.
+    fn begin_close(&self, label: &str) -> Option<u64> {
+        let mut pending = self.pending_closes.lock().ok()?;
+        if pending.contains_key(label) {
+            return None;
+        }
+        let request_id = self.next_close_id.fetch_add(1, Ordering::Relaxed);
+        pending.insert(label.to_owned(), request_id);
+        Some(request_id)
+    }
+
+    /// Resolves a close request if it is still current.  The timeout path
+    /// supplies its request id so an old watchdog cannot close a later request.
+    pub(crate) fn resolve_close(&self, label: &str, request_id: Option<u64>, allow: bool) -> bool {
+        let mut pending = match self.pending_closes.lock() {
+            Ok(pending) => pending,
+            Err(_) => return false,
+        };
+        let Some(current_id) = pending.get(label).copied() else {
+            return false;
+        };
+        if request_id.is_some_and(|request_id| request_id != current_id) {
+            return false;
+        }
+        pending.remove(label);
+        drop(pending);
+
+        if allow {
+            if let Ok(mut approved) = self.approved_closes.lock() {
+                approved.insert(label.to_owned());
+            }
+        }
+        true
+    }
+
+    fn consume_approved_close(&self, label: &str) -> bool {
+        self.approved_closes
+            .lock()
+            .map(|mut approved| approved.remove(label))
+            .unwrap_or(false)
+    }
+
+    pub(crate) fn clear_approved_close(&self, label: &str) {
+        if let Ok(mut approved) = self.approved_closes.lock() {
+            approved.remove(label);
+        }
+    }
+
     pub(crate) fn track_file(&self, path: &Path, label: &str) {
         self.reserve_file(registry_key(path), label);
     }
@@ -94,6 +151,10 @@ impl AppState {
         if let Ok(mut pending) = self.pending_files.lock() {
             pending.remove(label);
         }
+        if let Ok(mut pending) = self.pending_closes.lock() {
+            pending.remove(label);
+        }
+        self.clear_approved_close(label);
         self.watcher.unwatch(label);
     }
 
@@ -259,9 +320,47 @@ fn create_window(app: &tauri::AppHandle, label: &str) -> Result<WebviewWindow, S
 fn install_window_handlers(window: &WebviewWindow, app: &tauri::AppHandle) {
     let label = window.label().to_owned();
     let app = app.clone();
+    let event_window = window.clone();
     window.on_window_event(move |event| {
-        if matches!(event, WindowEvent::Destroyed) {
-            app.state::<AppState>().forget_window(&label);
+        match event {
+            WindowEvent::CloseRequested { api, .. } => {
+                let state = app.state::<AppState>();
+                // `window.close()` below causes another CloseRequested on
+                // Windows.  Consume the approval token to let that event
+                // through instead of starting the handshake again.
+                if state.consume_approved_close(&label) {
+                    return;
+                }
+
+                api.prevent_close();
+                let Some(request_id) = state.begin_close(&label) else {
+                    return;
+                };
+
+                // The frontend owns the dirty/autosave policy and decides
+                // whether to call `respond_to_close(allow = true/false)`.
+                // An unresponsive webview must not make its native window
+                // impossible to close, so arm a bounded fallback as well.
+                let _ = event_window.emit("save-before-close", serde_json::json!({}));
+                let timeout_window = event_window.clone();
+                let timeout_app = app.clone();
+                let timeout_label = label.clone();
+                let _ = std::thread::Builder::new()
+                    .name(format!("marknote-close-timeout-{label}"))
+                    .spawn(move || {
+                        std::thread::sleep(std::time::Duration::from_secs(
+                            CLOSE_RESPONSE_TIMEOUT_SECS,
+                        ));
+                        let state = timeout_app.state::<AppState>();
+                        if state.resolve_close(&timeout_label, Some(request_id), true) {
+                            let _ = timeout_window.close();
+                        }
+                    });
+            }
+            WindowEvent::Destroyed => {
+                app.state::<AppState>().forget_window(&label);
+            }
+            _ => {}
         }
     });
 }

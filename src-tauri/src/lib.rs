@@ -1,4 +1,5 @@
 mod atomic_write;
+mod binary;
 mod commands;
 mod encoding;
 mod formats;
@@ -23,6 +24,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::open_file,
             commands::take_pending_file,
+            commands::respond_to_close,
             commands::save_file,
             commands::save_as,
             commands::pick_file,

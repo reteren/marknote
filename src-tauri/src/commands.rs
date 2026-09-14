@@ -11,7 +11,7 @@ use tauri_plugin_dialog::DialogExt;
 use thiserror::Error;
 
 use crate::{
-    atomic_write, encoding as text_encoding,
+    atomic_write, binary, encoding as text_encoding,
     formats::{self, FormatCapabilities},
     windows::{self, AppState},
 };
@@ -30,6 +30,8 @@ pub enum CommandError {
     UnknownFormat(String),
     #[error("формат {0} доступен только для чтения")]
     ReadOnlyFormat(String),
+    #[error("двоичный файл нельзя открыть как текст: {0}")]
+    BinaryFile(String),
     #[error("недопустимый путь: {0}")]
     InvalidPath(String),
     #[error("ошибка окна: {0}")]
@@ -83,8 +85,13 @@ pub fn open_file(
     let metadata = fs::metadata(&canonical)?;
     let bytes = fs::read(&canonical)?;
     let adapter = formats::adapter_for_path(&canonical);
+    let format = adapter.caps();
+    if format.id == "plain" && binary::is_binary_sample(&bytes) {
+        return Err(CommandError::BinaryFile(
+            canonical.to_string_lossy().into_owned(),
+        ));
+    }
     let decoded = adapter.decode(&bytes).map_err(CommandError::Format)?;
-    let format = formats::for_path(&canonical);
     let readonly = metadata.permissions().readonly() || !format.editable;
 
     state.watcher.watch(window.label(), &canonical);
@@ -112,6 +119,27 @@ pub fn take_pending_file(window: WebviewWindow, state: State<'_, AppState>) -> O
     state
         .take_pending_file(window.label())
         .map(|path| path.to_string_lossy().into_owned())
+}
+
+/// Completes the native close handshake for this window.  `allow = false`
+/// cancels the close (the frontend's Cancel action); a stale response after
+/// the watchdog has already closed the window is intentionally ignored.
+#[tauri::command]
+pub fn respond_to_close(
+    window: WebviewWindow,
+    state: State<'_, AppState>,
+    allow: bool,
+) -> Result<(), CommandError> {
+    if !state.resolve_close(window.label(), None, allow) {
+        return Ok(());
+    }
+    if allow {
+        if let Err(error) = window.close() {
+            state.clear_approved_close(window.label());
+            return Err(CommandError::Window(error.to_string()));
+        }
+    }
+    Ok(())
 }
 
 #[allow(non_snake_case)]

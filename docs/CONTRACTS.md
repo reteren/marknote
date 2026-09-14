@@ -121,6 +121,7 @@ impl FileWatcher {
 | `open_in_new_window` | `path: String` | `()` |
 | `reveal_in_explorer` | `path: String` | `()` |
 | `take_pending_file` | — | `Option<String>` — путь, отложенный для этого окна |
+| `respond_to_close` | `allow: bool` | `()` — ответ на `save-before-close` |
 
 ```ts
 // то, что видит фронтенд (serde camelCase)
@@ -155,6 +156,14 @@ type NewDocument = { text: string; format: FormatCapabilities };
 командой `take_pending_file` сразу после того, как подписался на событие.
 Открытие обязано быть идемпотентным: если путь придёт и событием, и
 командой, файл открывается один раз.
+
+**Закрытие окна.** Окно не закрывается само: Rust перехватывает
+`CloseRequested`, отменяет закрытие и шлёт в окно `save-before-close`.
+Фронтенд обязан ответить командой `respond_to_close`: `true` после
+сохранения, автосохранения или явного «Discard», `false` на «Cancel».
+Если ответа нет пять секунд, окно закрывается принудительно — зависший
+webview не должен делать окно неубиваемым. Это единственный модальный
+диалог во всей программе (SPEC раздел 2.3).
 
 ## 6. Frontend: границы W3 ↔ W4
 
