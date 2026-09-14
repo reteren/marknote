@@ -433,6 +433,48 @@ function Get-UiAutomationNames {
     }
 }
 
+function Find-UiElement {
+    param(
+        [int]$ProcessId,
+        [string]$Name
+    )
+    if (-not $uiAutomationAvailable) { return $null }
+    try {
+        $state = Get-MarkNoteState
+        $window = Get-WindowForProcess -State $state -ProcessId $ProcessId
+        if (-not $window) { return $null }
+        $root = [System.Windows.Automation.AutomationElement]::FromHandle([IntPtr]$window.Handle)
+        if (-not $root) { return $null }
+        $all = $root.FindAll(
+            [System.Windows.Automation.TreeScope]::Descendants,
+            [System.Windows.Automation.Condition]::TrueCondition)
+        return ($all | Where-Object { $_.Current.Name -eq $Name } | Select-Object -First 1)
+    } catch {
+        return $null
+    }
+}
+
+function Click-UiElement {
+    param(
+        [int]$ProcessId,
+        [string]$Name
+    )
+    $element = Find-UiElement -ProcessId $ProcessId -Name $Name
+    if (-not $element) { return $false }
+    try {
+        $rect = $element.Current.BoundingRectangle
+        if ($rect.Width -le 0 -or $rect.Height -le 0) { return $false }
+        $x = [int]($rect.X + ($rect.Width / 2))
+        $y = [int]($rect.Y + ($rect.Height / 2))
+        [MarkNote.Acceptance.Native]::SetCursorPos($x, $y) | Out-Null
+        [MarkNote.Acceptance.Native]::mouse_event([uint32]2, 0, 0, 0, [UIntPtr]::Zero)
+        [MarkNote.Acceptance.Native]::mouse_event([uint32]4, 0, 0, 0, [UIntPtr]::Zero)
+        return $true
+    } catch {
+        return $false
+    }
+}
+
 function Bring-WindowToFront {
     param([object]$Window)
     if (-not $Window) { return $false }
@@ -675,18 +717,24 @@ function Test-UnsavedClose {
     if (-not $newMenu.Found) {
         return New-Outcome -Passed $false -Details "Меню File/New не появилось" -ElapsedMs $newMenu.ElapsedMs
     }
-    [void](Send-WindowKeys -Keys "{ENTER}")
+    # Click the exact accessible item rather than sending Enter to a webview
+    # whose focus can lag behind the menu render under load.
+    if (-not (Click-UiElement -ProcessId $process.Id -Name "New Ctrl+Shift+N")) {
+        return New-Outcome -Passed $false -Details "Пункт New не нажимается через UI Automation" -ElapsedMs $newMenu.ElapsedMs
+    }
     $markdownMenu = Wait-UiText -ProcessId $process.Id -Expected "Markdown" -TestId "TC-09-format-menu" -TimeoutSec 8
     if (-not $markdownMenu.Found) {
         return New-Outcome -Passed $false -Details "Подменю New не появилось" -ElapsedMs ($newMenu.ElapsedMs + $markdownMenu.ElapsedMs)
     }
-    [void](Send-WindowKeys -Keys "{ENTER}")
-    $startGone = Wait-UiText -ProcessId $process.Id -Expected "New file" -Absent $true -TestId "TC-09-new-document" -TimeoutSec 10
-    [void](Bring-WindowToFront -Window (Get-WindowForProcess -State $startGone.State -ProcessId $process.Id))
+    if (-not (Click-UiElement -ProcessId $process.Id -Name "Markdown")) {
+        return New-Outcome -Passed $false -Details "Пункт Markdown не нажимается через UI Automation" -ElapsedMs ($newMenu.ElapsedMs + $markdownMenu.ElapsedMs)
+    }
+    $menuClosed = Wait-UiText -ProcessId $process.Id -Expected "New Ctrl+Shift+N" -Absent $true -TestId "TC-09-menu-closed" -TimeoutSec 8
+    [void](Bring-WindowToFront -Window (Get-WindowForProcess -State $menuClosed.State -ProcessId $process.Id))
     [void](Send-WindowKeys -Keys "qa-unsaved")
     $typed = Wait-UiText -ProcessId $process.Id -Expected "qa-unsaved" -TestId "TC-09-typed" -TimeoutSec 5
     if (-not $typed.Found) {
-        return New-Outcome -Passed $false -Details "Текст не появился в новом документе; startScreenGone=$($startGone.Found)" -ElapsedMs ($newMenu.ElapsedMs + $markdownMenu.ElapsedMs + $typed.ElapsedMs)
+        return New-Outcome -Passed $false -Details "Текст не появился в новом документе; menuClosed=$($menuClosed.Found)" -ElapsedMs ($newMenu.ElapsedMs + $markdownMenu.ElapsedMs + $typed.ElapsedMs)
     }
     [void](Send-WindowKeys -Keys "%{F4}")
     $prompt = Wait-UiText -ProcessId $process.Id -Expected "Save changes?" -TestId "TC-09-close-prompt" -TimeoutSec 5
