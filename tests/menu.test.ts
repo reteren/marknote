@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createMenuModel, type MenuItem } from "../src/ui/menuModel";
+import { createContextFormatGroups, createMenuModel, type MenuItem } from "../src/ui/menuModel";
 import type { FormatCapabilities } from "../src/state/formats.svelte";
 
 const format = (id: string, label: string, extension: string, creatable = true): FormatCapabilities => ({
@@ -21,8 +21,8 @@ function allItems(items: MenuItem[]): MenuItem[] {
 }
 
 describe("menu model", () => {
-  it("contains the five sections from the specification", () => {
-    expect(createMenuModel([]).map((section) => section.id)).toEqual(["file", "edit", "format", "view", "help"]);
+  it("contains File, Edit, View, and Help without a top-level Format section", () => {
+    expect(createMenuModel([]).map((section) => section.id)).toEqual(["file", "edit", "view", "help"]);
   });
 
   it("builds File → New from the supplied creatable format registry", () => {
@@ -57,19 +57,26 @@ describe("menu model", () => {
     expect(shortcuts.get("edit.selectAll")).toBe("Ctrl+A");
     expect(shortcuts.get("edit.find")).toBe("Ctrl+F");
     expect(shortcuts.get("edit.replace")).toBe("Ctrl+H");
-    expect(shortcuts.get("format.bold")).toBe("Ctrl+B");
-    expect(shortcuts.get("format.italic")).toBe("Ctrl+I");
-    expect(shortcuts.get("format.code")).toBe("Ctrl+E");
-    expect(shortcuts.get("format.link")).toBe("Ctrl+K");
-    expect(shortcuts.get("format.codeBlock")).toBe("Ctrl+Shift+K");
+    expect(shortcuts.has("format.bold")).toBe(false);
     expect(shortcuts.get("view.resetZoom")).toBe("Ctrl+0");
+  });
+
+  it("keeps formatting actions and their established IDs in the three context groups", () => {
+    const groups = createContextFormatGroups();
+    expect(groups.map((group) => group.label)).toEqual(["Formatting", "Paragraph", "Insert"]);
+    const groupIds = groups.map((group) => group.items.filter((item) => !item.separator).map((item) => item.id));
+    expect(groupIds).toEqual([
+      ["format.bold", "format.italic", "format.strikethrough", "format.highlight", "format.code", "format.link"],
+      ["format.heading1", "format.heading2", "format.heading3", "format.heading4", "format.heading5", "format.heading6", "format.clearHeading", "format.list"],
+      ["format.table", "format.callout", "format.codeBlock", "format.mathBlock", "format.horizontalRule"],
+    ]);
   });
 
   it("marks unavailable items and leaves them unselectable", () => {
     const model = createMenuModel([format("markdown", "Markdown", "md")], { editable: false, canUndo: false });
     const items = allItems(model.flatMap((section) => section.items));
     expect(items.find((item) => item.id === "edit.undo")?.disabled).toBe(true);
-    expect(items.find((item) => item.id === "format.bold")?.disabled).toBe(true);
+    expect(createContextFormatGroups({ editable: false })[0].items.find((item) => item.id === "format.bold")?.disabled).toBe(true);
     expect(items.find((item) => item.id === "file.new.markdown")?.disabled).toBe(false);
   });
 });

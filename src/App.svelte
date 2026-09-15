@@ -464,6 +464,11 @@ import HelpDialog, { type HelpMode } from "./ui/HelpDialog.svelte";
   }
 
   function handleContextMenuAction(action: ContextMenuAction, payload?: string): void {
+    if (action.startsWith("format.") || action === "edit.pastePlainText") {
+      handleMenuAction(action);
+      return;
+    }
+
     switch (action) {
       case "cut": clipboard("cut"); break;
       case "copy": clipboard("copy"); break;
@@ -769,7 +774,7 @@ import HelpDialog, { type HelpMode } from "./ui/HelpDialog.svelte";
     {/if}
   </div>
 
-  <ContextMenu onSelect={handleContextMenuAction} />
+  <ContextMenu editable={!isReadOnly} onSelect={handleContextMenuAction} />
 
   {#if helpMode}
     <HelpDialog mode={helpMode} onClose={() => (helpMode = null)} />

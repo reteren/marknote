@@ -53,18 +53,18 @@ describe("MenuBar keyboard and pointer behavior", () => {
     expect(document.querySelector('[role="menu"][aria-label="File"]')).toBeNull();
   });
 
-  it("does not select disabled actions", async () => {
+  it("does not expose a Format top-level section and keeps disabled Save unavailable", async () => {
     const onAction = vi.fn();
     render(MenuBar, {
       props: { menuState: { editable: false, canSave: false }, onAction },
     });
-    const formatButton = Array.from(document.querySelectorAll<HTMLButtonElement>('[role="menubar"] button'))
-      .find((button) => button.textContent === "Format");
-    expect(formatButton).toBeDefined();
-    await fireEvent.click(formatButton!);
-    const bold = document.querySelector<HTMLButtonElement>('[data-menu-item-id="format.bold"]');
-    expect(bold?.disabled).toBe(true);
-    await fireEvent.click(bold!);
-    expect(onAction).not.toHaveBeenCalledWith("format.bold");
+    const sectionLabels = Array.from(document.querySelectorAll<HTMLButtonElement>('[role="menubar"] button'))
+      .map((button) => button.textContent);
+    expect(sectionLabels).toEqual(["File", "Edit", "View", "Help"]);
+    await fireEvent.click(document.querySelector<HTMLButtonElement>('[role="menubar"] button')!);
+    const save = document.querySelector<HTMLButtonElement>('[data-menu-item-id="file.save"]');
+    expect(save?.disabled).toBe(true);
+    await fireEvent.click(save!);
+    expect(onAction).not.toHaveBeenCalledWith("file.save");
   });
 });

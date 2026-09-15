@@ -17,6 +17,11 @@ export type MenuSection = {
   items: MenuItem[];
 };
 
+export type MenuGroup = {
+  label: string;
+  items: MenuItem[];
+};
+
 export type MenuState = {
   editable?: boolean;
   readOnly?: boolean;
@@ -120,33 +125,6 @@ export function createMenuModel(
       ],
     },
     {
-      id: "format",
-      label: "Format",
-      items: [
-        item("format.bold", "Bold", "Ctrl+B", notEditable),
-        item("format.italic", "Italic", "Ctrl+I", notEditable),
-        item("format.strikethrough", "Strikethrough", "", notEditable),
-        item("format.highlight", "Highlight", "", notEditable),
-        item("format.code", "Code", "Ctrl+E", notEditable),
-        item("format.link", "Link", "Ctrl+K", notEditable),
-        separator("format.separator.headings"),
-        item("format.heading1", "Heading 1", "Ctrl+1", notEditable),
-        item("format.heading2", "Heading 2", "Ctrl+2", notEditable),
-        item("format.heading3", "Heading 3", "Ctrl+3", notEditable),
-        item("format.heading4", "Heading 4", "Ctrl+4", notEditable),
-        item("format.heading5", "Heading 5", "Ctrl+5", notEditable),
-        item("format.heading6", "Heading 6", "Ctrl+6", notEditable),
-        item("format.clearHeading", "Remove Heading", "Ctrl+0", notEditable),
-        separator("format.separator.blocks"),
-        item("format.list", "List", "", notEditable),
-        item("format.table", "Table", "", notEditable),
-        item("format.callout", "Callout", "", notEditable),
-        item("format.codeBlock", "Code Block", "Ctrl+Shift+K", notEditable),
-        item("format.mathBlock", "Math Block", "", notEditable),
-        item("format.horizontalRule", "Horizontal Rule", "", notEditable),
-      ],
-    },
-    {
       id: "view",
       label: "View",
       items: [
@@ -167,3 +145,46 @@ export function createMenuModel(
   ];
 }
 
+/** Formatting commands shared with the context-menu submenus (not a top-level section). */
+export function createContextFormatGroups(state: MenuState = {}): MenuGroup[] {
+  const notEditable = state.editable === false || state.readOnly === true;
+  return [
+    {
+      label: "Formatting",
+      items: [
+        item("format.bold", "Bold", "Ctrl+B", notEditable),
+        item("format.italic", "Italic", "Ctrl+I", notEditable),
+        item("format.strikethrough", "Strikethrough", "", notEditable),
+        item("format.highlight", "Highlight", "", notEditable),
+        separator("format.separator.inline-code"),
+        item("format.code", "Code", "Ctrl+E", notEditable),
+        item("format.link", "Link", "Ctrl+K", notEditable),
+      ],
+    },
+    {
+      label: "Paragraph",
+      items: [
+        item("format.heading1", "Heading 1", "Ctrl+1", notEditable),
+        item("format.heading2", "Heading 2", "Ctrl+2", notEditable),
+        item("format.heading3", "Heading 3", "Ctrl+3", notEditable),
+        item("format.heading4", "Heading 4", "Ctrl+4", notEditable),
+        item("format.heading5", "Heading 5", "Ctrl+5", notEditable),
+        item("format.heading6", "Heading 6", "Ctrl+6", notEditable),
+        separator("format.separator.clear-heading"),
+        item("format.clearHeading", "Remove Heading", "Ctrl+0", notEditable),
+        separator("format.separator.list"),
+        item("format.list", "List", "", notEditable),
+      ],
+    },
+    {
+      label: "Insert",
+      items: [
+        item("format.table", "Table", "", notEditable),
+        item("format.callout", "Callout", "", notEditable),
+        item("format.codeBlock", "Code Block", "Ctrl+Shift+K", notEditable),
+        item("format.mathBlock", "Math Block", "", notEditable),
+        item("format.horizontalRule", "Horizontal Rule", "", notEditable),
+      ],
+    },
+  ];
+}

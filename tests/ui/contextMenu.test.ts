@@ -1,80 +1,227 @@
 import { cleanup, fireEvent, render } from "@testing-library/svelte";
 import { afterEach, describe, expect, it, vi } from "vitest";
+
+const tauri = vi.hoisted(() => ({
+  invoke: vi.fn(),
+  listen: vi.fn(),
+  focusChanged: vi.fn(),
+  handlers: new Map<string, Set<(event: { payload?: unknown }) => void>>(),
+}));
+
+vi.mock("@tauri-apps/api/core", () => ({ invoke: tauri.invoke }));
+vi.mock("@tauri-apps/api/event", () => ({ listen: tauri.listen }));
+vi.mock("@tauri-apps/api/window", () => ({
+  getCurrentWindow: () => ({
+    setTitle: vi.fn().mockResolvedValue(undefined),
+    listen: tauri.listen,
+    onFocusChanged: tauri.focusChanged,
+    close: vi.fn().mockResolvedValue(undefined),
+  }),
+}));
+
 import ContextMenu from "../../src/ui/ContextMenu.svelte";
+import App from "../../src/App.svelte";
+import { documentState, resetDocument } from "../../src/state/document.svelte";
+import { markdownFormat } from "../../src/state/formats.svelte";
 import { settle } from "./helpers";
 
-afterEach(() => cleanup());
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+  tauri.handlers.clear();
+  tauri.invoke.mockReset();
+  tauri.listen.mockReset();
+  resetDocument(markdownFormat, "");
+});
 
 describe("ContextMenu user interactions", () => {
-  it("shows editing and formatting actions for a selection, and inserts for empty space", async () => {
+  it("offers the three nested groups and the complete editing command set", async () => {
     const onSelect = vi.fn();
-    const { unmount } = render(ContextMenu, {
-      props: { open: true, targetType: "selection", canPaste: false, onSelect },
-    });
-    expect(document.body.textContent).toContain("Cut");
-    expect(document.body.textContent).toContain("Bold");
-    expect(document.body.textContent).not.toContain("Table");
-    const paste = Array.from(document.querySelectorAll<HTMLButtonElement>("button"))
-      .find((button) => button.textContent?.includes("Paste"));
-    expect(paste?.disabled).toBe(true);
-    await fireEvent.click(Array.from(document.querySelectorAll("button")).find((button) => button.textContent?.includes("Bold"))!);
-    expect(onSelect).toHaveBeenCalledWith("bold", undefined);
-    unmount();
+    render(ContextMenu, { props: { open: true, targetType: "empty", onSelect } });
 
-    render(ContextMenu, {
-      props: { open: true, targetType: "empty", onSelect },
-    });
-    expect(document.body.textContent).toContain("Select All");
-    expect(document.body.textContent).toContain("Table");
-    expect(document.body.textContent).not.toContain("Cut");
+    expect(Array.from(document.querySelectorAll<HTMLButtonElement>(".submenu-trigger")).map((button) => button.textContent?.replace("›", "").trim())).toEqual([
+      "Formatting", "Paragraph", "Insert",
+    ]);
+    for (const label of ["Cut", "Copy", "Paste", "Paste as Plain Text", "Delete", "Select All"]) {
+      expect(Array.from(document.querySelectorAll("button")).some((button) => button.textContent?.includes(label))).toBe(true);
+    }
+    expect(document.querySelector('[aria-label="Formatting"]')).toBeNull();
+    const cut = document.querySelector<HTMLButtonElement>('[data-menu-action="cut"]')!;
+    expect(cut.disabled).toBe(true);
+    await fireEvent.click(cut);
+    expect(onSelect).not.toHaveBeenCalled();
+
+    const formatting = Array.from(document.querySelectorAll<HTMLButtonElement>(".submenu-trigger"))
+      .find((button) => button.textContent?.includes("Formatting"))!;
+    await fireEvent.mouseEnter(formatting);
+    await settle();
+    const formattingMenu = document.querySelector<HTMLElement>('[role="menu"][aria-label="Formatting"]');
+    expect(formattingMenu).not.toBeNull();
+    expect(formattingMenu?.textContent).toContain("Strikethrough");
+    expect(formattingMenu?.textContent).toContain("Highlight");
+    expect(formattingMenu?.textContent).toContain("Code");
+    expect(formattingMenu?.textContent).toContain("Link");
+
+    await fireEvent.click(Array.from(formattingMenu!.querySelectorAll("button")).find((button) => button.textContent?.includes("Bold"))!);
+    expect(onSelect).toHaveBeenCalledWith("format.bold", undefined);
   });
 
-  it("offers link actions without mistaking an ordinary context for a link", async () => {
+  it("opens submenus by hover and keyboard, navigates items, and selects the focused action", async () => {
     const onSelect = vi.fn();
-    render(ContextMenu, {
-      props: { open: true, targetType: "link", linkUrl: "https://example.test/note", onSelect },
-    });
-    expect(document.body.textContent).toContain("Open Link");
-    expect(document.body.textContent).toContain("Copy Link Address");
-    expect(document.body.textContent).not.toContain("Select All");
-    await fireEvent.click(Array.from(document.querySelectorAll("button")).find((button) => button.textContent?.includes("Open Link"))!);
-    expect(onSelect).toHaveBeenCalledWith("open-link", "https://example.test/note");
+    render(ContextMenu, { props: { open: true, targetType: "selection", onSelect } });
+    const root = document.querySelector<HTMLElement>('[role="menu"][data-menu-level="root"]')!;
+
+    await fireEvent.keyDown(root, { key: "ArrowDown" });
+    await settle();
+    expect(document.activeElement?.getAttribute("data-submenu-label")).toBe("Formatting");
+    await fireEvent.keyDown(document.activeElement!, { key: "Enter" });
+    await settle();
+    await fireEvent.keyDown(document.activeElement!, { key: "ArrowRight" });
+    await settle();
+    expect(document.querySelector('[role="menu"][aria-label="Formatting"]')).not.toBeNull();
+    expect(document.activeElement?.textContent).toContain("Bold");
+
+    await fireEvent.keyDown(document.activeElement!, { key: "ArrowDown" });
+    await settle();
+    expect(document.activeElement?.textContent).toContain("Italic");
+    await fireEvent.keyDown(document.activeElement!, { key: "ArrowUp" });
+    await settle();
+    expect(document.activeElement?.textContent).toContain("Bold");
+    await fireEvent.keyDown(document.activeElement!, { key: "ArrowDown" });
+    await settle();
+    expect(document.activeElement?.textContent).toContain("Italic");
+    await fireEvent.keyDown(document.activeElement!, { key: "Enter" });
+    await settle();
+    expect(onSelect).toHaveBeenCalledWith("format.italic", undefined);
+    expect(document.querySelector('[data-menu-level="root"]')).toBeNull();
   });
 
-  it("suppresses the native menu and opens on a right click, then closes via Escape or outside click", async () => {
-    const target = document.createElement("div");
+  it("closes a submenu with ArrowLeft and closes the whole menu on Escape, restoring focus", async () => {
+    const target = document.createElement("button");
+    target.textContent = "Editor";
     document.body.append(target);
+    target.focus();
     const onClose = vi.fn();
     render(ContextMenu, { props: { targetElement: target, onClose } });
 
-    const event = new MouseEvent("contextmenu", { bubbles: true, cancelable: true, button: 2, clientX: 12, clientY: 18 });
-    target.dispatchEvent(event);
+    const contextEvent = new MouseEvent("contextmenu", { bubbles: true, cancelable: true, button: 2 });
+    target.dispatchEvent(contextEvent);
     await settle();
-    expect(event.defaultPrevented).toBe(true);
-    const menu = document.querySelector<HTMLElement>('[role="menu"]');
-    expect(menu).not.toBeNull();
+    expect(contextEvent.defaultPrevented).toBe(true);
+    const formatting = Array.from(document.querySelectorAll<HTMLButtonElement>(".submenu-trigger"))
+      .find((button) => button.textContent?.includes("Formatting"))!;
+    await fireEvent.mouseEnter(formatting);
+    await settle();
+    await fireEvent.keyDown(formatting, { key: "ArrowRight" });
+    await settle();
+    await fireEvent.keyDown(document.activeElement!, { key: "ArrowLeft" });
+    await settle();
+    expect(document.querySelector('[role="menu"][aria-label="Formatting"]')).toBeNull();
+    expect(document.activeElement).toBe(formatting);
 
-    await fireEvent.keyDown(menu!, { key: "Escape" });
+    await fireEvent.keyDown(formatting, { key: "Escape" });
     await settle();
+    expect(document.querySelector('[data-menu-level="root"]')).toBeNull();
     expect(onClose).toHaveBeenCalledTimes(1);
-    expect(document.querySelector('[role="menu"]')).toBeNull();
+    expect(document.activeElement).toBe(target);
+  });
 
-    const event2 = new MouseEvent("contextmenu", { bubbles: true, cancelable: true, button: 2 });
-    target.dispatchEvent(event2);
-    await settle();
-    expect(document.querySelector('[role="menu"]')).not.toBeNull();
-    document.body.dispatchEvent(new Event("pointerdown", { bubbles: true }));
-    await settle();
-    expect(document.querySelector('[role="menu"]')).toBeNull();
+  it("flips a submenu left and clamps it vertically near the viewport edges", async () => {
+    const previousWidth = window.innerWidth;
+    const previousHeight = window.innerHeight;
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 300 });
+    Object.defineProperty(window, "innerHeight", { configurable: true, value: 300 });
+    try {
+      render(ContextMenu, { props: { open: true, targetType: "empty" } });
+      const trigger = Array.from(document.querySelectorAll<HTMLButtonElement>(".submenu-trigger"))
+        .find((button) => button.textContent?.includes("Formatting"))!;
+      vi.spyOn(trigger, "getBoundingClientRect").mockReturnValue({
+        x: 265, y: 270, left: 265, right: 295, top: 270, bottom: 292, width: 30, height: 22,
+        toJSON: () => ({}),
+      });
+      await fireEvent.mouseEnter(trigger);
+      await settle();
+      const submenu = document.querySelector<HTMLElement>('[role="menu"][aria-label="Formatting"]')!;
+      expect(Number.parseFloat(submenu.style.left)).toBeLessThan(265);
+      expect(Number.parseFloat(submenu.style.left)).toBeGreaterThanOrEqual(8);
+      expect(Number.parseFloat(submenu.style.top)).toBeGreaterThanOrEqual(8);
+      expect(Number.parseFloat(submenu.style.top)).toBeLessThan(270);
+    } finally {
+      Object.defineProperty(window, "innerWidth", { configurable: true, value: previousWidth });
+      Object.defineProperty(window, "innerHeight", { configurable: true, value: previousHeight });
+    }
+  });
 
+  it("keeps link-specific actions and suppresses the native context menu", async () => {
+    const onSelect = vi.fn();
+    const target = document.createElement("div");
+    document.body.append(target);
+    render(ContextMenu, { props: { targetElement: target, onSelect } });
     const link = document.createElement("a");
-    link.href = "https://example.test/link";
+    link.href = "https://example.test/note";
     link.textContent = "a link";
     target.append(link);
-    const linkEvent = new MouseEvent("contextmenu", { bubbles: true, cancelable: true, button: 2 });
-    link.dispatchEvent(linkEvent);
+
+    const event = new MouseEvent("contextmenu", { bubbles: true, cancelable: true, button: 2 });
+    link.dispatchEvent(event);
     await settle();
+    expect(event.defaultPrevented).toBe(true);
     expect(document.body.textContent).toContain("Open Link");
-    expect(linkEvent.defaultPrevented).toBe(true);
+    expect(document.body.textContent).toContain("Copy Link Address");
+    expect(document.body.textContent).not.toContain("Formatting");
+    await fireEvent.click(Array.from(document.querySelectorAll("button")).find((button) => button.textContent?.includes("Open Link"))!);
+    expect(onSelect).toHaveBeenCalledWith("open-link", "https://example.test/note");
+
+    const plainArea = document.createElement("span");
+    plainArea.textContent = "plain text";
+    target.append(plainArea);
+    const plainEvent = new MouseEvent("contextmenu", { bubbles: true, cancelable: true, button: 2 });
+    plainArea.dispatchEvent(plainEvent);
+    await settle();
+    expect(document.body.textContent).toContain("Formatting");
+    expect(document.body.textContent).not.toContain("Open Link");
+  });
+
+  it("routes existing format action IDs from the context submenu into the document", async () => {
+    resetDocument(markdownFormat, "");
+    tauri.handlers.clear();
+    tauri.invoke.mockReset();
+    tauri.focusChanged.mockResolvedValue(async () => undefined);
+    tauri.listen.mockImplementation(async (name: string, handler: (event: { payload?: unknown }) => void) => {
+      const handlers = tauri.handlers.get(name) ?? new Set();
+      handlers.add(handler);
+      tauri.handlers.set(name, handlers);
+      return () => handlers.delete(handler);
+    });
+    tauri.invoke.mockImplementation(async (command: string) => {
+      if (command === "list_creatable_formats") return [markdownFormat];
+      if (command === "new_document") return { text: "", format: markdownFormat };
+      if (command === "take_pending_file") return null;
+      return undefined;
+    });
+
+    render(App);
+    await settle();
+    const markdownTile = Array.from(document.querySelectorAll<HTMLButtonElement>("button"))
+      .find((button) => button.textContent?.includes("Markdown") && button.textContent.includes(".md"));
+    expect(markdownTile).toBeDefined();
+    await fireEvent.click(markdownTile!);
+    await settle();
+
+    const editorContent = document.querySelector<HTMLElement>(".cm-content")!;
+    const contextEvent = new MouseEvent("contextmenu", { bubbles: true, cancelable: true, button: 2, clientX: 10, clientY: 10 });
+    editorContent.dispatchEvent(contextEvent);
+    await settle();
+    expect(contextEvent.defaultPrevented).toBe(true);
+
+    const insertTrigger = Array.from(document.querySelectorAll<HTMLButtonElement>(".submenu-trigger"))
+      .find((button) => button.textContent?.includes("Insert"))!;
+    await fireEvent.mouseEnter(insertTrigger);
+    await settle();
+    await fireEvent.click(Array.from(document.querySelectorAll<HTMLButtonElement>('[role="menu"][aria-label="Insert"] button'))
+      .find((button) => button.textContent?.includes("Table"))!);
+    await settle();
+    expect(document.querySelector<HTMLElement>(".cm-content")?.textContent).toContain("Column 1");
+    expect(documentState.text).toContain("Column 1");
   });
 });
