@@ -17,6 +17,7 @@ use crate::{
     atomic_write, binary, encoding as text_encoding,
     formats::{self, FormatCapabilities},
     messages::UserMessage,
+    settings::{Settings, SettingsError, SettingsState},
     windows::{self, AppState, FileSnapshot},
 };
 
@@ -415,6 +416,56 @@ pub fn reveal_in_explorer(path: String) -> Result<(), CommandError> {
     {
         let _ = path;
         Err(CommandError::Message(UserMessage::ExplorerWindowsOnly))
+    }
+}
+
+#[tauri::command]
+pub fn get_settings(state: State<'_, SettingsState>) -> Settings {
+    state.get()
+}
+
+#[tauri::command]
+pub fn get_resolved_language(state: State<'_, SettingsState>) -> String {
+    state.get().resolved_language()
+}
+
+#[tauri::command]
+pub fn save_settings(
+    state: State<'_, SettingsState>,
+    settings: Settings,
+) -> Result<Settings, CommandError> {
+    state.save(settings).map_err(map_settings_error)
+}
+
+#[tauri::command]
+pub fn reset_settings(state: State<'_, SettingsState>) -> Result<Settings, CommandError> {
+    state.reset().map_err(map_settings_error)
+}
+
+#[tauri::command]
+pub fn reveal_settings_file(state: State<'_, SettingsState>) -> Result<(), CommandError> {
+    #[cfg(windows)]
+    {
+        let path = state.ensure_file_exists().map_err(map_settings_error)?;
+        let select_argument = format!("/select,\"{}\"", path.display());
+        Command::new("explorer")
+            .arg(select_argument)
+            .spawn()
+            .map_err(CommandError::Io)?;
+        Ok(())
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = state;
+        Err(CommandError::Message(UserMessage::ExplorerWindowsOnly))
+    }
+}
+
+fn map_settings_error(error: SettingsError) -> CommandError {
+    match error {
+        SettingsError::Io(error) => CommandError::Io(error),
+        SettingsError::AtomicWrite(error) => CommandError::AtomicWrite(error),
+        SettingsError::Json(error) => CommandError::AtomicWrite(anyhow::anyhow!(error)),
     }
 }
 

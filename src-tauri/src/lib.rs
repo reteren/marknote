@@ -4,6 +4,7 @@ mod commands;
 mod encoding;
 mod formats;
 mod messages;
+mod settings;
 mod watcher;
 mod windows;
 
@@ -19,6 +20,12 @@ pub fn run() {
         }))
         .plugin(tauri_plugin_window_state::Builder::default().build())
         .setup(|app| {
+            let settings_path = app.path().app_config_dir()?.join("settings.json");
+            let settings = settings::SettingsState::load(&settings_path).unwrap_or_else(|error| {
+                eprintln!("Could not load settings; using defaults: {error}");
+                settings::SettingsState::defaults(settings_path)
+            });
+            app.manage(settings);
             app.manage(windows::AppState::new(app.handle().clone()));
             Ok(windows::initialize(app)?)
         })
@@ -36,6 +43,11 @@ pub fn run() {
             commands::read_image,
             commands::open_in_new_window,
             commands::reveal_in_explorer,
+            commands::get_settings,
+            commands::get_resolved_language,
+            commands::save_settings,
+            commands::reset_settings,
+            commands::reveal_settings_file,
         ])
         .run(tauri::generate_context!())
         .unwrap_or_else(|error| {

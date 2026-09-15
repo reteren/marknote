@@ -1,0 +1,690 @@
+use std::{
+    collections::BTreeSet,
+    fs, io,
+    path::{Path, PathBuf},
+    sync::Mutex,
+};
+
+use serde::{Deserialize, Serialize};
+use serde_json::{Map, Value};
+use thiserror::Error;
+
+use crate::atomic_write;
+
+const UI_LANGUAGES: &[&str] = &["en", "ru", "de", "es", "pt", "it", "fr", "zh", "ja", "ar"];
+const MIN_ZOOM_PERCENT: i32 = 50;
+const MAX_ZOOM_PERCENT: i32 = 200;
+const MIN_AUTOSAVE_DELAY_MS: i64 = 250;
+const MAX_AUTOSAVE_DELAY_MS: i64 = 60_000;
+const MIN_TAB_WIDTH: u8 = 1;
+const MAX_TAB_WIDTH: u8 = 16;
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Settings {
+    #[serde(default = "default_language")]
+    pub language: String,
+    #[serde(default)]
+    pub spellcheck: SpellcheckSettings,
+    #[serde(default)]
+    pub auto_correct: AutoCorrectSettings,
+    #[serde(default)]
+    pub editor: EditorSettings,
+    #[serde(default)]
+    pub live_preview: LivePreviewSettings,
+    #[serde(default)]
+    pub files: FileSettings,
+    #[serde(default)]
+    pub windows: WindowSettings,
+}
+
+impl Default for Settings {
+    fn default() -> Self {
+        Self {
+            language: default_language(),
+            spellcheck: SpellcheckSettings::default(),
+            auto_correct: AutoCorrectSettings::default(),
+            editor: EditorSettings::default(),
+            live_preview: LivePreviewSettings::default(),
+            files: FileSettings::default(),
+            windows: WindowSettings::default(),
+        }
+    }
+}
+
+impl Settings {
+    /// Ограничивает значения, пришедшие из IPC или файла, безопасными диапазонами.
+    pub fn validate(&mut self) {
+        self.language = normalize_language(&self.language, true);
+        self.spellcheck.languages = normalize_spellcheck_languages(&self.spellcheck.languages);
+        self.editor.zoom_percent = self
+            .editor
+            .zoom_percent
+            .clamp(MIN_ZOOM_PERCENT, MAX_ZOOM_PERCENT);
+        self.editor.tab_width = self.editor.tab_width.clamp(MIN_TAB_WIDTH, MAX_TAB_WIDTH);
+        self.files.autosave_delay_ms = self
+            .files
+            .autosave_delay_ms
+            .clamp(MIN_AUTOSAVE_DELAY_MS, MAX_AUTOSAVE_DELAY_MS);
+    }
+
+    /// Разрешает `system` в язык системы и при отсутствии перевода выбирает английский.
+    pub fn resolved_language(&self) -> String {
+        resolve_language(&self.language, &system_language_code())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SpellcheckSettings {
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    #[serde(default = "default_spellcheck_languages")]
+    pub languages: Vec<String>,
+    #[serde(default = "default_true")]
+    pub skip_code_formula_links: bool,
+}
+
+impl Default for SpellcheckSettings {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            languages: default_spellcheck_languages(),
+            skip_code_formula_links: true,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AutoCorrectSettings {
+    #[serde(default)]
+    pub smart_quotes: bool,
+    #[serde(default)]
+    pub double_hyphen_to_em_dash: bool,
+    #[serde(default)]
+    pub capitalize_after_period: bool,
+    #[serde(default)]
+    pub three_dots_to_ellipsis: bool,
+}
+
+impl Default for AutoCorrectSettings {
+    fn default() -> Self {
+        Self {
+            smart_quotes: false,
+            double_hyphen_to_em_dash: false,
+            capitalize_after_period: false,
+            three_dots_to_ellipsis: false,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EditorSettings {
+    #[serde(default = "default_font_family")]
+    pub font_family: String,
+    #[serde(default = "default_font_size")]
+    pub font_size: u8,
+    #[serde(default = "default_zoom")]
+    pub zoom_percent: i32,
+    #[serde(default)]
+    pub column_width: ColumnWidth,
+    #[serde(default = "default_tab_width")]
+    pub tab_width: u8,
+    #[serde(default = "default_true")]
+    pub insert_spaces: bool,
+    #[serde(default = "default_true")]
+    pub soft_wrap: bool,
+    #[serde(default)]
+    pub show_invisibles: bool,
+    #[serde(default = "default_true")]
+    pub highlight_current_line: bool,
+    #[serde(default)]
+    pub line_numbers: bool,
+}
+
+impl Default for EditorSettings {
+    fn default() -> Self {
+        Self {
+            font_family: default_font_family(),
+            font_size: default_font_size(),
+            zoom_percent: default_zoom(),
+            column_width: ColumnWidth::default(),
+            tab_width: default_tab_width(),
+            insert_spaces: true,
+            soft_wrap: true,
+            show_invisibles: false,
+            highlight_current_line: true,
+            line_numbers: false,
+        }
+    }
+}
+
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ColumnWidth {
+    Narrow,
+    #[default]
+    Normal,
+    Wide,
+    FullWidth,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LivePreviewSettings {
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    #[serde(default)]
+    pub reveal_markup: MarkupRevealMode,
+    #[serde(default = "default_true")]
+    pub render_formulas: bool,
+    #[serde(default = "default_true")]
+    pub render_images: bool,
+    #[serde(default)]
+    pub max_image_width: MaxImageWidth,
+    #[serde(default = "default_preview_limit")]
+    pub disable_above_bytes: u64,
+}
+
+impl Default for LivePreviewSettings {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            reveal_markup: MarkupRevealMode::default(),
+            render_formulas: true,
+            render_images: true,
+            max_image_width: MaxImageWidth::default(),
+            disable_above_bytes: default_preview_limit(),
+        }
+    }
+}
+
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum MarkupRevealMode {
+    #[default]
+    Cursor,
+    Line,
+    Never,
+}
+
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum MaxImageWidth {
+    #[default]
+    Column,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FileSettings {
+    #[serde(default = "default_true")]
+    pub autosave: bool,
+    #[serde(default = "default_autosave_delay")]
+    pub autosave_delay_ms: i64,
+    #[serde(default = "default_true")]
+    pub save_on_window_blur: bool,
+    #[serde(default = "default_new_document_format")]
+    pub new_document_format: String,
+    #[serde(default)]
+    pub new_document_encoding: NewDocumentEncoding,
+    #[serde(default)]
+    pub new_document_line_ending: NewDocumentLineEnding,
+    #[serde(default)]
+    pub trim_trailing_spaces: bool,
+    #[serde(default)]
+    pub final_newline: bool,
+}
+
+impl Default for FileSettings {
+    fn default() -> Self {
+        Self {
+            autosave: true,
+            autosave_delay_ms: default_autosave_delay(),
+            save_on_window_blur: true,
+            new_document_format: default_new_document_format(),
+            new_document_encoding: NewDocumentEncoding::default(),
+            new_document_line_ending: NewDocumentLineEnding::default(),
+            trim_trailing_spaces: false,
+            final_newline: false,
+        }
+    }
+}
+
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum NewDocumentEncoding {
+    #[default]
+    Utf8,
+}
+
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum NewDocumentLineEnding {
+    #[default]
+    System,
+    Lf,
+    Crlf,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WindowSettings {
+    #[serde(default = "default_true")]
+    pub remember_size_and_position: bool,
+    #[serde(default)]
+    pub startup_action: StartupAction,
+    #[serde(default = "default_true")]
+    pub raise_existing_window: bool,
+}
+
+impl Default for WindowSettings {
+    fn default() -> Self {
+        Self {
+            remember_size_and_position: true,
+            startup_action: StartupAction::default(),
+            raise_existing_window: true,
+        }
+    }
+}
+
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum StartupAction {
+    #[default]
+    StartScreen,
+    RecentFiles,
+}
+
+#[derive(Debug, Error)]
+pub enum SettingsError {
+    #[error("settings file I/O failed: {0}")]
+    Io(#[from] io::Error),
+    #[error("settings JSON could not be serialized: {0}")]
+    Json(#[from] serde_json::Error),
+    #[error("atomic settings write failed: {0}")]
+    AtomicWrite(#[source] anyhow::Error),
+}
+
+#[derive(Debug)]
+struct SettingsDocument {
+    settings: Settings,
+    raw: Value,
+}
+
+/// Настройки приложения и исходный JSON для сохранения неизвестных будущих полей.
+pub struct SettingsState {
+    path: PathBuf,
+    document: Mutex<SettingsDocument>,
+}
+
+impl SettingsState {
+    pub fn defaults(path: impl Into<PathBuf>) -> Self {
+        Self {
+            path: path.into(),
+            document: Mutex::new(default_document()),
+        }
+    }
+
+    /// Читает файл один раз. Отсутствующий файл нормален, повреждённый уносится в backup.
+    pub fn load(path: impl Into<PathBuf>) -> Result<Self, SettingsError> {
+        let path = path.into();
+        let document = match fs::read(&path) {
+            Ok(bytes) => match parse_document(&bytes) {
+                Ok(document) => document,
+                Err(()) => {
+                    quarantine_broken_file(&path)?;
+                    default_document()
+                }
+            },
+            Err(error) if error.kind() == io::ErrorKind::NotFound => default_document(),
+            Err(error) => return Err(SettingsError::Io(error)),
+        };
+        Ok(Self {
+            path,
+            document: Mutex::new(document),
+        })
+    }
+
+    pub fn get(&self) -> Settings {
+        self.lock_document().settings.clone()
+    }
+
+    pub fn save(&self, mut settings: Settings) -> Result<Settings, SettingsError> {
+        settings.validate();
+        let mut document = self.lock_document();
+        let merged = merge_values(document.raw.clone(), serde_json::to_value(&settings)?);
+        self.write_value(&merged)?;
+        document.settings = settings.clone();
+        document.raw = merged;
+        Ok(settings)
+    }
+
+    pub fn reset(&self) -> Result<Settings, SettingsError> {
+        self.save(Settings::default())
+    }
+
+    /// Создаёт файл при явном запросе «Показать файл настроек», если его ещё нет.
+    pub fn ensure_file_exists(&self) -> Result<PathBuf, SettingsError> {
+        let mut document = self.lock_document();
+        if !self.path.exists() {
+            let mut settings = document.settings.clone();
+            settings.validate();
+            let merged = merge_values(document.raw.clone(), serde_json::to_value(&settings)?);
+            self.write_value(&merged)?;
+            document.settings = settings;
+            document.raw = merged;
+        }
+        Ok(self.path.clone())
+    }
+
+    fn write_value(&self, value: &Value) -> Result<(), SettingsError> {
+        if let Some(parent) = self.path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        let mut bytes = serde_json::to_vec_pretty(value)?;
+        bytes.push(b'\n');
+        atomic_write::write_atomic(&self.path, &bytes).map_err(SettingsError::AtomicWrite)
+    }
+
+    fn lock_document(&self) -> std::sync::MutexGuard<'_, SettingsDocument> {
+        self.document
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+}
+
+fn parse_document(bytes: &[u8]) -> Result<SettingsDocument, ()> {
+    let raw: Value = serde_json::from_slice(bytes).map_err(|_| ())?;
+    let mut settings: Settings = serde_json::from_value(raw.clone()).map_err(|_| ())?;
+    settings.validate();
+    Ok(SettingsDocument { settings, raw })
+}
+
+fn default_document() -> SettingsDocument {
+    SettingsDocument {
+        settings: Settings::default(),
+        raw: Value::Object(Map::new()),
+    }
+}
+
+fn quarantine_broken_file(path: &Path) -> io::Result<()> {
+    let broken_path = path.with_file_name("settings.broken.json");
+    if broken_path.exists() {
+        fs::remove_file(&broken_path)?;
+    }
+    fs::rename(path, broken_path)
+}
+
+fn merge_values(existing: Value, current: Value) -> Value {
+    match (existing, current) {
+        (Value::Object(mut old), Value::Object(new)) => {
+            for (key, current_value) in new {
+                let merged = match old.remove(&key) {
+                    Some(old_value) => merge_values(old_value, current_value),
+                    None => current_value,
+                };
+                old.insert(key, merged);
+            }
+            Value::Object(old)
+        }
+        (_, current) => current,
+    }
+}
+
+fn normalize_language(language: &str, allow_system: bool) -> String {
+    let normalized = language.trim().to_ascii_lowercase();
+    if allow_system && normalized == "system" {
+        return normalized;
+    }
+    let base = normalized.split(['-', '_']).next().unwrap_or_default();
+    if UI_LANGUAGES.contains(&base) {
+        base.to_owned()
+    } else {
+        "en".to_owned()
+    }
+}
+
+fn normalize_spellcheck_languages(languages: &[String]) -> Vec<String> {
+    let mut seen = BTreeSet::new();
+    let mut normalized = Vec::new();
+    for language in languages {
+        let normalized_code = language.trim().to_ascii_lowercase();
+        let code = normalized_code.split(['-', '_']).next().unwrap_or_default();
+        if UI_LANGUAGES.contains(&code) && seen.insert(code.to_owned()) {
+            normalized.push(code.to_owned());
+        }
+    }
+    normalized
+}
+
+pub fn resolve_language(preference: &str, system_language: &str) -> String {
+    let preferred = normalize_language(preference, true);
+    if preferred == "system" {
+        normalize_language(system_language, false)
+    } else {
+        preferred
+    }
+}
+
+/// Возвращает код локали интерфейса Windows, ограниченный переводами MarkNote.
+pub fn system_language_code() -> String {
+    #[cfg(windows)]
+    {
+        // GetUserDefaultUILanguage возвращает язык интерфейса пользователя Windows.
+        #[link(name = "kernel32")]
+        extern "system" {
+            fn GetUserDefaultUILanguage() -> u16;
+        }
+        let language_id = unsafe { GetUserDefaultUILanguage() };
+        language_from_id(language_id).unwrap_or("en").to_owned()
+    }
+    #[cfg(not(windows))]
+    {
+        let locale = ["LC_ALL", "LC_MESSAGES", "LANG"]
+            .iter()
+            .find_map(|name| std::env::var(name).ok().filter(|value| !value.is_empty()))
+            .unwrap_or_default();
+        resolve_language("system", &locale)
+    }
+}
+
+fn language_from_id(language_id: u16) -> Option<&'static str> {
+    match language_id & 0x03ff {
+        0x0001 => Some("ar"),
+        0x0004 => Some("zh"),
+        0x0007 => Some("de"),
+        0x0009 => Some("en"),
+        0x000a => Some("es"),
+        0x000c => Some("fr"),
+        0x0010 => Some("it"),
+        0x0011 => Some("ja"),
+        0x0016 => Some("pt"),
+        0x0019 => Some("ru"),
+        _ => None,
+    }
+}
+
+fn default_language() -> String {
+    "en".to_owned()
+}
+
+fn default_font_family() -> String {
+    "system-serif".to_owned()
+}
+
+const fn default_font_size() -> u8 {
+    15
+}
+
+const fn default_zoom() -> i32 {
+    100
+}
+
+const fn default_tab_width() -> u8 {
+    4
+}
+
+const fn default_autosave_delay() -> i64 {
+    2_000
+}
+
+fn default_new_document_format() -> String {
+    "markdown".to_owned()
+}
+
+const fn default_preview_limit() -> u64 {
+    5 * 1024 * 1024
+}
+
+fn default_spellcheck_languages() -> Vec<String> {
+    vec!["en".to_owned()]
+}
+
+const fn default_true() -> bool {
+    true
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn missing_file_uses_defaults_without_creating_a_file() {
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let path = directory.path().join("settings.json");
+        let state = SettingsState::load(&path).expect("load defaults");
+
+        assert_eq!(state.get(), Settings::default());
+        assert!(!path.exists());
+    }
+
+    #[test]
+    fn corrupted_file_uses_defaults_and_is_renamed() {
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let path = directory.path().join("settings.json");
+        fs::write(&path, b"{ definitely not json").expect("write broken settings");
+
+        let state = SettingsState::load(&path).expect("load defaults after corruption");
+
+        assert_eq!(state.get(), Settings::default());
+        assert!(!path.exists());
+        assert_eq!(
+            fs::read(directory.path().join("settings.broken.json")).expect("read backup"),
+            b"{ definitely not json"
+        );
+    }
+
+    #[test]
+    fn unknown_fields_survive_read_modify_and_write() {
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let path = directory.path().join("settings.json");
+        fs::write(
+            &path,
+            br#"{"language":"en","editor":{"zoomPercent":120,"futureEditor":{"flag":true}},"futureTopLevel":{"value":7}}"#,
+        )
+        .expect("write initial settings");
+
+        let state = SettingsState::load(&path).expect("load settings");
+        let mut settings = state.get();
+        settings.editor.zoom_percent = 130;
+        state.save(settings).expect("save settings");
+        let written: Value = serde_json::from_slice(&fs::read(path).expect("read saved settings"))
+            .expect("parse saved JSON");
+
+        assert_eq!(written["editor"]["zoomPercent"], 130);
+        assert_eq!(written["editor"]["futureEditor"]["flag"], true);
+        assert_eq!(written["futureTopLevel"]["value"], 7);
+    }
+
+    #[test]
+    fn values_are_clamped_and_language_codes_are_validated() {
+        let mut settings = Settings::default();
+        settings.editor.zoom_percent = 900;
+        settings.editor.tab_width = 0;
+        settings.files.autosave_delay_ms = -50;
+        settings.language = "xx-YY".to_owned();
+        settings.validate();
+
+        assert_eq!(settings.editor.zoom_percent, MAX_ZOOM_PERCENT);
+        assert_eq!(settings.editor.tab_width, MIN_TAB_WIDTH);
+        assert_eq!(settings.files.autosave_delay_ms, MIN_AUTOSAVE_DELAY_MS);
+        assert_eq!(settings.language, "en");
+
+        settings.editor.zoom_percent = -1;
+        settings.files.autosave_delay_ms = i64::MAX;
+        settings.validate();
+        assert_eq!(settings.editor.zoom_percent, MIN_ZOOM_PERCENT);
+        assert_eq!(settings.files.autosave_delay_ms, MAX_AUTOSAVE_DELAY_MS);
+    }
+
+    #[test]
+    fn json_round_trip_preserves_every_settings_field() {
+        let settings = Settings {
+            language: "ar".to_owned(),
+            spellcheck: SpellcheckSettings {
+                enabled: false,
+                languages: vec!["ru".to_owned(), "fr".to_owned()],
+                skip_code_formula_links: false,
+            },
+            auto_correct: AutoCorrectSettings {
+                smart_quotes: true,
+                double_hyphen_to_em_dash: true,
+                capitalize_after_period: true,
+                three_dots_to_ellipsis: true,
+            },
+            editor: EditorSettings {
+                font_family: "serif".to_owned(),
+                font_size: 20,
+                zoom_percent: 120,
+                column_width: ColumnWidth::Wide,
+                tab_width: 8,
+                insert_spaces: false,
+                soft_wrap: false,
+                show_invisibles: true,
+                highlight_current_line: false,
+                line_numbers: true,
+            },
+            live_preview: LivePreviewSettings {
+                enabled: false,
+                reveal_markup: MarkupRevealMode::Never,
+                render_formulas: false,
+                render_images: false,
+                max_image_width: MaxImageWidth::Column,
+                disable_above_bytes: 3_000_000,
+            },
+            files: FileSettings {
+                autosave: false,
+                autosave_delay_ms: 4_000,
+                save_on_window_blur: false,
+                new_document_format: "plain".to_owned(),
+                new_document_encoding: NewDocumentEncoding::Utf8,
+                new_document_line_ending: NewDocumentLineEnding::Crlf,
+                trim_trailing_spaces: true,
+                final_newline: true,
+            },
+            windows: WindowSettings {
+                remember_size_and_position: false,
+                startup_action: StartupAction::RecentFiles,
+                raise_existing_window: false,
+            },
+        };
+
+        let json = serde_json::to_vec(&settings).expect("serialize");
+        let restored: Settings = serde_json::from_slice(&json).expect("deserialize");
+        assert_eq!(restored, settings);
+    }
+
+    #[test]
+    fn system_language_uses_supported_locale_or_english_fallback() {
+        assert_eq!(resolve_language("system", "fr-FR"), "fr");
+        assert_eq!(resolve_language("system", "xx-YY"), "en");
+        assert_eq!(language_from_id(0x0409), Some("en"));
+        assert_eq!(language_from_id(0x0419), Some("ru"));
+        assert_eq!(language_from_id(0x0401), Some("ar"));
+        assert_eq!(language_from_id(0x0411), Some("ja"));
+        assert_eq!(language_from_id(0x7c04), Some("zh"));
+    }
+}

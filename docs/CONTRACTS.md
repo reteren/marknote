@@ -123,6 +123,11 @@ impl FileWatcher {
 | `take_pending_file` | — | `Option<String>` — путь, отложенный для этого окна |
 | `respond_to_close` | `allow: bool` | `()` — ответ на `save-before-close` |
 | `set_document_title` | `path: Option<String>, defaultExtension: String` | `()` — заголовок окна |
+| `get_settings` | — | `Settings` — состав в docs/SETTINGS.md |
+| `save_settings` | `settings: Settings` | `Settings` — записанные значения после проверки границ |
+| `reset_settings` | — | `Settings` — умолчания |
+| `get_resolved_language` | — | `String` — язык интерфейса с учётом значения `system` |
+| `reveal_settings_file` | — | `()` — показать `settings.json` в проводнике |
 
 ```ts
 // то, что видит фронтенд (serde camelCase)
