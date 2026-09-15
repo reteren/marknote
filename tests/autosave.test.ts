@@ -186,16 +186,16 @@ describe("document state and autosave", () => {
     controller.dispose();
   });
 
-  it("saves when the window receives save-before-close", async () => {
+  it("leaves native close decisions to the App close handler", async () => {
     makeDirty();
-    tauri.invoke.mockResolvedValue(result());
     const controller = createAutosave();
     await controller.start();
 
+    expect(tauri.handlers.has("save-before-close")).toBe(false);
     emit("save-before-close");
     await settle();
 
-    expect(tauri.invoke).toHaveBeenCalledTimes(1);
+    expect(tauri.invoke).not.toHaveBeenCalled();
     controller.dispose();
   });
 
@@ -211,18 +211,16 @@ describe("document state and autosave", () => {
     const first = controller.flush();
     expect(tauri.invoke).toHaveBeenCalledTimes(1);
     setDocumentText("second edit while saving");
-    await controller.flush();
+    const second = controller.flush();
     expect(tauri.invoke).toHaveBeenCalledTimes(1);
 
     resolveFirst(result());
-    await first;
-    await settle();
-    expect(documentState.dirty).toBe(true);
-    vi.advanceTimersByTime(2_000);
+    await Promise.all([first, second]);
     await settle();
 
     expect(tauri.invoke).toHaveBeenCalledTimes(2);
     expect(tauri.invoke.mock.calls[1]?.[1]).toMatchObject({ text: "second edit while saving" });
+    expect(documentState.dirty).toBe(false);
     controller.dispose();
   });
 

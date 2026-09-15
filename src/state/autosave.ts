@@ -42,15 +42,15 @@ export function createAutosave(options: AutosaveOptions = {}): AutosaveControlle
   const getState = options.getState ?? (() => documentState);
   let timer: ReturnType<typeof setTimeout> | undefined;
   let focusUnlisten: UnlistenFn | undefined;
-  let closeUnlisten: UnlistenFn | undefined;
   let externalChangeUnlisten: UnlistenFn | undefined;
   let fileDeletedUnlisten: UnlistenFn | undefined;
   let saving = false;
+  let activeSave: Promise<SaveResult | null> | null = null;
   let queued = false;
   let disposed = false;
   const handleBlur = (): void => void save();
 
-  const save = async (force = false): Promise<SaveResult | null> => {
+  const save = (force = false): Promise<SaveResult | null> => {
     const current = getState();
 
     // path === null — единственное безусловное отключение автосохранения.
@@ -61,40 +61,45 @@ export function createAutosave(options: AutosaveOptions = {}): AutosaveControlle
       (!current.format.autosave && !force) ||
       !current.dirty
     ) {
-      return null;
+      return Promise.resolve(null);
     }
 
     if (saving) {
       queued = true;
-      return null;
+      return activeSave ?? Promise.resolve(null);
     }
 
     saving = true;
     const beforeSave = snapshot(current);
     markPending();
 
-    try {
-      const result = await invoke<SaveResult>("save_file", {
-        path: beforeSave.path,
-        text: beforeSave.text,
-        encoding: beforeSave.encoding,
-        bom: beforeSave.bom,
-        lineEnding: beforeSave.lineEnding,
-      });
-      markSaved(result, beforeSave.text);
-      options.onSaved?.(result);
-      return result;
-    } catch (error) {
-      markSaveFailed();
-      options.onError?.(error);
-      return null;
-    } finally {
-      saving = false;
-      if (queued) {
-        queued = false;
-        schedule();
+    const operation = (async (): Promise<SaveResult | null> => {
+      try {
+        const result = await invoke<SaveResult>("save_file", {
+          path: beforeSave.path,
+          text: beforeSave.text,
+          encoding: beforeSave.encoding,
+          bom: beforeSave.bom,
+          lineEnding: beforeSave.lineEnding,
+        });
+        markSaved(result, beforeSave.text);
+        options.onSaved?.(result);
+        return result;
+      } catch (error) {
+        markSaveFailed();
+        options.onError?.(error);
+        return null;
+      } finally {
+        saving = false;
+        activeSave = null;
+        if (queued) {
+          queued = false;
+          schedule();
+        }
       }
-    }
+    })();
+    activeSave = operation;
+    return operation;
   };
 
   const schedule = (): void => {
@@ -150,7 +155,6 @@ export function createAutosave(options: AutosaveOptions = {}): AutosaveControlle
     try {
       const currentWindow = getCurrentWindow();
       focusUnlisten = await currentWindow.onFocusChanged(({ payload }) => handleFocus(payload));
-      closeUnlisten = await listen("save-before-close", () => void save());
       externalChangeUnlisten = await listen<{ path: string }>(
         "file-changed-externally",
         (event) => void handleExternalChange(event),
@@ -158,7 +162,6 @@ export function createAutosave(options: AutosaveOptions = {}): AutosaveControlle
       fileDeletedUnlisten = await listen<{ path: string }>("file-deleted", handleFileDeleted);
       if (disposed) {
         focusUnlisten?.();
-        closeUnlisten?.();
         externalChangeUnlisten?.();
         fileDeletedUnlisten?.();
       }
@@ -173,11 +176,9 @@ export function createAutosave(options: AutosaveOptions = {}): AutosaveControlle
     timer = undefined;
     globalThis.removeEventListener("blur", handleBlur);
     focusUnlisten?.();
-    closeUnlisten?.();
     externalChangeUnlisten?.();
     fileDeletedUnlisten?.();
     focusUnlisten = undefined;
-    closeUnlisten = undefined;
     externalChangeUnlisten = undefined;
     fileDeletedUnlisten = undefined;
   };
@@ -185,10 +186,24 @@ export function createAutosave(options: AutosaveOptions = {}): AutosaveControlle
   return {
     start,
     schedule,
-    flush: (force = false) => {
-      clearTimeout(timer);
-      timer = undefined;
-      return save(force);
+    flush: async (force = false) => {
+      let result: SaveResult | null = null;
+      for (;;) {
+        clearTimeout(timer);
+        timer = undefined;
+        const beforeSave = getState();
+        if (!beforeSave.dirty || beforeSave.path === null) return result;
+        result = await save(force);
+        const afterSave = getState();
+        if (!afterSave.dirty) return result;
+        if (
+          result === null ||
+          afterSave.path === null ||
+          afterSave.readonly ||
+          afterSave.externalChange === "changed" ||
+          (!afterSave.format.autosave && !force)
+        ) return null;
+      }
     },
     dispose,
   };

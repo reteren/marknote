@@ -53,6 +53,7 @@ import HelpDialog, { type HelpMode } from "./ui/HelpDialog.svelte";
   let startScreenDismissed = $state(false);
   let formatPickerOpen = $state(false);
   let closePromptOpen = $state(false);
+  let nativeCloseReady = $state(false);
   let closeRequestSource = $state<CloseRequestSource>(null);
   let nativeClosePending = $state(false);
   let closeAfterDecision = $state(false);
@@ -313,15 +314,25 @@ import HelpDialog, { type HelpMode } from "./ui/HelpDialog.svelte";
     }
   }
 
-  function handleNativeCloseRequest(): void {
+  async function handleNativeCloseRequest(): Promise<void> {
     nativeClosePending = true;
     if (closeAfterDecision) {
       closeAfterDecision = false;
-      void respondToNativeClose(true);
+      await respondToNativeClose(true);
       return;
     }
     if (closePromptOpen) {
       closeRequestSource = "native";
+      return;
+    }
+    if (
+      documentState.path !== null &&
+      documentState.dirty &&
+      documentState.format.autosave &&
+      !isReadOnly
+    ) {
+      const result = await autosaveController?.flush();
+      await respondToNativeClose(result !== null && result !== undefined || !documentState.dirty);
       return;
     }
     if (needsClosePrompt()) {
@@ -329,7 +340,7 @@ import HelpDialog, { type HelpMode } from "./ui/HelpDialog.svelte";
       closePromptOpen = true;
       return;
     }
-    void respondToNativeClose(true);
+    await respondToNativeClose(true);
   }
 
   async function closeWindowAfterDecision(): Promise<void> {
@@ -629,10 +640,11 @@ import HelpDialog, { type HelpMode } from "./ui/HelpDialog.svelte";
 
     const setup = async (): Promise<void> => {
       try {
+        unlistenNativeClose = await listen("save-before-close", handleNativeCloseRequest);
+        nativeCloseReady = true;
         unlistenOpen = await listen<OpenFileRequest>("open-file-request", ({ payload }) => {
           if (payload?.path) void openFile(payload.path);
         });
-        unlistenNativeClose = await listen("save-before-close", handleNativeCloseRequest);
         unlistenNativeDrop = await listen<{ paths?: string[] }>("tauri://drag-drop", ({ payload }) => {
           handleDroppedPaths(payload?.paths ?? []);
         });
@@ -667,7 +679,7 @@ import HelpDialog, { type HelpMode } from "./ui/HelpDialog.svelte";
   <title>{title}</title>
 </svelte:head>
 
-<div class="app-shell">
+<div class="app-shell" inert={!nativeCloseReady} aria-busy={!nativeCloseReady}>
   <div class="menu-row">
     <MenuBar
       formats={formatsState.items}
