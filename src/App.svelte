@@ -8,7 +8,8 @@
   import { onMount } from "svelte";
   import { toggleWrapper } from "./editor/keymap";
   import { safeLinkHref } from "./editor/livePreview/inline";
-  import { createEditor, setEditorDocumentPath, type EditorStats } from "./editor/createEditor";
+  import { createActions } from "./state/actions";
+  import { createEditor, setEditorDocumentPath, setEditorFormat, type EditorStats } from "./editor/createEditor";
   import { dispatchSearchOpen } from "./editor/search";
   import { createAutosave, saveAs } from "./state/autosave";
   import {
@@ -112,6 +113,38 @@ import HelpDialog, { type HelpMode } from "./ui/HelpDialog.svelte";
     });
   }
 
+  const actions = createActions({
+    getEditorView: () => editorView,
+    autosave: {
+      flush: (force) => autosaveController?.flush(force) ?? Promise.resolve(null),
+    },
+    dialogs: {
+      showHelp: (mode) => {
+        helpMode = mode;
+      },
+      openLink: (url) => {
+        const href = safeLinkHref(url);
+        if (href) window.open(href, "_blank", "noopener,noreferrer");
+      },
+      openImage: (src) => {
+        const href = safeLinkHref(src);
+        if (href) window.open(href, "_blank", "noopener,noreferrer");
+      },
+    },
+    getFormats: () => formatsState.items,
+    notify: reportError,
+    closeWindow: () => void requestClose(),
+    zoomIn: () => {
+      zoomPercent = Math.min(200, zoomPercent + 10);
+    },
+    zoomOut: () => {
+      zoomPercent = Math.max(50, zoomPercent - 10);
+    },
+    resetZoom: () => {
+      zoomPercent = 100;
+    },
+  });
+
   function rebuildEditor(focus = false): void {
     if (!editorHost) return;
     editorView?.destroy();
@@ -120,6 +153,7 @@ import HelpDialog, { type HelpMode } from "./ui/HelpDialog.svelte";
       doc: documentState.text,
       path: documentState.path,
       format: documentState.format,
+      handlers: actions.handlers,
       onChange: (text) => {
         setDocumentText(text);
         autosaveController?.schedule();
@@ -186,7 +220,22 @@ import HelpDialog, { type HelpMode } from "./ui/HelpDialog.svelte";
     setDocumentFormat(format);
     startScreenDismissed = true;
     formatPickerOpen = false;
-    rebuildEditor(true);
+    // У безымянного документа имя в заголовке зависит от типа: Untitled.md
+    // против Untitled.json. Заголовок ставится из Rust, потому что setTitle
+    // с фронтенда молча подавляется разрешениями Tauri.
+    void invoke("set_document_title", {
+      path: documentState.path,
+      defaultExtension: format.defaultExtension,
+    }).catch(() => {
+      // Заголовок — украшение, а не работа программы: его неудача не должна
+      // мешать пользователю сменить тип документа.
+    });
+    if (editorView) {
+      void setEditorFormat(editorView, format);
+      editorView.focus();
+    } else {
+      rebuildEditor(true);
+    }
   }
 
   async function saveDocumentAs(): Promise<boolean> {
@@ -197,8 +246,15 @@ import HelpDialog, { type HelpMode } from "./ui/HelpDialog.svelte";
       if (!result) return false;
       const formatChanged = result.format.id !== documentState.format.id;
       markSaved(result, documentState.text);
-      if (editorView) setEditorDocumentPath(editorView, result.path);
-      if (formatChanged) rebuildEditor(true);
+      if (editorView) {
+        setEditorDocumentPath(editorView, result.path);
+        if (formatChanged) {
+          void setEditorFormat(editorView, result.format);
+          editorView.focus();
+        }
+      } else if (formatChanged) {
+        rebuildEditor(true);
+      }
       errorMessage = null;
       return true;
     } catch (error) {
