@@ -350,14 +350,28 @@ More…), New Window, Open…, Save, Save As…, Close
 Пункт `New ▸` создаёт документ выбранного типа в новом окне. Набор типов
 совпадает со стартовым экраном.
 **Edit** — Undo, Redo, Cut, Copy, Paste, Select All, Find…, Replace…
-**Format** — Bold, Italic, Strikethrough, Highlight, Code, Link, заголовки,
-списки, таблица, callout, блок кода, блок формулы, горизонтальная линия
 **View** — Zoom In, Zoom Out, Reset Zoom
 **Help** — Keyboard Shortcuts, Markdown Reference, About
 
 ### 6.3 Контекстное меню
 
 Встроенное меню WebView2 отключается, вместо него рисуется своё.
+
+Форматирования в строке меню нет: раздел `Format` убран, а все его команды
+живут здесь. Причина простая — форматируют текст, который уже выделен, то
+есть рука в этот момент на мыши и указатель на нужном месте. Тянуться
+за этим к верхнему краю окна незачем.
+
+Команды сгруппированы в раскрывающиеся подменю, как это сделано в Obsidian:
+
+- **Formatting** — Bold, Italic, Strikethrough, Highlight, Code, Link
+- **Paragraph** — заголовки шести уровней, снятие заголовка, списки
+- **Insert** — таблица, callout, блок кода, блок формулы, горизонтальная линия
+
+Ниже, за разделителем, обычная правка: Cut, Copy, Paste, Paste as Plain
+Text, Delete, Select All. Подменю раскрывается по наведению и по стрелке
+вправо, закрывается по стрелке влево и по Escape, у края окна
+разворачивается внутрь.
 
 - **Над выделением:** Cut, Copy, Paste, Select All, разделитель, Bold, Italic,
   Strikethrough, Highlight, Code, Link.
