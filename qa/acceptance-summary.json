@@ -1,5 +1,5 @@
 {
-  "session": "4305ee1d1fac40d987ad30503454fc8d",
+  "session": "fb7022091030492b802d87e601102f09",
   "runs": 1,
   "testsPerRun": 10,
   "fullyGreen": 0,
@@ -7,11 +7,11 @@
   "failedTests": 2,
   "failuresByTest": [
     {
-      "id": "TC-08",
+      "id": "TC-09",
       "count": 1
     },
     {
-      "id": "TC-09",
+      "id": "TC-10",
       "count": 1
     }
   ],
@@ -22,7 +22,7 @@
       "Name": "Запуск без аргументов: окно и заголовок MarkNote",
       "Passed": true,
       "Details": "Окно 'MarkNote', размер 916x739, visible=True",
-      "ElapsedMs": 650,
+      "ElapsedMs": 781,
       "Screenshot": "C:\\marknote\\qa\\shots\\run_001_01_no_args.png"
     },
     {
@@ -31,7 +31,7 @@
       "Name": "Запуск showcase.md: корректный заголовок",
       "Passed": true,
       "Details": "Заголовок 'showcase.md — MarkNote', размер 916x739, visible=True",
-      "ElapsedMs": 991,
+      "ElapsedMs": 1078,
       "Screenshot": "C:\\marknote\\qa\\shots\\run_001_02_showcase.png"
     },
     {
@@ -40,7 +40,7 @@
       "Name": "Запуск cp1251.txt: корректный заголовок",
       "Passed": true,
       "Details": "Заголовок 'cp1251.txt — MarkNote', размер 916x739, visible=True",
-      "ElapsedMs": 1030,
+      "ElapsedMs": 1149,
       "Screenshot": "C:\\marknote\\qa\\shots\\run_001_03_cp1251.png"
     },
     {
@@ -49,7 +49,7 @@
       "Name": "Несуществующий путь: процесс жив и окно показано",
       "Passed": true,
       "Details": "processAlive=True, окна=1: 'MarkNote' 916x739 visible=True",
-      "ElapsedMs": 596,
+      "ElapsedMs": 688,
       "Screenshot": "C:\\marknote\\qa\\shots\\run_001_04_nonexistent.png"
     },
     {
@@ -57,8 +57,8 @@
       "Id": "TC-05",
       "Name": "Повторный запуск с тем же файлом: один процесс",
       "Passed": true,
-      "Details": "firstWindow=True, secondExited=True, processes=1, pids=25832",
-      "ElapsedMs": 1816,
+      "Details": "firstWindow=True, secondExited=True, processes=1, pids=37124",
+      "ElapsedMs": 1761,
       "Screenshot": "C:\\marknote\\qa\\shots\\run_001_05_same_file.png"
     },
     {
@@ -66,26 +66,26 @@
       "Id": "TC-06",
       "Name": "Повторный запуск с другим файлом: второе окно",
       "Passed": true,
-      "Details": "firstWindow=True, secondExited=True, windows=2, processes=1: 'crlf.md — MarkNote' 916x739 visible=True; 'crlf.md — MarkNote' 916x739 visible=True",
-      "ElapsedMs": 1943,
-      "Screenshot": ""
+      "Details": "firstWindow=True, secondExited=True, firstTitle=True, secondTitle=True, windows=2, processes=1: 'crlf.md — MarkNote' 916x739 visible=True; 'showcase.md — MarkNote' 916x739 visible=True",
+      "ElapsedMs": 2699,
+      "Screenshot": "C:\\marknote\\qa\\shots\\run_001_06_second_window.png"
     },
     {
       "Run": 1,
       "Id": "TC-07",
       "Name": "big-10k.md: окно появляется и процесс отзывчив",
       "Passed": true,
-      "Details": "window=True, responding=True, elapsed=589 мс, processes=1",
-      "ElapsedMs": 589,
+      "Details": "window=True, responding=True, elapsed=1075 мс, processes=1",
+      "ElapsedMs": 1075,
       "Screenshot": "C:\\marknote\\qa\\shots\\run_001_07_big_10k.png"
     },
     {
       "Run": 1,
       "Id": "TC-08",
       "Name": "logo.png: бинарный файл отклонён с сообщением",
-      "Passed": false,
-      "Details": "binaryNotice=False, processAlive=True, title=MarkNote",
-      "ElapsedMs": 15854,
+      "Passed": true,
+      "Details": "binaryNotice=True, processAlive=True, title=MarkNote",
+      "ElapsedMs": 1677,
       "Screenshot": "C:\\marknote\\qa\\shots\\run_001_08_binary_rejected.png"
     },
     {
@@ -93,18 +93,18 @@
       "Id": "TC-09",
       "Name": "Несохранённый документ: close prompt и watchdog",
       "Passed": false,
-      "Details": "Диалог несохранённых изменений не появился после Alt+F4",
-      "ElapsedMs": 5075,
-      "Screenshot": "C:\\marknote\\qa\\shots\\run_001_09_unsaved_close_prompt.png"
+      "Details": "Clipboard paste did not produce the expected 10-character editor count; startScreenClosed=True, editorMounted=True, status='Document format: Markdown; 0 chars'",
+      "ElapsedMs": 6906,
+      "Screenshot": ""
     },
     {
       "Run": 1,
       "Id": "TC-10",
       "Name": "Ctrl+F: панель поиска открывается",
-      "Passed": true,
-      "Details": "searchPanel=True, processAlive=True, windows=1",
-      "ElapsedMs": 1473,
-      "Screenshot": "C:\\marknote\\qa\\shots\\run_001_10_search.png"
+      "Passed": false,
+      "Details": "CodeMirror contenteditable element was not available for Ctrl+F",
+      "ElapsedMs": 1063,
+      "Screenshot": ""
     }
   ]
 }
