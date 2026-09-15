@@ -16,6 +16,7 @@ use thiserror::Error;
 use crate::{
     atomic_write, binary, encoding as text_encoding,
     formats::{self, FormatCapabilities},
+    messages::UserMessage,
     windows::{self, AppState, FileSnapshot},
 };
 
@@ -23,34 +24,50 @@ const MAX_IMAGE_BYTES: u64 = 16 * 1024 * 1024;
 
 #[derive(Debug, Error)]
 pub enum CommandError {
-    #[error("ошибка ввода-вывода: {0}")]
+    #[error("{message}", message = UserMessage::FileIo)]
     Io(#[from] std::io::Error),
-    #[error("ошибка атомарной записи: {0}")]
+    #[error("{message}", message = UserMessage::AtomicWrite)]
     AtomicWrite(#[source] anyhow::Error),
-    #[error("ошибка преобразования формата: {0}")]
+    #[error("{message}", message = UserMessage::FormatConversion)]
     Format(#[source] anyhow::Error),
-    #[error("ошибка диалога: {0}")]
+    #[error("{message}", message = UserMessage::Dialog)]
     Dialog(String),
-    #[error("неизвестный формат: {0}")]
+    #[error("{message}", message = UserMessage::UnknownFormat)]
     UnknownFormat(String),
-    #[error("формат {0} доступен только для чтения")]
+    #[error("{message}", message = UserMessage::ReadOnlyFormat)]
     ReadOnlyFormat(String),
-    #[error("двоичный файл нельзя открыть как текст: {0}")]
+    #[error("{message}", message = UserMessage::BinaryFile)]
     BinaryFile(String),
-    #[error("файл изменился на диске после открытия: {0}")]
+    #[error("{message}", message = UserMessage::FileConflict)]
     FileConflict(String),
-    #[error("изображение слишком большое (лимит 16 MiB): {0}")]
+    #[error("{message}", message = UserMessage::ImageTooLarge)]
     ImageTooLarge(String),
-    #[error("недопустимый путь: {0}")]
+    #[error("{0}")]
     InvalidPath(String),
-    #[error("ошибка окна: {0}")]
+    #[error("{message}", message = UserMessage::Window)]
     Window(String),
     #[error("{0}")]
-    Message(String),
+    WindowRouting(String),
+    #[error("{0}")]
+    Message(UserMessage),
+}
+
+impl CommandError {
+    fn log_internal_details(&self) {
+        match self {
+            Self::Io(error) => eprintln!("File I/O failure: {error}"),
+            Self::AtomicWrite(error) => eprintln!("Atomic save failure: {error:#}"),
+            Self::Format(error) => eprintln!("Format processing failure: {error:#}"),
+            Self::Dialog(error) => eprintln!("File dialog failure: {error}"),
+            Self::Window(error) => eprintln!("Window operation failure: {error}"),
+            _ => {}
+        }
+    }
 }
 
 impl Serialize for CommandError {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        self.log_internal_details();
         if let Self::FileConflict(path) = self {
             let mut map = serializer.serialize_map(Some(3))?;
             map.serialize_entry("code", "file-conflict")?;
@@ -171,9 +188,7 @@ pub fn save_file(
     let path = PathBuf::from(&path);
     if let Ok(metadata) = fs::metadata(&path) {
         if metadata.permissions().readonly() {
-            return Err(CommandError::Message(
-                "файл доступен только для чтения".to_owned(),
-            ));
+            return Err(CommandError::Message(UserMessage::FileReadOnly));
         }
     }
 
@@ -252,8 +267,7 @@ pub async fn save_as(
     let adapter = if path.extension().is_some() {
         formats::adapter_for_path(&path)
     } else {
-        formats::adapter_by_id(&requested_format.id)
-            .expect("запрошенный формат должен находиться в реестре")
+        formats::adapter_by_id(&requested_format.id).expect("requested format must be registered")
     };
     let format = adapter.caps();
     ensure_editable(&format)?;
@@ -296,10 +310,7 @@ pub fn new_document(window: WebviewWindow, formatId: String) -> Result<NewDocume
     let format =
         formats::by_id(&formatId).ok_or_else(|| CommandError::UnknownFormat(formatId.clone()))?;
     if !format.creatable {
-        return Err(CommandError::Message(format!(
-            "формат {} нельзя использовать для нового документа",
-            format.label
-        )));
+        return Err(CommandError::Message(UserMessage::FormatCannotCreate));
     }
     windows::apply_document_title(&window, None, &format.default_extension)
         .map_err(CommandError::Window)?;
@@ -340,44 +351,45 @@ pub fn read_image(docPath: Option<String>, src: String) -> Result<String, Comman
         return Ok(src);
     }
 
-    if src.is_empty() || src.bytes().any(|byte| byte == 0) || has_uri_scheme(&src) {
+    if src.is_empty() {
+        return Err(CommandError::Message(UserMessage::InvalidPath));
+    }
+    if src.bytes().any(|byte| byte == 0) || has_uri_scheme(&src) {
         return Err(CommandError::InvalidPath(
-            "путь к изображению должен быть относительным путём".to_owned(),
+            UserMessage::ImagePathMustBeRelative.to_string(),
         ));
     }
 
     let source_path = PathBuf::from(&src);
     if source_path.is_absolute() || is_windows_device_path(&source_path) {
         return Err(CommandError::InvalidPath(
-            "абсолютные и device-пути к изображениям запрещены".to_owned(),
+            UserMessage::ImagePathAbsoluteOrDevice.to_string(),
         ));
     }
 
-    let document_path = docPath.ok_or_else(|| {
-        CommandError::InvalidPath("для относительного изображения нужен путь документа".to_owned())
-    })?;
+    let document_path = docPath.ok_or(CommandError::Message(UserMessage::DocumentPathRequired))?;
     let document_path =
         windows::canonical_path(Path::new(&document_path)).map_err(CommandError::InvalidPath)?;
     if is_windows_device_path(&document_path) {
         return Err(CommandError::InvalidPath(
-            "путь документа указывает на device".to_owned(),
+            UserMessage::DeviceDocumentPath.to_string(),
         ));
     }
-    let document_directory = document_path.parent().ok_or_else(|| {
-        CommandError::InvalidPath("у документа нет родительского каталога".to_owned())
-    })?;
+    let document_directory = document_path
+        .parent()
+        .ok_or(CommandError::Message(UserMessage::DocumentFolderRequired))?;
     let path = windows::canonical_path(&document_directory.join(source_path))
         .map_err(CommandError::InvalidPath)?;
     if !path_is_within(document_directory, &path) || is_windows_device_path(&path) {
         return Err(CommandError::InvalidPath(
-            "путь к изображению выходит за каталог документа".to_owned(),
+            UserMessage::ImagePathOutsideDocument.to_string(),
         ));
     }
 
     let metadata = fs::metadata(&path)?;
     if !metadata.is_file() {
         return Err(CommandError::InvalidPath(
-            "путь к изображению не является обычным файлом".to_owned(),
+            UserMessage::ImageNotRegularFile.to_string(),
         ));
     }
     if metadata.len() > MAX_IMAGE_BYTES {
@@ -393,7 +405,7 @@ pub fn read_image(docPath: Option<String>, src: String) -> Result<String, Comman
 
 #[tauri::command]
 pub fn open_in_new_window(app: AppHandle, path: String) -> Result<(), CommandError> {
-    windows::route_file(&app, path).map_err(CommandError::Window)
+    windows::route_file(&app, path).map_err(CommandError::WindowRouting)
 }
 
 #[tauri::command]
@@ -410,9 +422,7 @@ pub fn reveal_in_explorer(path: String) -> Result<(), CommandError> {
     #[cfg(not(windows))]
     {
         let _ = path;
-        Err(CommandError::Message(
-            "проводник доступен только в Windows".to_owned(),
-        ))
+        Err(CommandError::Message(UserMessage::ExplorerWindowsOnly))
     }
 }
 

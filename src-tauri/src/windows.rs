@@ -14,7 +14,7 @@ use tauri::{
     Emitter, Manager, WebviewWindow, WindowEvent,
 };
 
-use crate::watcher::FileWatcher;
+use crate::{messages::UserMessage, watcher::FileWatcher};
 
 const MAIN_WINDOW_LABEL: &str = "main";
 const WINDOW_LABEL_PREFIX: &str = "win-";
@@ -240,7 +240,9 @@ pub fn initialize(app: &mut tauri::App) -> tauri::Result<()> {
 
     for path in env::args().skip(1).map(PathBuf::from) {
         if path.is_file() {
-            let _ = route_file(app.handle(), &path);
+            if let Err(error) = route_file(app.handle(), &path) {
+                eprintln!("Could not open startup file: {error}");
+            }
         }
     }
 
@@ -251,7 +253,7 @@ pub fn initialize(app: &mut tauri::App) -> tauri::Result<()> {
 /// процессу.
 pub fn handle_single_instance(app: &tauri::AppHandle, argv: Vec<String>) {
     let handle = app.clone();
-    let _ = std::thread::Builder::new()
+    let result = std::thread::Builder::new()
         .name("marknote-single-instance-route".to_owned())
         .spawn(move || {
             let mut opened = false;
@@ -259,7 +261,9 @@ pub fn handle_single_instance(app: &tauri::AppHandle, argv: Vec<String>) {
             for path in argv.into_iter().skip(1).map(PathBuf::from) {
                 if path.is_file() {
                     opened = true;
-                    let _ = route_file(&handle, &path);
+                    if let Err(error) = route_file(&handle, &path) {
+                        eprintln!("Could not open requested file: {error}");
+                    }
                 }
             }
 
@@ -269,6 +273,9 @@ pub fn handle_single_instance(app: &tauri::AppHandle, argv: Vec<String>) {
                 }
             }
         });
+    if let Err(error) = result {
+        eprintln!("Could not start single-instance file routing: {error}");
+    }
 }
 
 /// Выбирает окно по реестру и отправляет ему запрос на открытие файла.
@@ -283,7 +290,10 @@ pub fn route_file(app: &tauri::AppHandle, path: impl AsRef<Path>) -> Result<(), 
         let existing = state
             .open_files
             .lock()
-            .map_err(|_| "не удалось заблокировать реестр открытых файлов".to_owned())?
+            .map_err(|error| {
+                eprintln!("Could not lock the open-file registry: {error}");
+                UserMessage::WindowRouting.to_string()
+            })?
             .get(&key)
             .cloned();
 
@@ -331,7 +341,13 @@ pub fn route_file(app: &tauri::AppHandle, path: impl AsRef<Path>) -> Result<(), 
             "open-file-request",
             serde_json::json!({ "path": canonical.to_string_lossy().into_owned() }),
         )
-        .map_err(|error| error.to_string())
+        .map_err(|error| {
+            eprintln!(
+                "Could not notify window {} about the requested file: {error}",
+                window.label()
+            );
+            UserMessage::WindowRouting.to_string()
+        })
 }
 
 enum RouteTarget {
@@ -347,12 +363,15 @@ fn create_window(app: &tauri::AppHandle, label: &str) -> Result<WebviewWindow, S
         .iter()
         .find(|window| window.label == MAIN_WINDOW_LABEL)
         .cloned()
-        .ok_or_else(|| "конфигурация главного окна не найдена".to_owned())?;
+        .ok_or_else(|| UserMessage::MainWindowUnavailable.to_string())?;
     config.label = label.to_owned();
     config.visible = false;
 
     let window = WebviewWindowBuilder::from_config(app, &config)
-        .map_err(|error| error.to_string())?
+        .map_err(|error| {
+            eprintln!("Could not configure a new application window: {error}");
+            UserMessage::MainWindowUnavailable.to_string()
+        })?
         .on_page_load(|window, payload| {
             if matches!(payload.event(), PageLoadEvent::Finished) {
                 let _ = window.show();
@@ -360,7 +379,10 @@ fn create_window(app: &tauri::AppHandle, label: &str) -> Result<WebviewWindow, S
             }
         })
         .build()
-        .map_err(|error| error.to_string())?;
+        .map_err(|error| {
+            eprintln!("Could not create a new application window: {error}");
+            UserMessage::MainWindowUnavailable.to_string()
+        })?;
 
     install_window_handlers(&window, app);
     apply_dark_titlebar(&window);
@@ -446,7 +468,10 @@ pub(crate) fn apply_document_title(
 pub(crate) fn canonical_path(path: &Path) -> Result<PathBuf, String> {
     std::fs::canonicalize(path)
         .map(preserve_extended_path)
-        .map_err(|error| format!("не удалось определить путь '{}': {error}", path.display()))
+        .map_err(|error| {
+            eprintln!("Could not resolve path {}: {error}", path.display());
+            UserMessage::path_resolution(&path.display().to_string())
+        })
 }
 
 /// `canonicalize` already returns the Win32 extended form when needed.  Keep

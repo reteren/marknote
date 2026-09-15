@@ -3,6 +3,7 @@ mod binary;
 mod commands;
 mod encoding;
 mod formats;
+mod messages;
 mod watcher;
 mod windows;
 
@@ -37,5 +38,8 @@ pub fn run() {
             commands::reveal_in_explorer,
         ])
         .run(tauri::generate_context!())
-        .expect("ошибка запуска MarkNote");
+        .unwrap_or_else(|error| {
+            eprintln!("Application startup failed: {error}");
+            panic!("{}", messages::UserMessage::StartupFailure);
+        });
 }
