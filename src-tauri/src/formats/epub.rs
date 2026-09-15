@@ -413,16 +413,16 @@ fn xhtml_to_markdown(bytes: &[u8]) -> anyhow::Result<String> {
                 append_text(&mut output, &decoded);
             }
             Event::GeneralRef(reference) if !in_head && ignored_depth == 0 => {
-                    let value = if let Some(character) =
-                        reference.resolve_char_ref().map_err(|_| invalid_epub())?
-                    {
-                        character.to_string()
-                    } else {
-                        let name = reference.decode().map_err(|_| invalid_epub())?;
-                        match named_entity(&name) {
-                            Some(value) => value,
-                            None => format!("&{name};"),
-                        }
+                let value = if let Some(character) =
+                    reference.resolve_char_ref().map_err(|_| invalid_epub())?
+                {
+                    character.to_string()
+                } else {
+                    let name = reference.decode().map_err(|_| invalid_epub())?;
+                    match named_entity(&name) {
+                        Some(value) => value,
+                        None => format!("&{name};"),
+                    }
                 };
                 output.push_str(&value);
             }
