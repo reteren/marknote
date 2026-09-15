@@ -57,6 +57,20 @@ export const documentState = $state<DocumentState>({
   externalChangePath: null,
 });
 
+/** UI labels derived from the same document identity stored in DocumentState. */
+export function getDocumentTitle(state: Pick<DocumentState, "path" | "format">): string {
+  const name = state.path
+    ? state.path.split(/[\\/]/u).pop() || state.path
+    : `Untitled.${state.format.defaultExtension}`;
+  return `${name} — MarkNote`;
+}
+
+export function getClosePromptMessage(state: Pick<DocumentState, "path">): string {
+  return state.path
+    ? "This document has unsaved changes."
+    : "This untitled document has unsaved changes.";
+}
+
 export function replaceDocument(opened: OpenedFile): void {
   const readonly = opened.readonly || !opened.format.editable;
   documentState.path = opened.path;

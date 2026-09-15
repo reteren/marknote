@@ -17,6 +17,7 @@ vi.mock("@tauri-apps/api/window", () => ({
 import {
   clearExternalChange,
   documentState,
+  getDocumentTitle,
   markExternalChange,
   replaceDocument,
   resetDocument,
@@ -254,6 +255,7 @@ describe("document state and autosave", () => {
 
     expect(documentState.saveStatus).toBe("saved");
     expect(documentState.dirty).toBe(false);
+    expect(getDocumentTitle(documentState)).toBe("draft.md — MarkNote");
     expect(documentState.lastSavedAt).toEqual(new Date(saved.savedAt));
     controller.dispose();
   });

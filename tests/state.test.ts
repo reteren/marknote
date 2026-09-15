@@ -5,6 +5,9 @@ vi.mock("@tauri-apps/api/core", () => ({ invoke: tauri.invoke }));
 
 import {
   documentState,
+  getClosePromptMessage,
+  getDocumentTitle,
+  markSaved,
   replaceDocument,
   resetDocument,
   setDocumentFormat,
@@ -43,6 +46,8 @@ describe("DocumentState M3.1", () => {
     resetDocument(markdownFormat, "draft");
 
     expect(documentState.path).toBeNull();
+    expect(getDocumentTitle(documentState)).toBe("Untitled.md — MarkNote");
+    expect(getClosePromptMessage(documentState)).toContain("untitled");
     expect(documentState.saveStatus).toBe("unsaved");
     expect(documentState.dirty).toBe(true);
     expect(documentState.readonly).toBe(false);
@@ -110,5 +115,28 @@ describe("DocumentState M3.1", () => {
     expect(documentState.dirty).toBe(false);
     expect(documentState.saveStatus).toBe("saved");
     expect(documentState.externalChange).toBe("none");
+  });
+
+  it("uses one path source for title and close text through new, open, and Save As transitions", () => {
+    replaceDocument(opened({ path: "C:\\work\\showcase.md" }));
+    expect(documentState.path).toBe("C:\\work\\showcase.md");
+    expect(getDocumentTitle(documentState)).toBe("showcase.md — MarkNote");
+    expect(getClosePromptMessage(documentState)).toBe("This document has unsaved changes.");
+
+    resetDocument(markdownFormat, "new content");
+    expect(documentState.path).toBeNull();
+    expect(getDocumentTitle(documentState)).toBe("Untitled.md — MarkNote");
+    expect(getClosePromptMessage(documentState)).toBe("This untitled document has unsaved changes.");
+
+    markSaved({
+      path: "D:\\notes\\renamed.md",
+      savedAt: "2026-09-14T12:34:56.000Z",
+      format: markdownFormat,
+    });
+    expect(documentState.path).toBe("D:\\notes\\renamed.md");
+    expect(getDocumentTitle(documentState)).toBe("renamed.md — MarkNote");
+    expect(getClosePromptMessage(documentState)).toBe("This document has unsaved changes.");
+    expect(documentState.dirty).toBe(false);
+    expect(documentState.saveStatus).toBe("saved");
   });
 });

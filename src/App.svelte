@@ -14,6 +14,8 @@
   import {
     clearExternalChange,
     documentState,
+    getClosePromptMessage,
+    getDocumentTitle,
     markSaved,
     replaceDocument,
     resetDocument,
@@ -64,9 +66,8 @@ import HelpDialog, { type HelpMode } from "./ui/HelpDialog.svelte";
   });
   let errorMessage = $state<string | null>(null);
 
-  const title = $derived(
-    `${documentState.path ? documentState.path.split(/[\\/]/u).pop() || documentState.path : `Untitled.${documentState.format.defaultExtension}`} — MarkNote`,
-  );
+  const title = $derived(getDocumentTitle(documentState));
+  const closePromptMessage = $derived(getClosePromptMessage(documentState));
   const showStartScreen = $derived(
     !startScreenDismissed && documentState.path === null && documentState.text.length === 0,
   );
@@ -677,7 +678,7 @@ import HelpDialog, { type HelpMode } from "./ui/HelpDialog.svelte";
   <div
     class="status-area"
     role="region"
-    aria-label="Выбор формата документа"
+    aria-label="Choose document format"
     onclick={(event) => {
       if ((event.target as Element | null)?.closest(".format-info")) formatPickerOpen = true;
     }}
@@ -712,7 +713,7 @@ import HelpDialog, { type HelpMode } from "./ui/HelpDialog.svelte";
     <div class="modal-backdrop">
       <div class="close-dialog" role="dialog" aria-modal="true" aria-labelledby="close-dialog-title">
         <h2 id="close-dialog-title">Save changes?</h2>
-        <p>{documentState.path ? "This document has unsaved changes." : "This untitled document has unsaved changes."}</p>
+        <p>{closePromptMessage}</p>
         <div class="close-dialog-actions">
           <button type="button" class="primary" onclick={() => void handleCloseChoice("save")}>Save</button>
           <button type="button" onclick={() => void handleCloseChoice("discard")}>Discard</button>
