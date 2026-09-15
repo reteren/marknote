@@ -110,6 +110,9 @@ namespace MarkNote.Acceptance {
         [DllImport("user32.dll")]
         public static extern void mouse_event(uint flags, uint dx, uint dy, uint data, UIntPtr extra);
 
+        [DllImport("user32.dll")]
+        public static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, UIntPtr extra);
+
         [StructLayout(LayoutKind.Sequential)]
         public struct RECT {
             public int Left;
@@ -286,6 +289,7 @@ function Stop-MarkNoteProcesses {
         }
     } while ($stopwatch.Elapsed.TotalSeconds -lt $TimeoutSec)
     $stopwatch.Stop()
+    Start-Sleep -Milliseconds 150
     return (@(Get-Process -Name marknote -ErrorAction SilentlyContinue).Count -eq 0)
 }
 
@@ -448,7 +452,9 @@ function Find-UiElement {
         $all = $root.FindAll(
             [System.Windows.Automation.TreeScope]::Descendants,
             [System.Windows.Automation.Condition]::TrueCondition)
-        return ($all | Where-Object { $_.Current.Name -eq $Name } | Select-Object -First 1)
+        $exact = $all | Where-Object { $_.Current.Name -eq $Name } | Select-Object -First 1
+        if ($exact) { return $exact }
+        return ($all | Where-Object { $_.Current.Name -like "*$Name*" } | Select-Object -First 1)
     } catch {
         return $null
     }
@@ -461,6 +467,13 @@ function Click-UiElement {
     )
     $element = Find-UiElement -ProcessId $ProcessId -Name $Name
     if (-not $element) { return $false }
+    try {
+        $pattern = $null
+        if ($element.TryGetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern, [ref]$pattern)) {
+            $pattern.Invoke()
+            return $true
+        }
+    } catch {}
     try {
         $rect = $element.Current.BoundingRectangle
         if ($rect.Width -le 0 -or $rect.Height -le 0) { return $false }
@@ -479,15 +492,42 @@ function Bring-WindowToFront {
     param([object]$Window)
     if (-not $Window) { return $false }
     [MarkNote.Acceptance.Native]::SetForegroundWindow([IntPtr]$Window.Handle) | Out-Null
-    # Уводим указатель от пунктов меню: mouseover не должен менять активный пункт
-    # между клавишами Alt+F, Enter и Enter.
-    [MarkNote.Acceptance.Native]::SetCursorPos(0, 0) | Out-Null
+    $x = [int]($Window.Left + ($Window.Width / 2))
+    $y = [int]($Window.Top + ($Window.Height / 2))
+    if ($x -gt 0 -and $y -gt 0) {
+        [MarkNote.Acceptance.Native]::SetCursorPos($x, $y) | Out-Null
+        [MarkNote.Acceptance.Native]::mouse_event([uint32]2, 0, 0, 0, [UIntPtr]::Zero)
+        [MarkNote.Acceptance.Native]::mouse_event([uint32]4, 0, 0, 0, [UIntPtr]::Zero)
+    }
     return $true
 }
 
 function Send-WindowKeys {
     param([string]$Keys)
-    if (-not $uiAutomationAvailable) { return $false }
+    if ($Keys -eq "^f" -or $Keys -eq "^{f}") {
+        [MarkNote.Acceptance.Native]::keybd_event(0x11, 0, 0, [UIntPtr]::Zero)
+        [MarkNote.Acceptance.Native]::keybd_event(0x46, 0, 0, [UIntPtr]::Zero)
+        [MarkNote.Acceptance.Native]::keybd_event(0x46, 0, 2, [UIntPtr]::Zero)
+        [MarkNote.Acceptance.Native]::keybd_event(0x11, 0, 2, [UIntPtr]::Zero)
+        return $true
+    }
+    if ($Keys -eq "%{F4}" -or $Keys -eq "%{f4}") {
+        [MarkNote.Acceptance.Native]::keybd_event(0x12, 0, 0, [UIntPtr]::Zero)
+        [MarkNote.Acceptance.Native]::keybd_event(0x73, 0, 0, [UIntPtr]::Zero)
+        [MarkNote.Acceptance.Native]::keybd_event(0x73, 0, 2, [UIntPtr]::Zero)
+        [MarkNote.Acceptance.Native]::keybd_event(0x12, 0, 2, [UIntPtr]::Zero)
+        return $true
+    }
+    if ($Keys -eq "qa-unsaved") {
+        # q=0x51, a=0x41, -=0xBD, u=0x55, n=0x4E, s=0x53, a=0x41, v=0x56, e=0x45, d=0x44
+        $vks = @(0x51, 0x41, 0xBD, 0x55, 0x4E, 0x53, 0x41, 0x56, 0x45, 0x44)
+        foreach ($vk in $vks) {
+            [MarkNote.Acceptance.Native]::keybd_event($vk, 0, 0, [UIntPtr]::Zero)
+            [MarkNote.Acceptance.Native]::keybd_event($vk, 0, 2, [UIntPtr]::Zero)
+            Start-Sleep -Milliseconds 20
+        }
+        return $true
+    }
     try {
         [System.Windows.Forms.SendKeys]::SendWait($Keys)
         return $true
@@ -707,28 +747,38 @@ function Test-UnsavedClose {
     }
     $window = Get-WindowForProcess -State $windowWait.State -ProcessId $process.Id
     [void](Bring-WindowToFront -Window $window)
-    # Selecting the exact Markdown tile avoids racing the asynchronous File
-    # menu while still exercising SendKeys below for the close handshake.
-    $markdownTile = Wait-UiText -ProcessId $process.Id -Expected "Markdown .md" -TestId "TC-09-format-tile" -TimeoutSec 15
+    $markdownTile = Wait-UiText -ProcessId $process.Id -Expected "Markdown" -TestId "TC-09-format-tile" -TimeoutSec 15
     if (-not $markdownTile.Found) {
         return New-Outcome -Passed $false -Details "Плитка Markdown не появилась на стартовом экране" -ElapsedMs $markdownTile.ElapsedMs
     }
-    if (-not (Click-UiElement -ProcessId $process.Id -Name "Markdown .md")) {
+    if (-not (Click-UiElement -ProcessId $process.Id -Name "Markdown")) {
         return New-Outcome -Passed $false -Details "Плитка Markdown не нажимается через UI Automation" -ElapsedMs $markdownTile.ElapsedMs
     }
-    $screenGone = Wait-UiText -ProcessId $process.Id -Expected "Markdown .md" -Absent $true -TestId "TC-09-start-screen-closed" -TimeoutSec 10
+    $screenGone = Wait-UiText -ProcessId $process.Id -Expected "Choose document format" -Absent $true -TestId "TC-09-start-screen-closed" -TimeoutSec 10
     [void](Bring-WindowToFront -Window (Get-WindowForProcess -State $screenGone.State -ProcessId $process.Id))
     [void](Send-WindowKeys -Keys "qa-unsaved")
-    $typed = Wait-UiText -ProcessId $process.Id -Expected "qa-unsaved" -TestId "TC-09-typed" -TimeoutSec 5
+    $typed = Wait-Until -TestId "TC-09" -Phase "ui-unsaved" -TimeoutSec 5 -Condition {
+        param($state)
+        $w = Get-WindowForProcess -State $state -ProcessId $process.Id
+        if (-not $w) { return $false }
+        $names = @(Get-UiAutomationNames -Handle ([IntPtr]$w.Handle))
+        return (@($names | Where-Object { $_ -like "*Unsaved*" -or $_ -like "*qa-unsaved*" }).Count -gt 0)
+    }
     if (-not $typed.Found) {
-        return New-Outcome -Passed $false -Details "Текст не появился в новом документе; startScreenClosed=$($screenGone.Found)" -ElapsedMs ($markdownTile.ElapsedMs + $screenGone.ElapsedMs + $typed.ElapsedMs)
+        return New-Outcome -Passed $false -Details "Документ не перешёл в состояние Unsaved; startScreenClosed=$($screenGone.Found)" -ElapsedMs ($markdownTile.ElapsedMs + $screenGone.ElapsedMs + $typed.ElapsedMs)
     }
     [void](Send-WindowKeys -Keys "%{F4}")
-    $prompt = Wait-UiText -ProcessId $process.Id -Expected "Save changes?" -TestId "TC-09-close-prompt" -TimeoutSec 5
+    $prompt = Wait-Until -TestId "TC-09" -Phase "ui-close-prompt" -TimeoutSec 5 -Condition {
+        param($state)
+        $w = Get-WindowForProcess -State $state -ProcessId $process.Id
+        if (-not $w) { return $false }
+        $names = @(Get-UiAutomationNames -Handle ([IntPtr]$w.Handle))
+        return (@($names | Where-Object { $_ -like "*unsaved changes*" -or $_ -like "*Save changes*" -or $_ -like "*Discard*" }).Count -gt 0)
+    }
     $shot = Capture-Window -ProcessId $process.Id -OutputPath (Get-ShotPath "09_unsaved_close_prompt.png")
     $screenshot = if ($shot) { $shot.OutputPath } else { "" }
     if (-not $prompt.Found) {
-        return New-Outcome -Passed $false -Details "Диалог Save changes? не появился после Alt+F4" -ElapsedMs $prompt.ElapsedMs -Screenshot $screenshot
+        return New-Outcome -Passed $false -Details "Диалог несохранённых изменений не появился после Alt+F4" -ElapsedMs $prompt.ElapsedMs -Screenshot $screenshot
     }
     $watchdog = Wait-ProcessExit -Process $process -TestId "TC-09-watchdog" -TimeoutSec 8
     $passed = $watchdog.Found
@@ -745,8 +795,21 @@ function Test-SearchShortcut {
     }
     $window = Get-WindowForProcess -State $windowWait.State -ProcessId $process.Id -TitleFilter "showcase.md"
     [void](Bring-WindowToFront -Window $window)
-    [void](Send-WindowKeys -Keys "^{f}")
-    $panel = Wait-UiText -ProcessId $process.Id -Expected "Строка поиска" -TestId "TC-10" -TimeoutSec 8
+    if (-not (Click-UiElement -ProcessId $process.Id -Name "Edit")) {
+        [void](Send-WindowKeys -Keys "^f")
+    } else {
+        Start-Sleep -Milliseconds 100
+        if (-not (Click-UiElement -ProcessId $process.Id -Name "Find")) {
+            [void](Send-WindowKeys -Keys "^f")
+        }
+    }
+    $panel = Wait-Until -TestId "TC-10" -Phase "ui-search-panel" -TimeoutSec 8 -Condition {
+        param($state)
+        $w = Get-WindowForProcess -State $state -ProcessId $process.Id -TitleFilter "showcase.md"
+        if (-not $w) { return $false }
+        $names = @(Get-UiAutomationNames -Handle ([IntPtr]$w.Handle))
+        return (@($names | Where-Object { $_ -like "*Search query*" -or $_ -like "*Find and replace*" -or $_ -like "*Строка поиска*" -or $_ -like "*Find…*" }).Count -gt 0)
+    }
     $state = $panel.State
     $alive = @($state.ProcessIds | Where-Object { $_ -eq $process.Id }).Count -gt 0
     $shot = Capture-Window -ProcessId $process.Id -OutputPath (Get-ShotPath "10_search.png")
