@@ -82,7 +82,8 @@ function applyZoom(view: EditorView, percent: number): void {
 
 /** Подключает масштаб и восстанавливает последнее значение из localStorage. */
 export function installZoom(view: EditorView): number {
-  return ensureRuntime(view).percent;
+  ensureRuntime(view);
+  return getZoom(view);
 }
 
 /** Увеличивает кегль текста редактора на один шаг. */

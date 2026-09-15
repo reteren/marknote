@@ -7,6 +7,7 @@
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import { onMount } from "svelte";
   import { toggleWrapper } from "./editor/keymap";
+  import { installZoom, resetZoom, zoomIn, zoomOut } from "./editor/zoom";
   import { safeLinkHref } from "./editor/livePreview/inline";
   import { createActions } from "./state/actions";
   import { createEditor, setEditorDocumentPath, setEditorFormat, type EditorStats } from "./editor/createEditor";
@@ -56,7 +57,6 @@ import HelpDialog, { type HelpMode } from "./ui/HelpDialog.svelte";
   let nativeClosePending = $state(false);
   let closeAfterDecision = $state(false);
   let helpMode = $state<HelpMode | null>(null);
-  let zoomPercent = $state(100);
   let stats = $state<EditorStats>({
     line: 1,
     col: 1,
@@ -135,13 +135,13 @@ import HelpDialog, { type HelpMode } from "./ui/HelpDialog.svelte";
     notify: reportError,
     closeWindow: () => void requestClose(),
     zoomIn: () => {
-      zoomPercent = Math.min(200, zoomPercent + 10);
+      if (editorView) zoomIn(editorView);
     },
     zoomOut: () => {
-      zoomPercent = Math.max(50, zoomPercent - 10);
+      if (editorView) zoomOut(editorView);
     },
     resetZoom: () => {
-      zoomPercent = 100;
+      if (editorView) resetZoom(editorView);
     },
   });
 
@@ -162,6 +162,7 @@ import HelpDialog, { type HelpMode } from "./ui/HelpDialog.svelte";
         stats = nextStats;
       },
     });
+    installZoom(editorView);
     if (focus) editorView.focus();
   }
 
@@ -532,9 +533,9 @@ import HelpDialog, { type HelpMode } from "./ui/HelpDialog.svelte";
       case "format.codeBlock": insertText("```\n\n```\n"); break;
       case "format.mathBlock": insertText("$$\n\n$$\n"); break;
       case "format.horizontalRule": insertText("\n---\n"); break;
-      case "view.zoomIn": zoomPercent = Math.min(200, zoomPercent + 10); break;
-      case "view.zoomOut": zoomPercent = Math.max(50, zoomPercent - 10); break;
-      case "view.resetZoom": zoomPercent = 100; break;
+      case "view.zoomIn": void actions.run("view.zoomIn"); break;
+      case "view.zoomOut": void actions.run("view.zoomOut"); break;
+      case "view.resetZoom": void actions.run("view.resetZoom"); break;
       case "help.shortcuts": helpMode = "shortcuts"; break;
       case "help.markdownReference": helpMode = "markdownReference"; break;
       case "help.about": helpMode = "about"; break;
@@ -611,10 +612,6 @@ import HelpDialog, { type HelpMode } from "./ui/HelpDialog.svelte";
     const text = documentState.text;
     const view = editorView;
     if (view && view.state.doc.toString() !== text) replaceEditorText(text);
-  });
-
-  $effect(() => {
-    if (typeof globalThis.document !== "undefined") globalThis.document.documentElement.style.zoom = `${zoomPercent}%`;
   });
 
   onMount(() => {

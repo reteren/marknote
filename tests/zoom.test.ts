@@ -88,6 +88,12 @@ describe("editor zoom", () => {
 
   it("keeps text, cursor, and undo history while changing only editor typography", () => {
     const view = editor("hello");
+    const menuLabel = document.createElement("span");
+    menuLabel.style.fontSize = "var(--font-size-ui)";
+    menuLabel.style.width = "72px";
+    document.body.append(menuLabel);
+    const menuTypography = menuLabel.style.fontSize;
+    const menuWidth = menuLabel.style.width;
     installZoom(view);
     view.dispatch({ selection: { anchor: 2 } });
     view.dispatch({ changes: { from: 2, to: 2, insert: "!" } });
@@ -100,11 +106,14 @@ describe("editor zoom", () => {
     expect(view.state.selection.main.head).toBe(cursor);
     expect(undo(view)).toBe(true);
     expect(view.state.doc.toString()).toBe("hello");
+    expect(menuLabel.style.fontSize).toBe(menuTypography);
+    expect(menuLabel.style.width).toBe(menuWidth);
     expect(document.documentElement.style.zoom || "").toBe("");
 
     const styleText = Array.from(document.head.querySelectorAll("style"), (style) => style.textContent ?? "").join("\n");
     expect(styleText).toContain("var(--line-width)");
     expect(styleText).toContain("var(--font-size-text)");
+    expect(view.dom.classList.contains("cm-editor")).toBe(true);
   });
 
   it("does not fail when localStorage is unavailable", () => {
