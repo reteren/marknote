@@ -119,7 +119,7 @@ impl<'a> RtfParser<'a> {
                 }
                 b'}' => {
                     self.state = self.stack.pop().ok_or_else(|| {
-                        anyhow::anyhow!("RTF содержит закрывающую скобку без группы")
+                        anyhow::anyhow!("The RTF document contains an unexpected closing brace.")
                     })?;
                     self.position += 1;
                 }
@@ -129,7 +129,9 @@ impl<'a> RtfParser<'a> {
         }
 
         if !self.stack.is_empty() {
-            return Err(anyhow::anyhow!("RTF содержит незакрытую группу"));
+            return Err(anyhow::anyhow!(
+                "The RTF document is incomplete: a group was not closed."
+            ));
         }
         self.flush_paragraph();
         Ok(self.output)
@@ -175,7 +177,7 @@ impl<'a> RtfParser<'a> {
             self.position += 1;
             if self.position + 1 >= self.bytes.len() {
                 return Err(anyhow::anyhow!(
-                    "RTF содержит неполную hex-escape последовательность"
+                    "The RTF document contains an incomplete escape sequence."
                 ));
             }
             let high = hex_value(self.bytes[self.position]);
@@ -183,7 +185,7 @@ impl<'a> RtfParser<'a> {
             self.position += 2;
             let Some(byte) = high.and_then(|high| low.map(|low| (high << 4) | low)) else {
                 return Err(anyhow::anyhow!(
-                    "RTF содержит неверную hex-escape последовательность"
+                    "The RTF document contains an invalid escape sequence."
                 ));
             };
             if !self.state.skip_group {
@@ -405,7 +407,7 @@ fn decode_rtf(bytes: &[u8]) -> anyhow::Result<String> {
         .windows(5)
         .any(|window| window.eq_ignore_ascii_case(br"{\rtf"))
     {
-        return Err(anyhow::anyhow!("файл не похож на RTF-документ"));
+        return Err(anyhow::anyhow!("Not a valid RTF document."));
     }
     RtfParser::new(bytes).parse()
 }

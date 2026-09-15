@@ -34,7 +34,7 @@ impl FileWatcher {
             }) {
                 Ok(debouncer) => Some(debouncer),
                 Err(error) => {
-                    eprintln!("Не удалось запустить наблюдение за файлами: {error}");
+                    eprintln!("Could not start file monitoring: {error}");
                     None
                 }
             };
@@ -112,7 +112,7 @@ fn handle_events(state: &Weak<WatcherState>, result: DebounceEventResult) {
         Ok(events) => events,
         Err(errors) => {
             for error in errors {
-                eprintln!("Ошибка наблюдения за файлами: {error}");
+                eprintln!("File monitoring error: {error}");
             }
             return;
         }
@@ -158,7 +158,7 @@ fn handle_events(state: &Weak<WatcherState>, result: DebounceEventResult) {
                     "path": event_path.to_string_lossy().into_owned(),
                 });
                 if let Err(error) = state.app.emit_to(&label, event_name, payload) {
-                    eprintln!("Не удалось отправить событие в окно {label}: {error}");
+                    eprintln!("Could not notify window {label} about a file change: {error}");
                 }
             }
         }
@@ -191,10 +191,7 @@ fn acquire_root(state: &WatcherState, root: PathBuf) {
             .as_mut()
         {
             if let Err(error) = debouncer.watch(&root, RecursiveMode::NonRecursive) {
-                eprintln!(
-                    "Не удалось начать наблюдение за {}: {error}",
-                    root.display()
-                );
+                eprintln!("Could not monitor {}: {error}", root.display());
             }
         }
     }
@@ -223,10 +220,7 @@ fn release_root(state: &WatcherState, root: PathBuf) {
             .as_mut()
         {
             if let Err(error) = debouncer.unwatch(&root) {
-                eprintln!(
-                    "Не удалось остановить наблюдение за {}: {error}",
-                    root.display()
-                );
+                eprintln!("Could not stop monitoring {}: {error}", root.display());
             }
         }
     }

@@ -75,7 +75,7 @@ pub fn adapter_for_extension(ext: &str) -> &'static dyn FormatAdapter {
             adapters()
                 .iter()
                 .find(|adapter| adapter.caps().id == "plain")
-                .expect("реестр форматов должен содержать plain")
+                .expect("format registry must contain the plain text adapter")
                 .as_ref()
         })
 }

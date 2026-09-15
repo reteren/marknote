@@ -122,6 +122,7 @@ impl FileWatcher {
 | `reveal_in_explorer` | `path: String` | `()` |
 | `take_pending_file` | — | `Option<String>` — путь, отложенный для этого окна |
 | `respond_to_close` | `allow: bool` | `()` — ответ на `save-before-close` |
+| `set_document_title` | `path: Option<String>, defaultExtension: String` | `()` — заголовок окна |
 
 ```ts
 // то, что видит фронтенд (serde camelCase)

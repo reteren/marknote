@@ -30,9 +30,15 @@ impl FormatAdapter for DocxAdapter {
     fn decode(&self, bytes: &[u8]) -> anyhow::Result<crate::encoding::Decoded> {
         let document = catch_unwind(AssertUnwindSafe(|| docx_rs::read_docx(bytes)))
             .map_err(|_| {
-                anyhow::anyhow!("DOCX не удалось разобрать: библиотека завершилась с ошибкой")
+                anyhow::anyhow!(
+                    "Could not read this Word document. Check that it is a valid DOCX file and try again."
+                )
             })?
-            .map_err(|error| anyhow::anyhow!("DOCX не удалось разобрать: {error}"))?;
+            .map_err(|_| {
+                anyhow::anyhow!(
+                    "Could not read this Word document. Check that it is a valid DOCX file and try again."
+                )
+            })?;
         Ok(crate::encoding::Decoded {
             text: document_to_markdown(&document.document),
             encoding: "utf-8".to_owned(),
@@ -43,7 +49,7 @@ impl FormatAdapter for DocxAdapter {
 
     fn encode(&self, _text: &str, _src: &crate::encoding::Decoded) -> anyhow::Result<Vec<u8>> {
         Err(anyhow::anyhow!(
-            "DOCX доступен только для чтения; используйте «Сохранить как Markdown»"
+            "Word documents are read-only. Use Save As to create a Markdown copy."
         ))
     }
 }

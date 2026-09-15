@@ -113,10 +113,8 @@ pub fn open_file(
     state.watcher.watch(window.label(), &canonical);
     state.track_file(&canonical, window.label());
     state.remember_file_snapshot(&canonical, &metadata);
-    if let Some(file_name) = canonical.file_name().and_then(|name| name.to_str()) {
-        let title = format!("{file_name} — MarkNote");
-        let _ = window.set_title(&title);
-    }
+    windows::apply_document_title(&window, Some(&canonical), &format.default_extension)
+        .map_err(CommandError::Window)?;
 
     Ok(OpenedFile {
         path: canonical.to_string_lossy().into_owned(),
@@ -274,6 +272,8 @@ pub async fn save_as(
     if let Ok(metadata) = fs::metadata(&path) {
         state.remember_file_snapshot(&path, &metadata);
     }
+    windows::apply_document_title(&window, Some(&path), &format.default_extension)
+        .map_err(CommandError::Window)?;
 
     Ok(Some(save_result(path, format)))
 }
@@ -292,7 +292,7 @@ pub async fn pick_file(app: AppHandle) -> Result<Option<String>, CommandError> {
 
 #[allow(non_snake_case)]
 #[tauri::command]
-pub fn new_document(formatId: String) -> Result<NewDocument, CommandError> {
+pub fn new_document(window: WebviewWindow, formatId: String) -> Result<NewDocument, CommandError> {
     let format =
         formats::by_id(&formatId).ok_or_else(|| CommandError::UnknownFormat(formatId.clone()))?;
     if !format.creatable {
@@ -301,10 +301,26 @@ pub fn new_document(formatId: String) -> Result<NewDocument, CommandError> {
             format.label
         )));
     }
+    windows::apply_document_title(&window, None, &format.default_extension)
+        .map_err(CommandError::Window)?;
     Ok(NewDocument {
         text: format.template.clone(),
         format,
     })
+}
+
+/// Обновляет заголовок при изменении пути или предполагаемого расширения
+/// документа, например при выборе формата для ещё не сохранённого файла.
+#[allow(non_snake_case)]
+#[tauri::command]
+pub fn set_document_title(
+    window: WebviewWindow,
+    path: Option<String>,
+    defaultExtension: String,
+) -> Result<(), CommandError> {
+    let path = path.map(PathBuf::from);
+    windows::apply_document_title(&window, path.as_deref(), &defaultExtension)
+        .map_err(CommandError::Window)
 }
 
 #[tauri::command]

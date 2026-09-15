@@ -32,8 +32,16 @@ impl FormatAdapter for PdfAdapter {
         let extracted = catch_unwind(AssertUnwindSafe(|| {
             pdf_extract::extract_text_from_mem(bytes)
         }))
-        .map_err(|_| anyhow::anyhow!("PDF не удалось разобрать: библиотека завершилась с ошибкой"))?
-        .map_err(|error| anyhow::anyhow!("PDF не удалось разобрать: {error}"))?;
+        .map_err(|_| {
+            anyhow::anyhow!(
+                "Could not read this PDF file. Check that it is a valid PDF and try again."
+            )
+        })?
+        .map_err(|_| {
+            anyhow::anyhow!(
+                "Could not read this PDF file. Check that it is a valid PDF and try again."
+            )
+        })?;
         Ok(crate::encoding::Decoded {
             text: extracted.replace("\r\n", "\n").replace('\r', "\n"),
             encoding: "utf-8".to_owned(),
@@ -44,7 +52,7 @@ impl FormatAdapter for PdfAdapter {
 
     fn encode(&self, _text: &str, _src: &crate::encoding::Decoded) -> anyhow::Result<Vec<u8>> {
         Err(anyhow::anyhow!(
-            "PDF доступен только для чтения; используйте «Сохранить как Markdown»"
+            "PDF files are read-only. Use Save As to create a Markdown copy."
         ))
     }
 }

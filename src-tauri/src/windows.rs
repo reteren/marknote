@@ -421,6 +421,28 @@ fn raise_window(window: &WebviewWindow) {
     let _ = window.set_focus();
 }
 
+/// Формирует заголовок окна по единому правилу из SPEC §2.6.
+pub(crate) fn document_window_title(path: Option<&Path>, default_extension: &str) -> String {
+    let name = path
+        .and_then(|path| path.file_name())
+        .and_then(|name| name.to_str())
+        .filter(|name| !name.is_empty())
+        .map(str::to_owned)
+        .unwrap_or_else(|| format!("Untitled.{default_extension}"));
+    format!("{name} — MarkNote")
+}
+
+/// Применяет заголовок к окну, используя общее форматирование для всех команд.
+pub(crate) fn apply_document_title(
+    window: &WebviewWindow,
+    path: Option<&Path>,
+    default_extension: &str,
+) -> Result<(), String> {
+    window
+        .set_title(&document_window_title(path, default_extension))
+        .map_err(|error| error.to_string())
+}
+
 pub(crate) fn canonical_path(path: &Path) -> Result<PathBuf, String> {
     std::fs::canonicalize(path)
         .map(preserve_extended_path)
@@ -475,7 +497,7 @@ pub fn apply_dark_titlebar(_window: &WebviewWindow) {}
 
 #[cfg(test)]
 mod tests {
-    use super::preserve_extended_path;
+    use super::{document_window_title, preserve_extended_path};
     use std::path::PathBuf;
 
     #[test]
@@ -489,5 +511,29 @@ mod tests {
         let path = PathBuf::from(format!(r"\\?\C:\{}\note.md", "nested\\".repeat(80)));
         assert!(path.to_string_lossy().starts_with(r"\\?\C:\"));
         assert_eq!(preserve_extended_path(path.clone()), path);
+    }
+
+    #[test]
+    fn opened_file_title_uses_file_name() {
+        assert_eq!(
+            document_window_title(Some(std::path::Path::new(r"C:\notes\showcase.md")), "md"),
+            "showcase.md — MarkNote"
+        );
+    }
+
+    #[test]
+    fn new_document_title_uses_untitled_name_and_selected_extension() {
+        assert_eq!(
+            document_window_title(None, "json"),
+            "Untitled.json — MarkNote"
+        );
+    }
+
+    #[test]
+    fn save_as_title_uses_new_file_name() {
+        assert_eq!(
+            document_window_title(Some(std::path::Path::new(r"D:\notes\notes.md")), "md"),
+            "notes.md — MarkNote"
+        );
     }
 }

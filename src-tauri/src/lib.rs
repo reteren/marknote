@@ -29,6 +29,7 @@ pub fn run() {
             commands::save_as,
             commands::pick_file,
             commands::new_document,
+            commands::set_document_title,
             commands::list_creatable_formats,
             commands::format_for_extension,
             commands::read_image,
