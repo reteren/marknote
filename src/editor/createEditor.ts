@@ -1,11 +1,11 @@
 import { markdown } from "@codemirror/lang-markdown";
 import { Compartment, EditorState, StateEffect, StateField, type Extension } from "@codemirror/state";
 import {
-  LanguageSupport,
-  StreamLanguage,
+  LanguageDescription,
+  type LanguageSupport,
   syntaxHighlighting,
-  type StreamParser,
 } from "@codemirror/language";
+import { languages } from "@codemirror/language-data";
 import { classHighlighter } from "@lezer/highlight";
 import { EditorView, highlightActiveLine } from "@codemirror/view";
 import { marknoteMarkdown } from "./markdownExtensions";
@@ -87,18 +87,11 @@ const setEditorDocumentPathEffect = StateEffect.define<string | null>();
 
 const setEditorDocumentFormatEffect = StateEffect.define<FormatCapabilities>();
 
-type SyntaxModeLoader = () => Promise<LanguageSupport>;
-
-function legacySupport(parser: StreamParser<unknown>): LanguageSupport {
-  return new LanguageSupport(StreamLanguage.define(parser));
-}
-
 /**
- * Явный список режимов из реестра форматов и того же набора, что использует
- * fenced-code preview. Общий реестр language-data сюда намеренно не тянем:
- * каждый режим подгружается только при выборе соответствующего формата.
+ * Полное сопоставление syntaxMode из src-tauri/src/formats/code.rs (и частых алиасов)
+ * с языками в @codemirror/language-data.
  */
-const syntaxModeAliases: Record<string, string> = {
+export const SYNTAX_MODE_MAP: Readonly<Record<string, string>> = {
   yaml: "yaml",
   yml: "yaml",
   toml: "toml",
@@ -125,6 +118,8 @@ const syntaxModeAliases: Record<string, string> = {
   "c++": "cpp",
   cc: "cpp",
   cxx: "cpp",
+  hpp: "cpp",
+  h: "c",
   shell: "shell",
   sh: "shell",
   bash: "shell",
@@ -134,22 +129,27 @@ const syntaxModeAliases: Record<string, string> = {
   jsonc: "json",
 };
 
-const syntaxModeLoaders: Record<string, SyntaxModeLoader> = {
-  yaml: () => import("@codemirror/lang-yaml").then((module) => module.yaml()),
-  toml: () => import("@codemirror/legacy-modes/mode/toml").then((module) => legacySupport(module.toml)),
-  html: () => import("@codemirror/lang-html").then((module) => module.html()),
-  xml: () => import("@codemirror/lang-xml").then((module) => module.xml()),
-  css: () => import("@codemirror/lang-css").then((module) => module.css()),
-  javascript: () => import("@codemirror/lang-javascript").then((module) => module.javascript()),
-  typescript: () => import("@codemirror/lang-javascript").then((module) => module.javascript({ typescript: true })),
-  python: () => import("@codemirror/lang-python").then((module) => module.python()),
-  rust: () => import("@codemirror/lang-rust").then((module) => module.rust()),
-  go: () => import("@codemirror/lang-go").then((module) => module.go()),
-  c: () => import("@codemirror/lang-cpp").then((module) => module.cpp()),
-  cpp: () => import("@codemirror/lang-cpp").then((module) => module.cpp()),
-  shell: () => import("@codemirror/legacy-modes/mode/shell").then((module) => legacySupport(module.shell)),
-  json: () => import("@codemirror/lang-json").then((module) => module.json()),
-};
+/**
+ * Находит LanguageDescription в @codemirror/language-data по syntaxMode или имени/расширению.
+ */
+export function findLanguageDescription(modeOrName: string | null | undefined): LanguageDescription | null {
+  if (!modeOrName) return null;
+  const trimmed = modeOrName.trim();
+  if (!trimmed) return null;
+  const normalized = trimmed.toLowerCase();
+
+  // Исключаем плейнтекст (в language-data "text" может резолвиться в LaTeX)
+  if (normalized === "plain" || normalized === "text" || normalized === "txt") {
+    return null;
+  }
+
+  const mapped = SYNTAX_MODE_MAP[normalized] ?? normalized;
+  return (
+    LanguageDescription.matchLanguageName(languages, mapped, true) ??
+    LanguageDescription.matchFilename(languages, `file.${normalized}`) ??
+    null
+  );
+}
 
 const loadedSyntaxModes = new Map<string, LanguageSupport>();
 const pendingSyntaxModes = new Map<string, Promise<LanguageSupport | null>>();
@@ -162,35 +162,32 @@ const syntaxTokenTheme = EditorView.theme({
   ".tok-invalid": { color: "var(--text-error)" },
 });
 
-function normalizedSyntaxMode(mode: string | null): string | null {
-  if (!mode) return null;
-  const normalized = mode.trim().toLowerCase();
-  return syntaxModeAliases[normalized] ?? null;
-}
+export function loadSyntaxMode(mode: string): Promise<LanguageSupport | null> {
+  const desc = findLanguageDescription(mode);
+  if (!desc) return Promise.resolve(null);
 
-function loadSyntaxMode(mode: string): Promise<LanguageSupport | null> {
-  const cached = loadedSyntaxModes.get(mode);
+  if (desc.support) return Promise.resolve(desc.support);
+
+  const cached = loadedSyntaxModes.get(desc.name);
   if (cached) return Promise.resolve(cached);
 
-  const pending = pendingSyntaxModes.get(mode);
+  const pending = pendingSyntaxModes.get(desc.name);
   if (pending) return pending;
 
-  const loader = syntaxModeLoaders[mode];
-  if (!loader) return Promise.resolve(null);
-
-  const request = loader()
+  const request = desc
+    .load()
     .then((support) => {
-      loadedSyntaxModes.set(mode, support);
-      pendingSyntaxModes.delete(mode);
+      loadedSyntaxModes.set(desc.name, support);
+      pendingSyntaxModes.delete(desc.name);
       return support;
     })
     .catch(() => {
       // Подсветка необязательна: неизвестный или недоступный режим не должен
       // мешать открыть текст и не должен шуметь в консоли.
-      pendingSyntaxModes.delete(mode);
+      pendingSyntaxModes.delete(desc.name);
       return null;
     });
-  pendingSyntaxModes.set(mode, request);
+  pendingSyntaxModes.set(desc.name, request);
   return request;
 }
 
@@ -212,22 +209,34 @@ function formatExtensions(
   format: FormatCapabilities,
   imageResolver: ReturnType<typeof createImageResolver>,
 ): Extension {
-  if (!format.livePreview) return [];
-  return [
-    markdown({ extensions: marknoteMarkdown, addKeymap: false }),
-    livePreview({ resolveImage: imageResolver }),
-  ];
+  if (format.livePreview) {
+    return [
+      markdown({ extensions: marknoteMarkdown, addKeymap: false }),
+      livePreview({ resolveImage: imageResolver }),
+    ];
+  }
+  if (format.syntaxMode) {
+    const desc = findLanguageDescription(format.syntaxMode);
+    if (desc?.support) {
+      return desc.support.extension;
+    }
+  }
+  return [];
 }
 
 function activateSyntaxMode(
   view: EditorView,
   runtime: EditorRuntime,
   format: FormatCapabilities,
-): void {
-  const mode = normalizedSyntaxMode(format.syntaxMode);
-  if (!mode || format.livePreview) return;
+): Promise<void> {
+  if (format.livePreview || !format.syntaxMode) {
+    return Promise.resolve();
+  }
 
-  void loadSyntaxMode(mode).then((support) => {
+  const desc = findLanguageDescription(format.syntaxMode);
+  if (!desc) return Promise.resolve();
+
+  return loadSyntaxMode(format.syntaxMode).then((support) => {
     if (!support) return;
     const current = view.state.field(runtime.formatField, false);
     if (!current || !sameFormat(current, format)) return;
@@ -257,7 +266,7 @@ export function setEditorDocumentPath(view: EditorView, path: string | null): vo
  * сохраняет текст, выделение и историю undo; асинхронный язык применяется
  * только если документ всё ещё имеет тот же формат.
  */
-export function setEditorDocumentFormat(view: EditorView, format: FormatCapabilities): void {
+export function setEditorFormat(view: EditorView, format: FormatCapabilities): Promise<void> | void {
   const runtime = editorRuntimes.get(view);
   if (!runtime) return;
 
@@ -268,8 +277,11 @@ export function setEditorDocumentFormat(view: EditorView, format: FormatCapabili
     ],
     selection: view.state.selection,
   });
-  activateSyntaxMode(view, runtime, format);
+  return activateSyntaxMode(view, runtime, format);
 }
+
+/** Алиас для обратной совместимости */
+export const setEditorDocumentFormat = setEditorFormat;
 
 export function createEditor(opts: {
   parent: HTMLElement;
