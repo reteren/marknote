@@ -437,6 +437,25 @@ function Get-UiAutomationNames {
     }
 }
 
+function Get-EditorInputElement {
+    param([IntPtr]$Handle)
+    if (-not $uiAutomationAvailable -or $Handle -eq [IntPtr]::Zero) { return $null }
+    try {
+        $root = [System.Windows.Automation.AutomationElement]::FromHandle($Handle)
+        if (-not $root) { return $null }
+        $all = $root.FindAll(
+            [System.Windows.Automation.TreeScope]::Descendants,
+            [System.Windows.Automation.Condition]::TrueCondition)
+        return ($all | Where-Object {
+            $_.Current.ControlType.ProgrammaticName -eq "ControlType.Edit" -and
+            $_.Current.ClassName -like "cm-content*" -and
+            $_.Current.IsKeyboardFocusable
+        } | Select-Object -First 1)
+    } catch {
+        return $null
+    }
+}
+
 function Find-UiElement {
     param(
         [int]$ProcessId,
@@ -514,8 +533,17 @@ function Send-WindowKeys {
     if ($Keys -eq "%{F4}" -or $Keys -eq "%{f4}") {
         [MarkNote.Acceptance.Native]::keybd_event(0x12, 0, 0, [UIntPtr]::Zero)
         [MarkNote.Acceptance.Native]::keybd_event(0x73, 0, 0, [UIntPtr]::Zero)
+        Start-Sleep -Milliseconds 40
         [MarkNote.Acceptance.Native]::keybd_event(0x73, 0, 2, [UIntPtr]::Zero)
         [MarkNote.Acceptance.Native]::keybd_event(0x12, 0, 2, [UIntPtr]::Zero)
+        return $true
+    }
+    if ($Keys -eq "^v" -or $Keys -eq "^{v}") {
+        [MarkNote.Acceptance.Native]::keybd_event(0x11, 0, 0, [UIntPtr]::Zero)
+        [MarkNote.Acceptance.Native]::keybd_event(0x56, 0, 0, [UIntPtr]::Zero)
+        Start-Sleep -Milliseconds 40
+        [MarkNote.Acceptance.Native]::keybd_event(0x56, 0, 2, [UIntPtr]::Zero)
+        [MarkNote.Acceptance.Native]::keybd_event(0x11, 0, 2, [UIntPtr]::Zero)
         return $true
     }
     try {
@@ -756,15 +784,81 @@ function Test-UnsavedClose {
     if (-not $screenGone.Found) {
         return New-Outcome -Passed $false -Details "Стартовый экран остался виден после выбора Markdown" -ElapsedMs ($markdownTile.ElapsedMs + $screenGone.ElapsedMs)
     }
-    [void](Bring-WindowToFront -Window (Get-WindowForProcess -State $screenGone.State -ProcessId $process.Id))
-    [void](Send-WindowKeys -Keys "qa-unsaved")
-    $typed = Wait-UiText -ProcessId $process.Id -Expected "10 chars" -TestId "TC-09" -TimeoutSec 5
-    if (-not $typed.Found) {
+
+    # Wait for the actual CodeMirror contenteditable element.  The center of
+    # the window is not reliably inside the editor when window-state restores
+    # an offset or the editor is only one line tall.
+    $editorWait = Wait-Until -TestId "TC-09" -Phase "editor-mounted" -TimeoutSec 10 -Condition {
+        param($state)
+        $window = Get-WindowForProcess -State $state -ProcessId $process.Id
+        if (-not $window) { return $false }
+        return [bool](Get-EditorInputElement -Handle ([IntPtr]$window.Handle))
+    }
+    if (-not $editorWait.Found) {
+        return New-Outcome -Passed $false -Details "CodeMirror contenteditable element did not mount after selecting Markdown" -ElapsedMs ($markdownTile.ElapsedMs + $screenGone.ElapsedMs + $editorWait.ElapsedMs)
+    }
+
+    $window = Get-WindowForProcess -State $editorWait.State -ProcessId $process.Id
+    $editor = if ($window) { Get-EditorInputElement -Handle ([IntPtr]$window.Handle) } else { $null }
+    if (-not $editor) {
+        return New-Outcome -Passed $false -Details "CodeMirror contenteditable element disappeared before input" -ElapsedMs ($markdownTile.ElapsedMs + $screenGone.ElapsedMs + $editorWait.ElapsedMs)
+    }
+    $editorRect = $editor.Current.BoundingRectangle
+    if (
+        $editorRect.Width -le 0 -or $editorRect.Height -le 0 -or
+        [double]::IsNaN($editorRect.X) -or [double]::IsInfinity($editorRect.X) -or
+        [double]::IsNaN($editorRect.Y) -or [double]::IsInfinity($editorRect.Y)
+    ) {
+        return New-Outcome -Passed $false -Details "CodeMirror contenteditable element has no usable screen bounds" -ElapsedMs ($markdownTile.ElapsedMs + $screenGone.ElapsedMs + $editorWait.ElapsedMs)
+    }
+
+    [void][MarkNote.Acceptance.Native]::SetForegroundWindow([IntPtr]$window.Handle)
+    try {
+        $editor.SetFocus()
+    } catch {
+        return New-Outcome -Passed $false -Details "Could not focus the CodeMirror contenteditable element: $($_.Exception.Message)" -ElapsedMs ($markdownTile.ElapsedMs + $screenGone.ElapsedMs + $editorWait.ElapsedMs)
+    }
+    [MarkNote.Acceptance.Native]::SetCursorPos(
+        [int]($editorRect.X + ($editorRect.Width / 2)),
+        [int]($editorRect.Y + ($editorRect.Height / 2))) | Out-Null
+    [MarkNote.Acceptance.Native]::mouse_event([uint32]2, 0, 0, 0, [UIntPtr]::Zero)
+    [MarkNote.Acceptance.Native]::mouse_event([uint32]4, 0, 0, 0, [UIntPtr]::Zero)
+    Start-Sleep -Milliseconds 250
+
+    $previousClipboard = $null
+    $pasteSent = $false
+    $typed = $null
+    try {
+        $previousClipboard = [System.Windows.Forms.Clipboard]::GetDataObject()
+        [System.Windows.Forms.Clipboard]::SetText("qa-unsaved")
+        $pasteSent = Send-WindowKeys -Keys "^v"
+        if ($pasteSent) {
+            # Keep the clipboard contents available until WebView2 has applied
+            # the paste and CodeMirror reports the expected character count.
+            $typed = Wait-Until -TestId "TC-09" -Phase "editor-char-count-10" -TimeoutSec 5 -Condition {
+                param($state)
+                $window = Get-WindowForProcess -State $state -ProcessId $process.Id
+                if (-not $window) { return $false }
+                $names = @(Get-UiAutomationNames -Handle ([IntPtr]$window.Handle))
+                return (@($names | Where-Object { $_ -match "^Document format: Markdown; 10 chars$" }).Count -gt 0)
+            }
+        }
+    } catch {
+        return New-Outcome -Passed $false -Details "Could not paste test text into CodeMirror: $($_.Exception.Message)" -ElapsedMs ($markdownTile.ElapsedMs + $screenGone.ElapsedMs + $editorWait.ElapsedMs)
+    } finally {
+        if ($previousClipboard) {
+            try { [System.Windows.Forms.Clipboard]::SetDataObject($previousClipboard, $true) } catch {}
+        }
+    }
+    if (-not $pasteSent) {
+        return New-Outcome -Passed $false -Details "Could not send Ctrl+V to the focused CodeMirror editor" -ElapsedMs ($markdownTile.ElapsedMs + $screenGone.ElapsedMs + $editorWait.ElapsedMs)
+    }
+    if (-not $typed -or -not $typed.Found) {
         $state = Get-MarkNoteState
         $w = Get-WindowForProcess -State $state -ProcessId $process.Id
         $names = if ($w) { @(Get-UiAutomationNames -Handle ([IntPtr]$w.Handle)) } else { @() }
-        $status = ($names | Where-Object { $_ -match "\b\d+ chars\b" } | Select-Object -First 1)
-        return New-Outcome -Passed $false -Details "В редактор не попал текст qa-unsaved; startScreenClosed=$($screenGone.Found), status='$status'" -ElapsedMs ($markdownTile.ElapsedMs + $screenGone.ElapsedMs + $typed.ElapsedMs)
+        $status = ($names | Where-Object { $_ -match "^Document format: Markdown; \d+ chars$" } | Select-Object -First 1)
+        return New-Outcome -Passed $false -Details "Clipboard paste did not produce the expected 10-character editor count; startScreenClosed=$($screenGone.Found), editorMounted=$($editorWait.Found), status='$status'" -ElapsedMs ($markdownTile.ElapsedMs + $screenGone.ElapsedMs + $editorWait.ElapsedMs + $typed.ElapsedMs)
     }
     [void](Send-WindowKeys -Keys "%{F4}")
     $prompt = Wait-Until -TestId "TC-09" -Phase "ui-close-prompt" -TimeoutSec 5 -Condition {
@@ -772,7 +866,11 @@ function Test-UnsavedClose {
         $w = Get-WindowForProcess -State $state -ProcessId $process.Id
         if (-not $w) { return $false }
         $names = @(Get-UiAutomationNames -Handle ([IntPtr]$w.Handle))
-        return (@($names | Where-Object { $_ -like "*unsaved changes*" -or $_ -like "*Save changes*" -or $_ -like "*Discard*" }).Count -gt 0)
+        return (
+            $names -contains "Save changes?" -and
+            $names -contains "Discard" -and
+            $names -contains "Cancel"
+        )
     }
     $shot = Capture-Window -ProcessId $process.Id -OutputPath (Get-ShotPath "09_unsaved_close_prompt.png")
     $screenshot = if ($shot) { $shot.OutputPath } else { "" }
