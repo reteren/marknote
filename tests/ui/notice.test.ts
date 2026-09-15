@@ -24,7 +24,7 @@ describe("Notice actions", () => {
     expect(document.body.textContent).toContain(icon);
     await fireEvent.click(Array.from(document.querySelectorAll("button")).find((button) => button.textContent?.includes("Do it"))!);
     expect(onAction).toHaveBeenCalledWith("do-it");
-    await fireEvent.click(document.querySelector<HTMLButtonElement>('[aria-label="Закрыть уведомление"]')!);
+    await fireEvent.click(document.querySelector<HTMLButtonElement>('[aria-label="Dismiss notification"]')!);
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 });

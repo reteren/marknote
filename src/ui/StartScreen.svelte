@@ -24,7 +24,7 @@
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <section
   class="start-screen"
-  aria-label="Новый документ"
+  aria-label="New document"
   ondragover={preventDrag}
   ondrop={handleDrop}
 >
@@ -41,7 +41,7 @@
       <button type="button" class="open-button" onclick={() => onOpenFile?.()}>Open file…</button>
       <span>or drop a file here</span>
     </div>
-    <p class="hint">Начните печатать — новый документ будет Markdown.</p>
+    <p class="hint">Start typing to create a Markdown note.</p>
   </div>
 </section>
 

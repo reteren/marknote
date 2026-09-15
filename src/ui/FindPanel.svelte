@@ -48,10 +48,10 @@
 
   const counterText = $derived.by(() => {
     if (!search) return "";
-    if (isRegexInvalid) return "Ошибка regex";
-    if (stats.total === 0) return "нет совпадений";
-    if (stats.current > 0) return `${stats.current} из ${stats.total}`;
-    return `${stats.total} совпадений`;
+    if (isRegexInvalid) return "Invalid regular expression";
+    if (stats.total === 0) return "No matches";
+    if (stats.current > 0) return `${stats.current} of ${stats.total}`;
+    return `${stats.total} matches`;
   });
 
   function syncSearchQuery(): void {
@@ -273,7 +273,7 @@
     class="find-panel"
     role="dialog"
     tabindex="-1"
-    aria-label="Поиск и замена"
+    aria-label="Find and replace"
     onkeydown={onPanelKeydown}
   >
     <!-- Строка 1: Поиск -->
@@ -282,9 +282,9 @@
         type="button"
         class="btn-icon toggle-replace"
         class:expanded={replaceMode}
-        title={replaceMode ? "Скрыть замену" : "Показать замену (Ctrl+H)"}
+        title={replaceMode ? "Hide replace" : "Show replace (Ctrl+H)"}
         onclick={() => (replaceMode = !replaceMode)}
-        aria-label="Переключить панель замены"
+        aria-label="Toggle replace panel"
       >
         <span class="chevron">{replaceMode ? "▼" : "▶"}</span>
       </button>
@@ -294,10 +294,10 @@
           type="text"
           bind:this={searchInputEl}
           bind:value={search}
-          placeholder="Найти…"
-          aria-label="Строка поиска"
+          placeholder="Find…"
+          aria-label="Search query"
           aria-invalid={isRegexInvalid}
-          title={isRegexInvalid ? (regexError ?? "Некорректное регулярное выражение") : ""}
+          title={isRegexInvalid ? (regexError ?? "Invalid regular expression") : ""}
           oninput={() => scheduleSync(false)}
           onkeydown={onSearchKeydown}
         />
@@ -307,7 +307,7 @@
             type="button"
             class="toggle-btn"
             class:active={caseSensitive}
-            title="Учитывать регистр (Alt+C)"
+            title="Match case (Alt+C)"
             aria-pressed={caseSensitive}
             onclick={toggleCase}
           >
@@ -317,7 +317,7 @@
             type="button"
             class="toggle-btn"
             class:active={wholeWord}
-            title="Слово целиком (Alt+W)"
+            title="Whole word (Alt+W)"
             aria-pressed={wholeWord}
             onclick={toggleWholeWord}
           >
@@ -327,7 +327,7 @@
             type="button"
             class="toggle-btn"
             class:active={regexp}
-            title="Регулярное выражение (Alt+R)"
+            title="Regular expression (Alt+R)"
             aria-pressed={regexp}
             onclick={toggleRegexp}
           >
@@ -346,8 +346,8 @@
         <button
           type="button"
           class="btn-icon"
-          title="Предыдущее совпадение (Shift+Enter)"
-          aria-label="Предыдущее совпадение"
+          title="Previous match (Shift+Enter)"
+          aria-label="Previous match"
           disabled={stats.total === 0}
           onclick={handlePrevious}
         >
@@ -356,8 +356,8 @@
         <button
           type="button"
           class="btn-icon"
-          title="Следующее совпадение (Enter)"
-          aria-label="Следующее совпадение"
+          title="Next match (Enter)"
+          aria-label="Next match"
           disabled={stats.total === 0}
           onclick={handleNext}
         >
@@ -366,8 +366,8 @@
         <button
           type="button"
           class="btn-icon close-btn"
-          title="Закрыть (Esc)"
-          aria-label="Закрыть панель поиска"
+          title="Close (Esc)"
+          aria-label="Close find panel"
           onclick={close}
         >
           ✕
@@ -385,8 +385,8 @@
             type="text"
             bind:this={replaceInputEl}
             bind:value={replace}
-            placeholder="Заменить на…"
-            aria-label="Строка замены"
+            placeholder="Replace with…"
+            aria-label="Replacement text"
             oninput={() => scheduleSync(false)}
             onkeydown={onReplaceKeydown}
           />
@@ -396,20 +396,20 @@
           <button
             type="button"
             class="btn-action"
-            title="Заменить текущее (Enter)"
+            title="Replace current (Enter)"
             disabled={stats.total === 0}
             onclick={handleReplaceOne}
           >
-            Заменить
+            Replace
           </button>
           <button
             type="button"
             class="btn-action"
-            title="Заменить все совпадения"
+            title="Replace all matches"
             disabled={stats.total === 0}
             onclick={handleReplaceAll}
           >
-            Заменить всё
+            Replace All
           </button>
         </div>
       </div>

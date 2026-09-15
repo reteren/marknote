@@ -6,9 +6,9 @@
   let { format, stats }: Props = $props();
 </script>
 
-<footer class="status-bar" aria-label="Строка состояния">
+<footer class="status-bar" aria-label="Status bar">
   <div class="format-info">
-    <button type="button" title="Смена формата будет доступна в M3">{format.label}</button>
+    <button type="button" title="Change document format">{format.label}</button>
     {#if !format.editable}<span class="restriction">Read-only</span>{/if}
     {#if format.lossy}<span class="restriction">Lossy</span>{/if}
   </div>

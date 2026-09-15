@@ -306,7 +306,7 @@
     style:top="{adjustedY}px"
     role="menu"
     tabindex="0"
-    aria-label="Контекстное меню"
+    aria-label="Context menu"
     onkeydown={handleKeyDown}
   >
     {#each entries as entry}

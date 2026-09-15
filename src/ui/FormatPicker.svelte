@@ -104,11 +104,11 @@
   class:mode-list={mode === "list" || mode === "menu"}
   class:mode-dropdown={mode === "dropdown"}
   role="region"
-  aria-label="Выбор формата документа"
+  aria-label="Choose document format"
   onkeydown={handleKeyDown}
 >
   {#if mode === "grid"}
-    <div class="grid-container" role="grid" aria-label="Сетка форматов">
+    <div class="grid-container" role="grid" aria-label="Format grid">
       {#each primaryFormats as format (format.id)}
         <button
           type="button"
@@ -139,7 +139,7 @@
     <div
       class="list-container"
       role="menu"
-      aria-label="Список форматов"
+      aria-label="Format list"
     >
       {#each primaryFormats as format (format.id)}
         <button

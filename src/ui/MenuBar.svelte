@@ -230,10 +230,10 @@
   });
 </script>
 
-<header class="menu-bar" bind:this={menuRoot} aria-label="Главное меню">
+<header class="menu-bar" bind:this={menuRoot} aria-label="Main menu">
   <div class="menu-groups">
     <span class="window-title" title={title}>{title}</span>
-    <div class="menu-tabs" aria-label="Разделы меню" role="menubar" tabindex="-1">
+    <div class="menu-tabs" aria-label="Menu sections" role="menubar" tabindex="-1">
       {#each model as section}
         <button
           type="button"
@@ -248,7 +248,7 @@
     </div>
   </div>
 
-  <div class="save-controls" aria-label="Сохранение документа">
+  <div class="save-controls" aria-label="Document save controls">
     <span class:status-pending={saveStatus === "pending"} class:status-saved={saveStatus === "saved"}>{statusLabel}</span>
     <button type="button" onclick={() => onSave?.()} disabled={saveStatus === "pending" || saveStatus === "readonly"}>Save</button>
     <button type="button" onclick={() => onSaveAs?.()}>Save as…</button>

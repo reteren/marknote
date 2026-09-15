@@ -7,9 +7,9 @@ afterEach(() => cleanup());
 
 describe("HelpDialog", () => {
   it.each([
-    ["shortcuts", "Горячие клавиши"],
-    ["markdownReference", "Справка по Markdown"],
-    ["about", "О программе"],
+    ["shortcuts", "Keyboard Shortcuts"],
+    ["markdownReference", "Markdown Reference"],
+    ["about", "About"],
   ] as const)("renders the %s mode", (mode, title) => {
     render(HelpDialog, { props: { mode } });
     expect(document.querySelector("[role=dialog]")?.textContent).toContain(title);

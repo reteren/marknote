@@ -16,48 +16,48 @@
 
   const version = packageInfo.version;
   const shortcuts: Shortcut[] = [
-    { keys: "Ctrl+Z", action: "Отменить" },
-    { keys: "Ctrl+Shift+Z / Ctrl+Y", action: "Повторить" },
-    { keys: "Ctrl+X / Ctrl+C / Ctrl+V", action: "Вырезать / копировать / вставить" },
-    { keys: "Ctrl+Shift+V", action: "Вставить как простой текст" },
-    { keys: "Ctrl+A", action: "Выделить всё" },
-    { keys: "Ctrl+D", action: "Удалить строку" },
-    { keys: "Alt+↑ / Alt+↓", action: "Переместить строку вверх / вниз" },
-    { keys: "Ctrl+B", action: "Жирный" },
-    { keys: "Ctrl+I", action: "Курсив" },
-    { keys: "Ctrl+E", action: "Код" },
-    { keys: "Ctrl+K", action: "Ссылка" },
-    { keys: "Ctrl+1 … Ctrl+6", action: "Заголовок уровня" },
-    { keys: "Ctrl+0", action: "Убрать заголовок (приоритет keymap)" },
-    { keys: "Ctrl+Shift+K", action: "Блок кода" },
-    { keys: "Tab / Shift+Tab", action: "Изменить уровень списка" },
-    { keys: "Ctrl+Home / Ctrl+End", action: "В начало / конец документа" },
-    { keys: "Ctrl+N", action: "Новый документ" },
-    { keys: "Ctrl+Shift+N", action: "Новый документ с выбором типа" },
-    { keys: "Ctrl+O", action: "Открыть файл" },
-    { keys: "Ctrl+S", action: "Сохранить" },
-    { keys: "Ctrl+Shift+S", action: "Сохранить как" },
-    { keys: "Ctrl+W", action: "Закрыть окно" },
-    { keys: "Ctrl+F / Ctrl+H", action: "Поиск / замена" },
-    { keys: "Ctrl+G", action: "Перейти к строке" },
-    { keys: "Ctrl+±", action: "Масштаб текста" },
+    { keys: "Ctrl+Z", action: "Undo" },
+    { keys: "Ctrl+Shift+Z / Ctrl+Y", action: "Redo" },
+    { keys: "Ctrl+X / Ctrl+C / Ctrl+V", action: "Cut / copy / paste" },
+    { keys: "Ctrl+Shift+V", action: "Paste as plain text" },
+    { keys: "Ctrl+A", action: "Select all" },
+    { keys: "Ctrl+D", action: "Delete line" },
+    { keys: "Alt+↑ / Alt+↓", action: "Move line up / down" },
+    { keys: "Ctrl+B", action: "Bold" },
+    { keys: "Ctrl+I", action: "Italic" },
+    { keys: "Ctrl+E", action: "Code" },
+    { keys: "Ctrl+K", action: "Link" },
+    { keys: "Ctrl+1 … Ctrl+6", action: "Set heading level" },
+    { keys: "Ctrl+0", action: "Remove heading (takes precedence in the keymap)" },
+    { keys: "Ctrl+Shift+K", action: "Code block" },
+    { keys: "Tab / Shift+Tab", action: "Change list indentation" },
+    { keys: "Ctrl+Home / Ctrl+End", action: "Go to document start / end" },
+    { keys: "Ctrl+N", action: "New document" },
+    { keys: "Ctrl+Shift+N", action: "New document with format picker" },
+    { keys: "Ctrl+O", action: "Open file" },
+    { keys: "Ctrl+S", action: "Save" },
+    { keys: "Ctrl+Shift+S", action: "Save as" },
+    { keys: "Ctrl+W", action: "Close window" },
+    { keys: "Ctrl+F / Ctrl+H", action: "Find / replace" },
+    { keys: "Ctrl+G", action: "Go to line" },
+    { keys: "Ctrl+±", action: "Change editor text size" },
   ];
 
   const markdownEntries: MarkdownEntry[] = [
-    { syntax: "**жирный**", meaning: "Жирное начертание" },
-    { syntax: "*курсив*", meaning: "Курсивное начертание" },
-    { syntax: "~~зачёркнутый~~", meaning: "Зачёркивание" },
-    { syntax: "==подсветка==", meaning: "Подсветка фрагмента" },
-    { syntax: "`код`", meaning: "Строчный код" },
-    { syntax: "[текст](https://example.com)", meaning: "Ссылка (Ctrl+клик открывает http/https/mailto)" },
-    { syntax: "![](image.png)", meaning: "Изображение относительно открытого файла" },
-    { syntax: "# Заголовок", meaning: "Заголовок 1–6 уровней" },
-    { syntax: "- [ ] задача", meaning: "Невыполненная задача; [x] — выполненная" },
-    { syntax: "> цитата", meaning: "Цитата; вложенные цитаты поддерживаются" },
-    { syntax: "> [!NOTE] текст", meaning: "Callout: note, tip, info, success, question, warning, danger, example, quote" },
-    { syntax: "$x^2$", meaning: "Строчная формула" },
-    { syntax: "$$x^2$$", meaning: "Блочная формула" },
-    { syntax: "[^1] … [^1]: текст", meaning: "Сноска и её определение" },
+    { syntax: "**bold**", meaning: "Bold emphasis" },
+    { syntax: "*italic*", meaning: "Italic emphasis" },
+    { syntax: "~~strikethrough~~", meaning: "Strikethrough" },
+    { syntax: "==highlight==", meaning: "Highlighted text" },
+    { syntax: "`code`", meaning: "Inline code" },
+    { syntax: "[label](https://example.com)", meaning: "Link (Ctrl-click opens http, https, or mailto)" },
+    { syntax: "![](image.png)", meaning: "Image relative to the open document" },
+    { syntax: "# Heading", meaning: "Heading levels 1–6" },
+    { syntax: "- [ ] task", meaning: "Unchecked task; [x] marks it complete" },
+    { syntax: "> quote", meaning: "Blockquote; nested quotes are supported" },
+    { syntax: "> [!NOTE] text", meaning: "Callout types: note, tip, info, success, question, warning, danger, example, quote" },
+    { syntax: "$x^2$", meaning: "Inline formula" },
+    { syntax: "$$x^2$$", meaning: "Block formula" },
+    { syntax: "[^1] … [^1]: text", meaning: "Footnote reference and definition" },
   ];
 
   function handleKeydown(event: KeyboardEvent): void {
@@ -93,22 +93,22 @@
     <header class="dialog-header">
       <h2 id="help-dialog-title">
         {#if mode === "shortcuts"}
-          Горячие клавиши
+          Keyboard Shortcuts
         {:else if mode === "markdownReference"}
-          Справка по Markdown
+          Markdown Reference
         {:else}
-          О программе
+          About
         {/if}
       </h2>
-      <button type="button" class="close-button" aria-label="Закрыть справку" onclick={() => onClose?.()}>×</button>
+      <button type="button" class="close-button" aria-label="Close help" onclick={() => onClose?.()}>×</button>
     </header>
 
     {#if mode === "shortcuts"}
-      <p class="intro">Сочетания редактора; команды файла, поиска, масштаба и окна доступны, когда оболочка передаёт обработчики.</p>
+      <p class="intro">Editor shortcuts. File, search, zoom, and window commands are available when the application shell supplies their handlers.</p>
       <div class="table-wrap">
         <table>
           <thead>
-            <tr><th>Клавиши</th><th>Действие</th></tr>
+            <tr><th>Shortcut</th><th>Action</th></tr>
           </thead>
           <tbody>
             {#each shortcuts as shortcut}
@@ -121,11 +121,11 @@
         </table>
       </div>
     {:else if mode === "markdownReference"}
-      <p class="intro">Короткая шпаргалка по разметке, которую понимает MarkNote.</p>
+      <p class="intro">A quick reference for the Markdown features supported by MarkNote.</p>
       <div class="table-wrap">
         <table>
           <thead>
-            <tr><th>Запись</th><th>Результат</th></tr>
+            <tr><th>Syntax</th><th>What it does</th></tr>
           </thead>
           <tbody>
             {#each markdownEntries as entry}
@@ -140,10 +140,10 @@
     {:else}
       <div class="about-content">
         <p class="app-name">MarkNote</p>
-        <p>Быстрый редактор Markdown с живым предпросмотром и поддержкой обычных текстовых форматов.</p>
+        <p>A fast Markdown editor with live preview and support for common text formats.</p>
         <dl>
-          <div><dt>Версия</dt><dd>{version}</dd></div>
-          <div><dt>Лицензия</dt><dd>MIT</dd></div>
+          <div><dt>Version</dt><dd>{version}</dd></div>
+          <div><dt>License</dt><dd>MIT</dd></div>
         </dl>
       </div>
     {/if}

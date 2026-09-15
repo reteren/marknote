@@ -143,14 +143,14 @@
   }
 </script>
 
-<div class="save-controls" aria-label="Сохранение документа">
+<div class="save-controls" aria-label="Document save controls">
   <span
     class="status-indicator"
     class:status-pending={isPending}
     class:status-saved={isSaved}
     class:status-readonly={isReadOnly}
     class:status-faint={isEmptyUntitled}
-    title={isReadOnly ? "Документ только для чтения" : statusLabel}
+    title={isReadOnly ? "Document is read-only" : statusLabel}
   >
     {statusLabel}
   </span>
@@ -160,7 +160,7 @@
     class="save-btn"
     disabled={saveDisabled}
     onclick={handleSave}
-    title={isReadOnly ? "Файл только для чтения (сохранение заблокировано)" : "Сохранить (Ctrl+S)"}
+    title={isReadOnly ? "File is read-only (saving is disabled)" : "Save (Ctrl+S)"}
   >
     Save
   </button>
@@ -170,7 +170,7 @@
     class="save-as-btn"
     disabled={saveAsDisabled}
     onclick={handleSaveAs}
-    title={isReadOnly ? "Сохранить как Markdown документ" : "Сохранить как… (Ctrl+Shift+S)"}
+    title={isReadOnly ? "Save as a Markdown document" : "Save as… (Ctrl+Shift+S)"}
   >
     {isReadOnly && !format.editable ? "Save as Markdown…" : "Save as…"}
   </button>

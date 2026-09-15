@@ -93,7 +93,7 @@
     class:severity-error={effectiveSeverity === "error"}
     role="status"
     aria-live="polite"
-    aria-label="Уведомление"
+    aria-label="Notification"
   >
     <div class="content">
       <span class="icon" aria-hidden="true">
@@ -134,8 +134,8 @@
         <button
           type="button"
           class="close-btn"
-          aria-label="Закрыть уведомление"
-          title="Закрыть"
+          aria-label="Dismiss notification"
+          title="Dismiss"
           onclick={handleClose}
         >
           ✕
