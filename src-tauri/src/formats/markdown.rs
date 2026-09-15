@@ -13,6 +13,7 @@ impl FormatAdapter for MarkdownAdapter {
                 "markdown".to_owned(),
                 "mdown".to_owned(),
                 "mkd".to_owned(),
+                "mdx".to_owned(),
             ],
             editable: true,
             creatable: true,
@@ -35,5 +36,13 @@ impl FormatAdapter for MarkdownAdapter {
             src.bom,
             src.line_ending,
         ))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn mdx_is_registered_as_markdown() {
+        assert_eq!(crate::formats::for_extension("mdx").id, "markdown");
     }
 }

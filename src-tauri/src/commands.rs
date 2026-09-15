@@ -193,20 +193,7 @@ pub fn save_file(
     }
 
     if let Some(expected) = state.file_snapshot(&path) {
-        match fs::metadata(&path) {
-            Ok(metadata) if FileSnapshot::from_metadata(&metadata) != expected => {
-                return Err(CommandError::FileConflict(
-                    path.to_string_lossy().into_owned(),
-                ));
-            }
-            Ok(_) => {}
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-                return Err(CommandError::FileConflict(
-                    path.to_string_lossy().into_owned(),
-                ));
-            }
-            Err(error) => return Err(CommandError::Io(error)),
-        }
+        ensure_snapshot_current(&path, expected)?;
     }
 
     let adapter = formats::adapter_for_path(&path);
@@ -242,13 +229,13 @@ pub async fn save_as(
     formatId: String,
     suggestedName: String,
 ) -> Result<Option<SaveResult>, CommandError> {
-    let requested_format =
-        formats::by_id(&formatId).ok_or_else(|| CommandError::UnknownFormat(formatId.clone()))?;
-    if !requested_format.editable {
-        return Err(CommandError::ReadOnlyFormat(requested_format.label));
-    }
+    let (requested_format, export_as_markdown) = resolve_save_as_format(&formatId)?;
 
-    let suggested_name = with_default_extension(&suggestedName, &requested_format);
+    let suggested_name = if export_as_markdown {
+        with_forced_extension(&suggestedName, &requested_format)
+    } else {
+        with_default_extension(&suggestedName, &requested_format)
+    };
     let extensions: Vec<String> = requested_format.extensions.clone();
     let extension_refs: Vec<&str> = extensions.iter().map(String::as_str).collect();
     let selected = app
@@ -261,10 +248,15 @@ pub async fn save_as(
     let Some(selected) = selected else {
         return Ok(None);
     };
-    let path = selected
+    let mut path = selected
         .into_path()
         .map_err(|error| CommandError::Dialog(error.to_string()))?;
-    let adapter = if path.extension().is_some() {
+    if export_as_markdown {
+        path.set_extension(&requested_format.default_extension);
+    }
+    let adapter = if export_as_markdown {
+        formats::adapter_by_id("markdown").expect("markdown adapter must be registered")
+    } else if path.extension().is_some() {
         formats::adapter_for_path(&path)
     } else {
         formats::adapter_by_id(&requested_format.id).expect("requested format must be registered")
@@ -443,12 +435,43 @@ fn ensure_editable(format: &FormatCapabilities) -> Result<(), CommandError> {
     }
 }
 
+fn ensure_snapshot_current(path: &Path, expected: FileSnapshot) -> Result<(), CommandError> {
+    match fs::metadata(path) {
+        Ok(metadata) if FileSnapshot::from_metadata(&metadata) != expected => Err(
+            CommandError::FileConflict(path.to_string_lossy().into_owned()),
+        ),
+        Ok(_) => Ok(()),
+        // A deleted or renamed source is an expected external change. The
+        // atomic save below recreates it, while any replacement file that
+        // already exists is still checked against the recorded snapshot.
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(CommandError::Io(error)),
+    }
+}
+
+fn resolve_save_as_format(format_id: &str) -> Result<(FormatCapabilities, bool), CommandError> {
+    let requested = formats::by_id(format_id)
+        .ok_or_else(|| CommandError::UnknownFormat(format_id.to_owned()))?;
+    if requested.editable {
+        return Ok((requested, false));
+    }
+
+    let markdown = formats::by_id("markdown").expect("markdown adapter must be registered");
+    Ok((markdown, true))
+}
+
 fn with_default_extension(name: &str, format: &FormatCapabilities) -> String {
     if Path::new(name).extension().is_some() {
         name.to_owned()
     } else {
         format!("{name}.{}", format.default_extension)
     }
+}
+
+fn with_forced_extension(name: &str, format: &FormatCapabilities) -> String {
+    let mut path = PathBuf::from(name);
+    path.set_extension(&format.default_extension);
+    path.to_string_lossy().into_owned()
 }
 
 fn image_mime(path: &Path) -> &'static str {
@@ -604,6 +627,48 @@ mod tests {
         assert!(matches!(
             ensure_editable(&format),
             Err(CommandError::ReadOnlyFormat(label)) if label == "PDF"
+        ));
+    }
+
+    #[test]
+    fn read_only_save_as_exports_to_markdown_and_changes_the_extension() {
+        for format_id in ["pdf", "docx"] {
+            let (format, export_as_markdown) =
+                resolve_save_as_format(format_id).expect("registered read-only format");
+            assert!(export_as_markdown);
+            assert_eq!(format.id, "markdown");
+            assert_eq!(with_forced_extension("report.pdf", &format), "report.md");
+        }
+    }
+
+    #[test]
+    fn saving_after_external_deletion_is_allowed_to_recreate_the_file() {
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let path = directory.path().join("note.md");
+        fs::write(&path, "original").expect("initial file");
+        let expected = FileSnapshot::from_metadata(&fs::metadata(&path).expect("metadata"));
+        fs::remove_file(&path).expect("simulate external deletion");
+
+        ensure_snapshot_current(&path, expected).expect("deleted source should be recreated");
+        crate::atomic_write::write_atomic(&path, b"saved again")
+            .expect("atomic write target can be recreated");
+        assert_eq!(
+            fs::read_to_string(&path).expect("recreated file"),
+            "saved again"
+        );
+    }
+
+    #[test]
+    fn external_modification_still_blocks_save() {
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let path = directory.path().join("note.md");
+        fs::write(&path, "original").expect("initial file");
+        let expected = FileSnapshot::from_metadata(&fs::metadata(&path).expect("metadata"));
+        fs::write(&path, "changed outside").expect("external edit");
+
+        assert!(matches!(
+            ensure_snapshot_current(&path, expected),
+            Err(CommandError::FileConflict(_))
         ));
     }
 

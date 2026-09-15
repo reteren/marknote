@@ -130,8 +130,10 @@ mod tests {
 
     #[test]
     fn test_no_extra_format_intercepts_markdown_or_plain() {
-        let reserved_markdown = ["md", "markdown", "mdown", "mkd"];
-        let reserved_plain = ["txt", "log", "ini", "env", "text"];
+        let reserved_markdown = ["md", "markdown", "mdown", "mkd", "mdx"];
+        let reserved_plain = [
+            "txt", "log", "ini", "cfg", "conf", "env", "csv", "tsv", "text",
+        ];
 
         for ext in reserved_markdown {
             let caps = crate::formats::for_extension(ext);
