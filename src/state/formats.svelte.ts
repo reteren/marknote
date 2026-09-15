@@ -76,15 +76,3 @@ export async function loadCreatableFormats(): Promise<FormatCapabilities[]> {
   }
 }
 
-export function formatById(id: string): FormatCapabilities | undefined {
-  return formatsState.items.find((format) => format.id === id);
-}
-
-export function formatByExtension(extension: string): FormatCapabilities {
-  const normalized = extension.replace(/^\./, "").toLowerCase();
-  return (
-    formatsState.items.find((format) =>
-      format.extensions.some((candidate) => candidate.toLowerCase() === normalized),
-    ) ?? markdownFormat
-  );
-}

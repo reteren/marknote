@@ -480,11 +480,8 @@ export function createMarknoteKeymap(options: MarknoteKeymapOptions = {}): Exten
   ];
 }
 
-/** M1 keymap plus local M5 editor shortcuts; shell commands stay injectable. */
-export const marknoteKeymap: Extension = createMarknoteKeymap();
-
 /** Exported for tests and integration code that needs to inspect the real bindings. */
 export const marknoteKeyBindings: readonly KeyBinding[] = createBindings({});
 export const getMarknoteKeyBindings = (options: MarknoteKeymapOptions = {}): readonly KeyBinding[] => createBindings(options);
 
-export { isListLine, currentLine, toggleWrapper, indent, outdent, continueMarkdownList };
+export { isListLine, toggleWrapper, indent, outdent, continueMarkdownList };

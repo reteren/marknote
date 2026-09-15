@@ -268,4 +268,3 @@ export const marknoteMarkdown: MarkdownExtension[] = [
   MarknoteBlocks,
 ];
 
-export { calloutTypes };

@@ -167,5 +167,3 @@ export function createMenuModel(
   ];
 }
 
-/** Понятный алиас для владельцев App и тестов, которым нужна именно сборка. */
-export const buildMenuModel = createMenuModel;
