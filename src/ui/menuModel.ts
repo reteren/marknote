@@ -1,4 +1,5 @@
 import type { FormatCapabilities } from "../state/formats.svelte";
+import { formatLabel, translate as t } from "../i18n";
 
 export type MenuItem = {
   id: string;
@@ -66,7 +67,7 @@ function newItems(formats: readonly FormatCapabilities[], state: MenuState): Men
     .map((format) =>
       item(
         `file.new.${format.id}`,
-        format.label,
+        formatLabel(format.id, format.label),
         "",
         format.editable === false || state.readOnly === true,
         undefined,
@@ -90,56 +91,56 @@ export function createMenuModel(
   return [
     {
       id: "file",
-      label: "File",
+      label: t("menu.file"),
       items: [
-        item("file.new", "New", "Ctrl+Shift+N", false, newFormats),
-        item("file.newWindow", "New Window", "Ctrl+N"),
+        item("file.new", t("menu.new"), "Ctrl+Shift+N", false, newFormats),
+        item("file.newWindow", t("menu.newWindow"), "Ctrl+N"),
         separator("file.separator.open"),
-        item("file.open", "Open…", "Ctrl+O"),
+        item("file.open", t("menu.open"), "Ctrl+O"),
         separator("file.separator.save"),
-        item("file.save", "Save", "Ctrl+S", state.canSave === false),
-        item("file.saveAs", "Save As…", "Ctrl+Shift+S"),
+        item("file.save", t("menu.save"), "Ctrl+S", state.canSave === false),
+        item("file.saveAs", t("menu.saveAs"), "Ctrl+Shift+S"),
         separator("file.separator.close"),
-        item("file.close", "Close", "Ctrl+W"),
+        item("file.close", t("menu.close"), "Ctrl+W"),
       ],
     },
     {
       id: "edit",
-      label: "Edit",
+      label: t("menu.edit"),
       items: [
-        item("edit.undo", "Undo", "Ctrl+Z", state.canUndo === false),
-        item("edit.redo", "Redo", "Ctrl+Shift+Z / Ctrl+Y", state.canRedo === false),
+        item("edit.undo", t("menu.undo"), "Ctrl+Z", state.canUndo === false),
+        item("edit.redo", t("menu.redo"), "Ctrl+Shift+Z / Ctrl+Y", state.canRedo === false),
         separator("edit.separator.clipboard"),
-        item("edit.cut", "Cut", "Ctrl+X", notEditable || noSelection),
-        item("edit.copy", "Copy", "Ctrl+C", noSelection),
-        item("edit.paste", "Paste", "Ctrl+V", notEditable),
-        item("edit.pastePlainText", "Paste as Plain Text", "Ctrl+Shift+V", notEditable),
-        item("edit.selectAll", "Select All", "Ctrl+A"),
+        item("edit.cut", t("menu.cut"), "Ctrl+X", notEditable || noSelection),
+        item("edit.copy", t("menu.copy"), "Ctrl+C", noSelection),
+        item("edit.paste", t("menu.paste"), "Ctrl+V", notEditable),
+        item("edit.pastePlainText", t("menu.pastePlainText"), "Ctrl+Shift+V", notEditable),
+        item("edit.selectAll", t("menu.selectAll"), "Ctrl+A"),
         separator("edit.separator.search"),
-        item("edit.find", "Find…", "Ctrl+F"),
-        item("edit.replace", "Replace…", "Ctrl+H"),
+        item("edit.find", t("menu.find"), "Ctrl+F"),
+        item("edit.replace", t("menu.replace"), "Ctrl+H"),
         separator("edit.separator.lines"),
-        item("edit.deleteLine", "Delete Line", "Ctrl+D", notEditable),
-        item("edit.moveLineUp", "Move Line Up", "Alt+↑", notEditable),
-        item("edit.moveLineDown", "Move Line Down", "Alt+↓", notEditable),
+        item("edit.deleteLine", t("menu.deleteLine"), "Ctrl+D", notEditable),
+        item("edit.moveLineUp", t("menu.moveLineUp"), "Alt+↑", notEditable),
+        item("edit.moveLineDown", t("menu.moveLineDown"), "Alt+↓", notEditable),
       ],
     },
     {
       id: "view",
-      label: "View",
+      label: t("menu.view"),
       items: [
-        item("view.zoomIn", "Zoom In", "Ctrl+±"),
-        item("view.zoomOut", "Zoom Out", "Ctrl+±"),
-        item("view.resetZoom", "Reset Zoom", "Ctrl+0"),
+        item("view.zoomIn", t("menu.zoomIn"), "Ctrl+±"),
+        item("view.zoomOut", t("menu.zoomOut"), "Ctrl+±"),
+        item("view.resetZoom", t("menu.resetZoom"), "Ctrl+0"),
       ],
     },
     {
       id: "help",
-      label: "Help",
+      label: t("menu.help"),
       items: [
-        item("help.shortcuts", "Keyboard Shortcuts"),
-        item("help.markdownReference", "Markdown Reference"),
-        item("help.about", "About"),
+        item("help.shortcuts", t("menu.keyboardShortcuts")),
+        item("help.markdownReference", t("menu.markdownReference")),
+        item("help.about", t("menu.about")),
       ],
     },
   ];
@@ -150,40 +151,38 @@ export function createContextFormatGroups(state: MenuState = {}): MenuGroup[] {
   const notEditable = state.editable === false || state.readOnly === true;
   return [
     {
-      label: "Formatting",
+      label: t("contextMenu.formatting"),
       items: [
-        item("format.bold", "Bold", "Ctrl+B", notEditable),
-        item("format.italic", "Italic", "Ctrl+I", notEditable),
-        item("format.strikethrough", "Strikethrough", "", notEditable),
-        item("format.highlight", "Highlight", "", notEditable),
+        item("format.bold", t("format.bold"), "Ctrl+B", notEditable),
+        item("format.italic", t("format.italic"), "Ctrl+I", notEditable),
+        item("format.strikethrough", t("format.strikethrough"), "", notEditable),
+        item("format.highlight", t("format.highlight"), "", notEditable),
         separator("format.separator.inline-code"),
-        item("format.code", "Code", "Ctrl+E", notEditable),
-        item("format.link", "Link", "Ctrl+K", notEditable),
+        item("format.code", t("format.code"), "Ctrl+E", notEditable),
+        item("format.link", t("format.link"), "Ctrl+K", notEditable),
       ],
     },
     {
-      label: "Paragraph",
+      label: t("contextMenu.paragraph"),
       items: [
-        item("format.heading1", "Heading 1", "Ctrl+1", notEditable),
-        item("format.heading2", "Heading 2", "Ctrl+2", notEditable),
-        item("format.heading3", "Heading 3", "Ctrl+3", notEditable),
-        item("format.heading4", "Heading 4", "Ctrl+4", notEditable),
-        item("format.heading5", "Heading 5", "Ctrl+5", notEditable),
-        item("format.heading6", "Heading 6", "Ctrl+6", notEditable),
+        ...Array.from({ length: 6 }, (_, index) => {
+          const level = index + 1;
+          return item(`format.heading${level}`, t("format.heading", { level }), `Ctrl+${level}`, notEditable);
+        }),
         separator("format.separator.clear-heading"),
-        item("format.clearHeading", "Remove Heading", "Ctrl+0", notEditable),
+        item("format.clearHeading", t("format.removeHeading"), "Ctrl+0", notEditable),
         separator("format.separator.list"),
-        item("format.list", "List", "", notEditable),
+        item("format.list", t("format.list"), "", notEditable),
       ],
     },
     {
-      label: "Insert",
+      label: t("contextMenu.insert"),
       items: [
-        item("format.table", "Table", "", notEditable),
-        item("format.callout", "Callout", "", notEditable),
-        item("format.codeBlock", "Code Block", "Ctrl+Shift+K", notEditable),
-        item("format.mathBlock", "Math Block", "", notEditable),
-        item("format.horizontalRule", "Horizontal Rule", "", notEditable),
+        item("format.table", t("format.table"), "", notEditable),
+        item("format.callout", t("format.callout"), "", notEditable),
+        item("format.codeBlock", t("format.codeBlock"), "Ctrl+Shift+K", notEditable),
+        item("format.mathBlock", t("format.mathBlock"), "", notEditable),
+        item("format.horizontalRule", t("format.horizontalRule"), "", notEditable),
       ],
     },
   ];

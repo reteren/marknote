@@ -2,6 +2,7 @@
   import { onMount } from "svelte";
   import type { EditorView } from "@codemirror/view";
   import { openSearchPanel, setSearchQuery } from "@codemirror/search";
+  import { translate as t } from "../i18n";
   import {
     createSearchQuery,
     getInitialSearchText,
@@ -48,10 +49,10 @@
 
   const counterText = $derived.by(() => {
     if (!search) return "";
-    if (isRegexInvalid) return "Invalid regular expression";
-    if (stats.total === 0) return "No matches";
-    if (stats.current > 0) return `${stats.current} of ${stats.total}`;
-    return `${stats.total} matches`;
+    if (isRegexInvalid) return t("search.invalidRegex");
+    if (stats.total === 0) return t("search.noMatches");
+    if (stats.current > 0) return t("search.counter", { current: stats.current, total: stats.total });
+    return t("search.matchCount", { count: stats.total });
   });
 
   function syncSearchQuery(): void {
@@ -273,7 +274,7 @@
     class="find-panel"
     role="dialog"
     tabindex="-1"
-    aria-label="Find and replace"
+    aria-label={t("search.panel")}
     onkeydown={onPanelKeydown}
   >
     <!-- Строка 1: Поиск -->
@@ -282,9 +283,9 @@
         type="button"
         class="btn-icon toggle-replace"
         class:expanded={replaceMode}
-        title={replaceMode ? "Hide replace" : "Show replace (Ctrl+H)"}
+        title={replaceMode ? t("search.hideReplace") : t("search.showReplace")}
         onclick={() => (replaceMode = !replaceMode)}
-        aria-label="Toggle replace panel"
+        aria-label={t("search.toggleReplace")}
       >
         <span class="chevron">{replaceMode ? "▼" : "▶"}</span>
       </button>
@@ -294,10 +295,10 @@
           type="text"
           bind:this={searchInputEl}
           bind:value={search}
-          placeholder="Find…"
-          aria-label="Search query"
+          placeholder={t("search.queryPlaceholder")}
+          aria-label={t("search.queryLabel")}
           aria-invalid={isRegexInvalid}
-          title={isRegexInvalid ? (regexError ?? "Invalid regular expression") : ""}
+          title={isRegexInvalid ? t("search.invalidRegex") : ""}
           oninput={() => scheduleSync(false)}
           onkeydown={onSearchKeydown}
         />
@@ -307,7 +308,7 @@
             type="button"
             class="toggle-btn"
             class:active={caseSensitive}
-            title="Match case (Alt+C)"
+            title={t("search.matchCase")}
             aria-pressed={caseSensitive}
             onclick={toggleCase}
           >
@@ -317,7 +318,7 @@
             type="button"
             class="toggle-btn"
             class:active={wholeWord}
-            title="Whole word (Alt+W)"
+            title={t("search.wholeWord")}
             aria-pressed={wholeWord}
             onclick={toggleWholeWord}
           >
@@ -327,7 +328,7 @@
             type="button"
             class="toggle-btn"
             class:active={regexp}
-            title="Regular expression (Alt+R)"
+            title={t("search.regularExpression")}
             aria-pressed={regexp}
             onclick={toggleRegexp}
           >
@@ -346,8 +347,8 @@
         <button
           type="button"
           class="btn-icon"
-          title="Previous match (Shift+Enter)"
-          aria-label="Previous match"
+          title={t("search.previousShortcut")}
+          aria-label={t("search.previous")}
           disabled={stats.total === 0}
           onclick={handlePrevious}
         >
@@ -356,8 +357,8 @@
         <button
           type="button"
           class="btn-icon"
-          title="Next match (Enter)"
-          aria-label="Next match"
+          title={t("search.nextShortcut")}
+          aria-label={t("search.next")}
           disabled={stats.total === 0}
           onclick={handleNext}
         >
@@ -366,8 +367,8 @@
         <button
           type="button"
           class="btn-icon close-btn"
-          title="Close (Esc)"
-          aria-label="Close find panel"
+          title={t("search.closeShortcut")}
+          aria-label={t("search.close")}
           onclick={close}
         >
           ✕
@@ -385,8 +386,8 @@
             type="text"
             bind:this={replaceInputEl}
             bind:value={replace}
-            placeholder="Replace with…"
-            aria-label="Replacement text"
+            placeholder={t("search.replacementPlaceholder")}
+            aria-label={t("search.replacementLabel")}
             oninput={() => scheduleSync(false)}
             onkeydown={onReplaceKeydown}
           />
@@ -396,20 +397,20 @@
           <button
             type="button"
             class="btn-action"
-            title="Replace current (Enter)"
+            title={t("search.replaceCurrent")}
             disabled={stats.total === 0}
             onclick={handleReplaceOne}
           >
-            Replace
+            {t("search.replace")}
           </button>
           <button
             type="button"
             class="btn-action"
-            title="Replace all matches"
+            title={t("search.replaceAllMatches")}
             disabled={stats.total === 0}
             onclick={handleReplaceAll}
           >
-            Replace All
+            {t("search.replaceAll")}
           </button>
         </div>
       </div>
@@ -421,7 +422,7 @@
   .find-panel {
     position: absolute;
     top: 8px;
-    right: 16px;
+    inset-inline-end: 16px;
     z-index: 100;
     display: flex;
     flex-direction: column;
@@ -506,7 +507,7 @@
     display: flex;
     align-items: center;
     gap: 2px;
-    padding-right: 4px;
+    padding-inline-end: 4px;
   }
 
   .toggle-btn {
@@ -535,7 +536,7 @@
 
   .status-group {
     min-width: 70px;
-    text-align: right;
+    text-align: end;
     white-space: nowrap;
     padding: 0 4px;
     flex-shrink: 0;

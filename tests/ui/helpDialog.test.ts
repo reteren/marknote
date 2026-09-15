@@ -2,14 +2,15 @@ import { cleanup, fireEvent, render } from "@testing-library/svelte";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import packageInfo from "../../package.json";
 import HelpDialog, { type HelpMode } from "../../src/ui/HelpDialog.svelte";
+import { translate as t } from "../../src/i18n";
 
 afterEach(() => cleanup());
 
 describe("HelpDialog", () => {
   it.each([
-    ["shortcuts", "Keyboard Shortcuts"],
-    ["markdownReference", "Markdown Reference"],
-    ["about", "About"],
+    ["shortcuts", t("menu.keyboardShortcuts")],
+    ["markdownReference", t("menu.markdownReference")],
+    ["about", t("menu.about")],
   ] as const)("renders the %s mode", (mode, title) => {
     render(HelpDialog, { props: { mode } });
     expect(document.querySelector("[role=dialog]")?.textContent).toContain(title);
@@ -22,7 +23,7 @@ describe("HelpDialog", () => {
     cleanup();
     render(HelpDialog, { props: { mode: "about" } });
     expect(document.body.textContent).toContain(packageInfo.version);
-    expect(document.body.textContent).toContain("MIT");
+    expect(document.body.textContent).toContain(t("about.licenseName"));
   });
 
   it.each([

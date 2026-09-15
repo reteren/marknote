@@ -36,6 +36,7 @@ import ContextMenu, { type ContextMenuAction } from "./ui/ContextMenu.svelte";
 import FormatPicker from "./ui/FormatPicker.svelte";
 import Notice from "./ui/Notice.svelte";
 import HelpDialog, { type HelpMode } from "./ui/HelpDialog.svelte";
+  import { formatLabel, translate as t } from "./i18n";
   import type { EditorView } from "@codemirror/view";
 
   type OpenFileRequest = { path: string };
@@ -68,8 +69,15 @@ import HelpDialog, { type HelpMode } from "./ui/HelpDialog.svelte";
   });
   let errorMessage = $state<string | null>(null);
 
-  const title = $derived(getDocumentTitle(documentState));
-  const closePromptMessage = $derived(getClosePromptMessage(documentState));
+  const rawDocumentTitle = $derived(getDocumentTitle(documentState));
+  const title = $derived(t("window.documentTitle", {
+    filename: rawDocumentTitle.replace(/\s+—\s+MarkNote$/u, ""),
+  }));
+  const closePromptMessage = $derived.by(() => {
+    const message = getClosePromptMessage(documentState);
+    const untitledMessage = getClosePromptMessage({ path: null });
+    return t(message === untitledMessage ? "dialog.close.unsavedUntitled" : "dialog.close.unsavedDocument");
+  });
   const showStartScreen = $derived(
     !startScreenDismissed && documentState.path === null && documentState.text.length === 0,
   );
@@ -749,7 +757,10 @@ import HelpDialog, { type HelpMode } from "./ui/HelpDialog.svelte";
   <div
     class="status-area"
     role="region"
-    aria-label={`Document format: ${documentState.format.label}; ${stats.chars} chars`}
+    aria-label={t("document.formatChars", {
+      format: formatLabel(documentState.format.id, documentState.format.label),
+      count: stats.chars,
+    })}
     onclick={(event) => {
       if ((event.target as Element | null)?.closest(".format-info")) formatPickerOpen = true;
     }}
@@ -783,12 +794,12 @@ import HelpDialog, { type HelpMode } from "./ui/HelpDialog.svelte";
   {#if closePromptOpen}
     <div class="modal-backdrop">
       <div class="close-dialog" role="dialog" aria-modal="true" aria-labelledby="close-dialog-title">
-        <h2 id="close-dialog-title">Save changes?</h2>
+        <h2 id="close-dialog-title">{t("dialog.close.title")}</h2>
         <p>{closePromptMessage}</p>
         <div class="close-dialog-actions">
-          <button type="button" class="primary" onclick={() => void handleCloseChoice("save")}>Save</button>
-          <button type="button" onclick={() => void handleCloseChoice("discard")}>Discard</button>
-          <button type="button" onclick={() => void handleCloseChoice("cancel")}>Cancel</button>
+          <button type="button" class="primary" onclick={() => void handleCloseChoice("save")}>{t("dialog.close.save")}</button>
+          <button type="button" onclick={() => void handleCloseChoice("discard")}>{t("dialog.close.discard")}</button>
+          <button type="button" onclick={() => void handleCloseChoice("cancel")}>{t("dialog.close.cancel")}</button>
         </div>
       </div>
     </div>
@@ -815,12 +826,12 @@ import HelpDialog, { type HelpMode } from "./ui/HelpDialog.svelte";
   .save-controls-overlay {
     position: absolute;
     top: 0;
-    right: 12px;
+    inset-inline-end: 12px;
     z-index: 25;
     display: flex;
     align-items: center;
     height: var(--menubar-height);
-    padding-left: 8px;
+    padding-inline-start: 8px;
     background: var(--bg-secondary);
   }
 
@@ -848,13 +859,13 @@ import HelpDialog, { type HelpMode } from "./ui/HelpDialog.svelte";
   .format-picker-popover {
     position: absolute;
     bottom: calc(var(--statusbar-height) + 4px);
-    left: 8px;
+    inset-inline-start: 8px;
     z-index: 40;
   }
 
   .notice {
     position: absolute;
-    right: 16px;
+    inset-inline-end: 16px;
     bottom: 16px;
     max-width: min(520px, calc(100% - 32px));
     padding: 8px 10px;
@@ -901,6 +912,6 @@ import HelpDialog, { type HelpMode } from "./ui/HelpDialog.svelte";
   .close-dialog-actions button.primary { background: var(--accent); color: var(--text-on-accent); }
 
   @media (max-width: 760px) {
-    .save-controls-overlay { right: 4px; padding-left: 4px; }
+    .save-controls-overlay { inset-inline-end: 4px; padding-inline-start: 4px; }
   }
 </style>

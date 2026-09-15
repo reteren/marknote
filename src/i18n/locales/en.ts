@@ -97,6 +97,7 @@ const en = {
   "contextMenu.openLink": "Open Link",
   "contextMenu.copyLinkAddress": "Copy Link Address",
   "contextMenu.editLink": "Edit Link",
+  "contextMenu.delete": "Delete",
   "contextMenu.openImage": "Open Image",
   "contextMenu.copyImagePath": "Copy Image Path",
   "contextMenu.formatting": "Formatting",

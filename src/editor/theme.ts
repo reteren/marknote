@@ -1,8 +1,9 @@
+import type { Extension } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 
 /** CodeMirror использует только токены общей тёмной темы MarkNote. */
-export const marknoteTheme = EditorView.theme(
-  {
+export const marknoteTheme: Extension = [
+  EditorView.theme({
     "&": {
       color: "var(--text-normal)",
       backgroundColor: "var(--bg-primary)",
@@ -24,13 +25,14 @@ export const marknoteTheme = EditorView.theme(
       fontFamily: "var(--font-text)",
       fontSize: "var(--font-size-text)",
       lineHeight: "var(--line-height-text)",
+      unicodeBidi: "plaintext",
     },
     ".cm-line": {
       padding: "0",
     },
     ".cm-cursor, .cm-dropCursor": {
-      borderLeftColor: "var(--caret-color)",
-      borderLeftWidth: "2px",
+      borderInlineStartColor: "var(--caret-color)",
+      borderInlineStartWidth: "2px",
     },
     "&.cm-focused": {
       outline: "none",
@@ -55,6 +57,6 @@ export const marknoteTheme = EditorView.theme(
       color: "var(--text-normal)",
       border: "1px solid var(--bg-modifier-border)",
     },
-  },
-  { dark: true },
-);
+  }, { dark: true }),
+  EditorView.contentAttributes.of({ dir: "auto" }),
+];

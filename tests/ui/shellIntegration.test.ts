@@ -59,6 +59,12 @@ describe("Shell-Editor Integration (W50)", () => {
     resetDocument(markdownFormat, "");
   });
 
+  it("lets each document choose its own text direction independently of the interface", () => {
+    const view = createTestEditor("مرحبا\nHello", markdownFormat);
+    expect(view.contentDOM.getAttribute("dir")).toBe("auto");
+    expect(getComputedStyle(view.contentDOM).unicodeBidi).toBe("plaintext");
+  });
+
   describe("Gap 2: Format switching preserves text, cursor, and undo history", () => {
     it("preserves text, cursor position, and undo/redo stack when switching format via setEditorFormat", async () => {
       const initialText = "fn calculate_total() -> i32 {\n  return 42;\n}\n";

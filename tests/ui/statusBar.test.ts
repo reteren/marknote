@@ -4,6 +4,7 @@ import { EditorSelection, EditorState } from "@codemirror/state";
 import { getEditorStats } from "../../src/editor/createEditor";
 import StatusBar from "../../src/ui/StatusBar.svelte";
 import { format } from "./helpers";
+import { formatLabel, translate as t } from "../../src/i18n";
 
 afterEach(() => cleanup());
 
@@ -15,13 +16,13 @@ describe("StatusBar statistics", () => {
         stats: { line: 2, col: 4, lines: 7, words: 12, chars: 94, selection: null },
       },
     });
-    expect(document.body.textContent).toContain("PDF");
-    expect(document.body.textContent).toContain("Read-only");
-    expect(document.body.textContent).toContain("Lossy");
-    expect(document.body.textContent).toContain("Ln 2, Col 4");
-    expect(document.body.textContent).toContain("7 lines");
-    expect(document.body.textContent).toContain("12 words");
-    expect(document.body.textContent).toContain("94 chars");
+    expect(document.body.textContent).toContain(formatLabel("pdf", "PDF"));
+    expect(document.body.textContent).toContain(t("save.readOnly"));
+    expect(document.body.textContent).toContain(t("status.lossy"));
+    expect(document.body.textContent).toContain(t("status.position", { line: 2, column: 4 }));
+    expect(document.body.textContent).toContain(t("status.lines", { count: 7 }));
+    expect(document.body.textContent).toContain(t("status.words", { count: 12 }));
+    expect(document.body.textContent).toContain(t("status.characters", { count: 94 }));
   });
 
   it("shows selection range and counts only whole words", () => {
@@ -38,9 +39,9 @@ describe("StatusBar statistics", () => {
         stats,
       },
     });
-    expect(document.body.textContent).toContain("Ln 1 selected");
-    expect(document.body.textContent).toContain("1 words");
-    expect(document.body.textContent).toContain("12 chars");
-    expect(document.body.textContent).not.toContain("3 words");
+    expect(document.body.textContent).toContain(t("status.selectionLine", { line: 1 }));
+    expect(document.body.textContent).toContain(t("status.words", { count: 1 }));
+    expect(document.body.textContent).toContain(t("status.characters", { count: 12 }));
+    expect(document.body.textContent).not.toContain(t("status.words", { count: 3 }));
   });
 });

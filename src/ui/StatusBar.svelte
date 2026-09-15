@@ -1,33 +1,36 @@
 <script lang="ts">
   import type { EditorStats } from "../editor/createEditor";
   import type { FormatCapabilities } from "../state/formats.svelte";
+  import { formatLabel, translate as t } from "../i18n";
 
   type Props = { format: FormatCapabilities; stats: EditorStats };
   let { format, stats }: Props = $props();
 </script>
 
-<footer class="status-bar" aria-label="Status bar">
+<footer class="status-bar" aria-label={t("status.bar")}>
   <div class="format-info">
-    <button type="button" title="Change document format">{format.label}</button>
-    {#if !format.editable}<span class="restriction">Read-only</span>{/if}
-    {#if format.lossy}<span class="restriction">Lossy</span>{/if}
+    <button type="button" title={t("status.changeFormat")}>{formatLabel(format.id, format.label)}</button>
+    {#if !format.editable}<span class="restriction">{t("save.readOnly")}</span>{/if}
+    {#if format.lossy}<span class="restriction">{t("status.lossy")}</span>{/if}
   </div>
 
   <div class="stats" aria-live="polite">
     {#if stats.selection}
-      <span>Ln {stats.selection.fromLine}{#if stats.selection.toLine !== stats.selection.fromLine}–{stats.selection.toLine}{/if} selected</span>
+      <span>{stats.selection.toLine !== stats.selection.fromLine
+        ? t("status.selectionLines", { fromLine: stats.selection.fromLine, toLine: stats.selection.toLine })
+        : t("status.selectionLine", { line: stats.selection.fromLine })}</span>
       <span aria-hidden="true">·</span>
-      <span>{stats.selection.words} words</span>
+      <span>{t("status.words", { count: stats.selection.words })}</span>
       <span aria-hidden="true">·</span>
-      <span>{stats.selection.chars} chars</span>
+      <span>{t("status.characters", { count: stats.selection.chars })}</span>
     {:else}
-      <span>Ln {stats.line}, Col {stats.col}</span>
+      <span>{t("status.position", { line: stats.line, column: stats.col })}</span>
       <span aria-hidden="true">·</span>
-      <span>{stats.lines} lines</span>
+      <span>{t("status.lines", { count: stats.lines })}</span>
       <span aria-hidden="true">·</span>
-      <span>{stats.words} words</span>
+      <span>{t("status.words", { count: stats.words })}</span>
       <span aria-hidden="true">·</span>
-      <span>{stats.chars} chars</span>
+      <span>{t("status.characters", { count: stats.chars })}</span>
     {/if}
   </div>
 </footer>

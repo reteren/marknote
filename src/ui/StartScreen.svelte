@@ -1,6 +1,7 @@
 <script lang="ts">
   import FormatPicker from "./FormatPicker.svelte";
   import type { FormatCapabilities } from "../state/formats.svelte";
+  import { translate as t } from "../i18n";
 
   type Props = {
     formats?: FormatCapabilities[];
@@ -24,24 +25,24 @@
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <section
   class="start-screen"
-  aria-label="New document"
+  aria-label={t("start.newDocument")}
   ondragover={preventDrag}
   ondrop={handleDrop}
 >
   <div class="start-content">
     <div class="mark" aria-hidden="true">MN</div>
-    <h1>MarkNote</h1>
-    <p class="lead">New file</p>
+    <h1>{t("app.name")}</h1>
+    <p class="lead">{t("start.newFile")}</p>
 
     <div class="format-picker-wrap">
       <FormatPicker mode="grid" {formats} onSelect={onSelect} />
     </div>
 
     <div class="open-row">
-      <button type="button" class="open-button" onclick={() => onOpenFile?.()}>Open file…</button>
-      <span>or drop a file here</span>
+      <button type="button" class="open-button" onclick={() => onOpenFile?.()}>{t("start.openFile")}</button>
+      <span>{t("start.dropFile")}</span>
     </div>
-    <p class="hint">Start typing to create a Markdown note.</p>
+    <p class="hint">{t("start.hint")}</p>
   </div>
 </section>
 

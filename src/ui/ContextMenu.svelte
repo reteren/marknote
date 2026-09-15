@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount, tick } from "svelte";
+  import { interfaceLanguage, translate as t } from "../i18n";
   import { createContextFormatGroups, type MenuItem as ModelMenuItem } from "./menuModel";
 
   export type ContextMenuTarget = "selection" | "empty" | "link" | "image";
@@ -72,6 +73,7 @@
   let submenuX = $state(0);
   let submenuY = $state(0);
   let returnFocusElement: HTMLElement | null = null;
+  const rtl = $derived(interfaceLanguage.locale === "ar");
 
   function toOption(item: ModelMenuItem): MenuOption {
     if (item.separator) return { separator: true };
@@ -95,21 +97,21 @@
     if (targetType === "link" || linkUrl) {
       const url = linkUrl ?? "";
       return [
-        { id: "open-link", label: "Open Link", payload: url },
-        { id: "copy-link", label: "Copy Link Address", payload: url },
-        { id: "edit-link", label: "Edit Link", payload: url },
+        { id: "open-link", label: t("contextMenu.openLink"), payload: url },
+        { id: "copy-link", label: t("contextMenu.copyLinkAddress"), payload: url },
+        { id: "edit-link", label: t("contextMenu.editLink"), payload: url },
         { separator: true },
-        { id: "copy", label: "Copy", shortcut: "Ctrl+C" },
+        { id: "copy", label: t("menu.copy"), shortcut: "Ctrl+C" },
       ];
     }
 
     if (targetType === "image" || imageSrc) {
       const src = imageSrc ?? "";
       return [
-        { id: "open-image", label: "Open Image", payload: src },
-        { id: "copy-image", label: "Copy Image Path", payload: src },
+        { id: "open-image", label: t("contextMenu.openImage"), payload: src },
+        { id: "copy-image", label: t("contextMenu.copyImagePath"), payload: src },
         { separator: true },
-        { id: "copy", label: "Copy", shortcut: "Ctrl+C" },
+        { id: "copy", label: t("menu.copy"), shortcut: "Ctrl+C" },
       ];
     }
 
@@ -117,12 +119,12 @@
     return [
       ...formatSubmenus,
       { separator: true },
-      { id: "cut", label: "Cut", shortcut: "Ctrl+X", disabled: !selectionExists || !editable },
-      { id: "copy", label: "Copy", shortcut: "Ctrl+C", disabled: !selectionExists },
-      { id: "paste", label: "Paste", shortcut: "Ctrl+V", disabled: !canPaste || !editable },
-      { id: "edit.pastePlainText", label: "Paste as Plain Text", shortcut: "Ctrl+Shift+V", disabled: !canPaste || !editable },
-      { id: "delete", label: "Delete", disabled: !selectionExists || !editable },
-      { id: "select-all", label: "Select All", shortcut: "Ctrl+A" },
+      { id: "cut", label: t("menu.cut"), shortcut: "Ctrl+X", disabled: !selectionExists || !editable },
+      { id: "copy", label: t("menu.copy"), shortcut: "Ctrl+C", disabled: !selectionExists },
+      { id: "paste", label: t("menu.paste"), shortcut: "Ctrl+V", disabled: !canPaste || !editable },
+      { id: "edit.pastePlainText", label: t("menu.pastePlainText"), shortcut: "Ctrl+Shift+V", disabled: !canPaste || !editable },
+      { id: "delete", label: t("contextMenu.delete"), disabled: !selectionExists || !editable },
+      { id: "select-all", label: t("menu.selectAll"), shortcut: "Ctrl+A" },
     ];
   });
 
@@ -148,16 +150,18 @@
     }
 
     const margin = 8;
-    const menuWidth = menuRef?.offsetWidth || 230;
-    const menuHeight = menuRef?.offsetHeight || Math.min(360, Math.max(170, entries.length * 30));
     const viewportWidth = window.innerWidth;
     const viewportHeight = window.innerHeight;
-    let posX = targetX;
+    const menuWidth = Math.min(menuRef?.offsetWidth || 230, viewportWidth - margin * 2);
+    const menuHeight = Math.min(menuRef?.offsetHeight || Math.min(360, Math.max(170, entries.length * 30)), viewportHeight - margin * 2);
+    let posX = rtl ? targetX - menuWidth : targetX;
     let posY = targetY;
 
-    if (posX + menuWidth > viewportWidth - margin) posX = Math.max(margin, posX - menuWidth);
+    if (posX + menuWidth > viewportWidth - margin) posX = targetX - menuWidth;
+    if (posX < margin) posX = targetX;
     if (posY + menuHeight > viewportHeight - margin) posY = Math.max(margin, viewportHeight - menuHeight - margin);
-    adjustedX = Math.max(margin, posX);
+    posX = Math.max(margin, Math.min(posX, viewportWidth - menuWidth - margin));
+    adjustedX = rtl ? viewportWidth - posX - menuWidth : posX;
     adjustedY = Math.max(margin, posY);
   }
 
@@ -165,13 +169,24 @@
     if (typeof window === "undefined") return;
     const margin = 8;
     const rect = anchor.getBoundingClientRect();
-    const width = submenuRef?.offsetWidth || 220;
-    const height = submenuRef?.offsetHeight || Math.max(150, (activeSubmenu?.items.length ?? 5) * 29);
-    const openLeft = rect.right + width > window.innerWidth - margin;
-    submenuX = openLeft ? Math.max(margin, rect.left - width) : rect.right - 2;
-    submenuY = rect.top + height > window.innerHeight - margin
-      ? Math.max(margin, window.innerHeight - height - margin)
-      : Math.max(margin, rect.top - 4);
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+    const width = Math.min(submenuRef?.offsetWidth || 220, viewportWidth - margin * 2);
+    const height = Math.min(submenuRef?.offsetHeight || Math.max(150, (activeSubmenu?.items.length ?? 5) * 29), viewportHeight - margin * 2);
+    const leftSpace = rect.left - margin;
+    const rightSpace = viewportWidth - rect.right - margin;
+    let openLeft = rtl;
+    if ((openLeft ? leftSpace : rightSpace) < width) openLeft = !openLeft;
+    if (Math.max(leftSpace, rightSpace) < width) openLeft = leftSpace >= rightSpace;
+    const physicalX = Math.max(
+      margin,
+      Math.min(openLeft ? rect.left - width : rect.right - 2, viewportWidth - width - margin),
+    );
+    submenuX = rtl ? viewportWidth - physicalX - width : physicalX;
+    const idealY = rect.top + height > viewportHeight - margin
+      ? viewportHeight - height - margin
+      : rect.top - 4;
+    submenuY = Math.max(margin, Math.min(idealY, viewportHeight - height - margin));
   }
 
   function openSubmenu(group: SubmenuEntry, trigger?: HTMLElement): void {
@@ -288,7 +303,9 @@
         break;
       case "ArrowRight":
         event.preventDefault();
-        if (!inSubmenu) {
+        if (rtl && inSubmenu) {
+          closeSubmenuAndFocusTrigger();
+        } else if (!rtl && !inSubmenu) {
           const current = rootFocusable[focusedRootIndex];
           if (current && "kind" in current) {
             const trigger = menuRef?.querySelector<HTMLButtonElement>(`[data-submenu-label="${current.label}"]`);
@@ -299,7 +316,16 @@
         }
         break;
       case "ArrowLeft":
-        if (inSubmenu) {
+        if (rtl && !inSubmenu) {
+          event.preventDefault();
+          const current = rootFocusable[focusedRootIndex];
+          if (current && "kind" in current) {
+            const trigger = menuRef?.querySelector<HTMLButtonElement>(`[data-submenu-label="${current.label}"]`);
+            openSubmenu(current, trigger ?? undefined);
+            focusedSubmenuIndex = 0;
+            focusSubmenuItem(0);
+          }
+        } else if (!rtl && inSubmenu) {
           event.preventDefault();
           closeSubmenuAndFocusTrigger();
         }
@@ -384,16 +410,15 @@
 </script>
 
 {#if open}
-  <div bind:this={layerRef} class="context-menu-layer">
+  <div bind:this={layerRef} class="context-menu-layer" class:rtl>
     <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
     <div
       bind:this={menuRef}
       class="context-menu"
-      style:left="{adjustedX}px"
-      style:top="{adjustedY}px"
+      style={`inset-inline-start: ${adjustedX}px; top: ${adjustedY}px;`}
       role="menu"
       tabindex="0"
-      aria-label="Context menu"
+      aria-label={t("contextMenu.label")}
       data-menu-level="root"
       onkeydown={handleKeyDown}
     >
@@ -445,8 +470,7 @@
       <div
         bind:this={submenuRef}
         class="context-submenu"
-        style:left="{submenuX}px"
-        style:top="{submenuY}px"
+        style={`inset-inline-start: ${submenuX}px; top: ${submenuY}px;`}
         role="menu"
         aria-label={activeSubmenu.label}
         tabindex="-1"
@@ -518,7 +542,7 @@
     background: transparent;
     color: var(--text-normal);
     font: inherit;
-    text-align: left;
+    text-align: start;
     cursor: pointer;
     outline: none;
     transition: background 0.08s ease;
@@ -531,6 +555,7 @@
   .menu-item:active:not(:disabled) { background: var(--bg-modifier-active); }
   .menu-item:disabled { color: var(--text-faint); cursor: default; }
   .label { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .shortcut { margin-left: 14px; color: var(--text-faint); font-size: 11px; white-space: nowrap; }
-  .submenu-arrow { margin-left: 18px; color: var(--text-muted); font-size: 18px; line-height: 0.7; }
+  .shortcut { margin-inline-start: 14px; color: var(--text-faint); font-size: 11px; white-space: nowrap; }
+  .submenu-arrow { margin-inline-start: 18px; color: var(--text-muted); font-size: 18px; line-height: 0.7; }
+  .context-menu-layer.rtl .submenu-arrow { transform: scaleX(-1); }
 </style>

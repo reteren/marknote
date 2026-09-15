@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render } from "@testing-library/svelte";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import Notice from "../../src/ui/Notice.svelte";
+import { translate as t } from "../../src/i18n";
 
 afterEach(() => cleanup());
 
@@ -24,7 +25,7 @@ describe("Notice actions", () => {
     expect(document.body.textContent).toContain(icon);
     await fireEvent.click(Array.from(document.querySelectorAll("button")).find((button) => button.textContent?.includes("Do it"))!);
     expect(onAction).toHaveBeenCalledWith("do-it");
-    await fireEvent.click(document.querySelector<HTMLButtonElement>('[aria-label="Dismiss notification"]')!);
+    await fireEvent.click(document.querySelector<HTMLButtonElement>(`[aria-label="${t("notice.dismissLabel")}"]`)!);
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 });

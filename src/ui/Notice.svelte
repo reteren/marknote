@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { translate as t } from "../i18n";
+
   export type NoticeSeverity = "info" | "warning" | "error";
 
   export type NoticeAction = {
@@ -42,25 +44,25 @@
       case "file-changed":
         return {
           severity: "warning",
-          message: "File changed on disk",
+          message: t("notice.fileChanged"),
           actions: [
-            { label: "Reload", action: "reload", primary: true },
-            { label: "Keep mine", action: "keep-mine" },
+            { label: t("notice.reload"), action: "reload", primary: true },
+            { label: t("notice.keepMine"), action: "keep-mine" },
           ],
         };
       case "file-deleted":
         return {
           severity: "error",
-          message: "File no longer exists on disk",
-          actions: [{ label: "Save", action: "save", primary: true }],
+          message: t("notice.fileDeleted"),
+          actions: [{ label: t("menu.save"), action: "save", primary: true }],
         };
       case "lossy-warning":
         return {
           severity: "warning",
-          message: "Formatting may be lost when saving in this format",
+          message: t("notice.lossyWarning"),
           actions: [
-            { label: "Save anyway", action: "save-lossy" },
-            { label: "Save as Markdown…", action: "save-markdown", primary: true },
+            { label: t("notice.saveAnyway"), action: "save-lossy" },
+            { label: t("notice.saveAsMarkdown"), action: "save-markdown", primary: true },
           ],
         };
       default:
@@ -93,7 +95,7 @@
     class:severity-error={effectiveSeverity === "error"}
     role="status"
     aria-live="polite"
-    aria-label="Notification"
+    aria-label={t("notice.notification")}
   >
     <div class="content">
       <span class="icon" aria-hidden="true">
@@ -134,8 +136,8 @@
         <button
           type="button"
           class="close-btn"
-          aria-label="Dismiss notification"
-          title="Dismiss"
+          aria-label={t("notice.dismissLabel")}
+          title={t("notice.dismiss")}
           onclick={handleClose}
         >
           ✕
@@ -165,15 +167,15 @@
   }
 
   .notice-bar.severity-info {
-    border-left: 3px solid var(--accent);
+    border-inline-start: 3px solid var(--accent);
   }
 
   .notice-bar.severity-warning {
-    border-left: 3px solid rgb(var(--callout-warning, 224, 175, 104));
+    border-inline-start: 3px solid rgb(var(--callout-warning, 224, 175, 104));
   }
 
   .notice-bar.severity-error {
-    border-left: 3px solid var(--text-error);
+    border-inline-start: 3px solid var(--text-error);
   }
 
   .content {

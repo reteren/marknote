@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { EditorView } from "@codemirror/view";
 import FindPanel from "../../src/ui/FindPanel.svelte";
 import { settle } from "./helpers";
+import { translate as t } from "../../src/i18n";
 
 afterEach(() => cleanup());
 
@@ -69,13 +70,13 @@ describe("FindPanel interaction contract", () => {
     window.dispatchEvent(new KeyboardEvent("keydown", { key: "f", ctrlKey: true, bubbles: true }));
     await settle();
     expect(document.querySelector('[role="dialog"]')).not.toBeNull();
-    expect(document.querySelector<HTMLInputElement>('input[aria-label="Search query"]')?.value).toBe("");
+    expect(document.querySelector<HTMLInputElement>(`input[aria-label="${t("search.queryLabel")}"]`)?.value).toBe("");
 
     window.dispatchEvent(new KeyboardEvent("keydown", { key: "h", ctrlKey: true, bubbles: true }));
     await settle();
-    expect(document.querySelector<HTMLInputElement>('input[aria-label="Replacement text"]')).not.toBeNull();
+    expect(document.querySelector<HTMLInputElement>(`input[aria-label="${t("search.replacementLabel")}"]`)).not.toBeNull();
 
-    const input = document.querySelector<HTMLInputElement>('input[aria-label="Search query"]')!;
+    const input = document.querySelector<HTMLInputElement>(`input[aria-label="${t("search.queryLabel")}"]`)!;
     await fireEvent.keyDown(input, { key: "Escape" });
     await settle();
     expect(document.querySelector('[role="dialog"]')).toBeNull();
@@ -85,10 +86,10 @@ describe("FindPanel interaction contract", () => {
   it("updates the counter and toggles case, whole-word, and regexp modes", async () => {
     const view = createView();
     render(FindPanel, { props: { view, isOpen: true } });
-    const input = document.querySelector<HTMLInputElement>('input[aria-label="Search query"]')!;
+    const input = document.querySelector<HTMLInputElement>(`input[aria-label="${t("search.queryLabel")}"]`)!;
     await fireEvent.input(input, { target: { value: "alpha" } });
     await new Promise((resolve) => setTimeout(resolve, 70));
-    expect(document.body.textContent).toContain("2 matches");
+    expect(document.body.textContent).toContain(t("search.matchCount", { count: 2 }));
 
     const toggles = document.querySelectorAll<HTMLButtonElement>(".toggle-btn");
     await fireEvent.click(toggles[0]!);
@@ -101,7 +102,7 @@ describe("FindPanel interaction contract", () => {
     await fireEvent.input(input, { target: { value: "(" } });
     await new Promise((resolve) => setTimeout(resolve, 70));
     expect(input.getAttribute("aria-invalid")).toBe("true");
-    expect(document.body.textContent).toContain("Invalid regular expression");
+    expect(document.body.textContent).toContain(t("search.invalidRegex"));
   });
 
   it("moves through matches with Enter and Shift+Enter", async () => {
@@ -117,7 +118,7 @@ describe("FindPanel interaction contract", () => {
       return true;
     });
     render(FindPanel, { props: { view, isOpen: true } });
-    const input = document.querySelector<HTMLInputElement>('input[aria-label="Search query"]')!;
+    const input = document.querySelector<HTMLInputElement>(`input[aria-label="${t("search.queryLabel")}"]`)!;
     await fireEvent.input(input, { target: { value: "alpha" } });
     await new Promise((resolve) => setTimeout(resolve, 70));
 

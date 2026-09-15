@@ -1,11 +1,12 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import packageInfo from "../../package.json";
+  import { translate as t } from "../i18n";
 
   export type HelpMode = "shortcuts" | "markdownReference" | "about";
 
-  type Shortcut = { keys: string; action: string };
-  type MarkdownEntry = { syntax: string; meaning: string };
+  type Shortcut = { keys: string; actionKey: string };
+  type MarkdownEntry = { syntax: string; meaningKey: string };
   type Props = {
     mode: HelpMode;
     onClose?: () => void;
@@ -16,48 +17,48 @@
 
   const version = packageInfo.version;
   const shortcuts: Shortcut[] = [
-    { keys: "Ctrl+Z", action: "Undo" },
-    { keys: "Ctrl+Shift+Z / Ctrl+Y", action: "Redo" },
-    { keys: "Ctrl+X / Ctrl+C / Ctrl+V", action: "Cut / copy / paste" },
-    { keys: "Ctrl+Shift+V", action: "Paste as plain text" },
-    { keys: "Ctrl+A", action: "Select all" },
-    { keys: "Ctrl+D", action: "Delete line" },
-    { keys: "Alt+↑ / Alt+↓", action: "Move line up / down" },
-    { keys: "Ctrl+B", action: "Bold" },
-    { keys: "Ctrl+I", action: "Italic" },
-    { keys: "Ctrl+E", action: "Code" },
-    { keys: "Ctrl+K", action: "Link" },
-    { keys: "Ctrl+1 … Ctrl+6", action: "Set heading level" },
-    { keys: "Ctrl+0", action: "Remove heading (takes precedence in the keymap)" },
-    { keys: "Ctrl+Shift+K", action: "Code block" },
-    { keys: "Tab / Shift+Tab", action: "Change list indentation" },
-    { keys: "Ctrl+Home / Ctrl+End", action: "Go to document start / end" },
-    { keys: "Ctrl+N", action: "New document" },
-    { keys: "Ctrl+Shift+N", action: "New document with format picker" },
-    { keys: "Ctrl+O", action: "Open file" },
-    { keys: "Ctrl+S", action: "Save" },
-    { keys: "Ctrl+Shift+S", action: "Save as" },
-    { keys: "Ctrl+W", action: "Close window" },
-    { keys: "Ctrl+F / Ctrl+H", action: "Find / replace" },
-    { keys: "Ctrl+G", action: "Go to line" },
-    { keys: "Ctrl+±", action: "Change editor text size" },
+    { keys: "Ctrl+Z", actionKey: "help.action.undo" },
+    { keys: "Ctrl+Shift+Z / Ctrl+Y", actionKey: "help.action.redo" },
+    { keys: "Ctrl+X / Ctrl+C / Ctrl+V", actionKey: "help.action.clipboard" },
+    { keys: "Ctrl+Shift+V", actionKey: "help.action.pastePlainText" },
+    { keys: "Ctrl+A", actionKey: "help.action.selectAll" },
+    { keys: "Ctrl+D", actionKey: "help.action.deleteLine" },
+    { keys: "Alt+↑ / Alt+↓", actionKey: "help.action.moveLine" },
+    { keys: "Ctrl+B", actionKey: "help.action.bold" },
+    { keys: "Ctrl+I", actionKey: "help.action.italic" },
+    { keys: "Ctrl+E", actionKey: "help.action.code" },
+    { keys: "Ctrl+K", actionKey: "help.action.link" },
+    { keys: "Ctrl+1 … Ctrl+6", actionKey: "help.action.setHeading" },
+    { keys: "Ctrl+0", actionKey: "help.action.removeHeading" },
+    { keys: "Ctrl+Shift+K", actionKey: "help.action.codeBlock" },
+    { keys: "Tab / Shift+Tab", actionKey: "help.action.listIndent" },
+    { keys: "Ctrl+Home / Ctrl+End", actionKey: "help.action.documentStartEnd" },
+    { keys: "Ctrl+N", actionKey: "help.action.newDocument" },
+    { keys: "Ctrl+Shift+N", actionKey: "help.action.newWithFormat" },
+    { keys: "Ctrl+O", actionKey: "help.action.openFile" },
+    { keys: "Ctrl+S", actionKey: "help.action.save" },
+    { keys: "Ctrl+Shift+S", actionKey: "help.action.saveAs" },
+    { keys: "Ctrl+W", actionKey: "help.action.closeWindow" },
+    { keys: "Ctrl+F / Ctrl+H", actionKey: "help.action.findReplace" },
+    { keys: "Ctrl+G", actionKey: "help.action.goToLine" },
+    { keys: "Ctrl+±", actionKey: "help.action.zoom" },
   ];
 
   const markdownEntries: MarkdownEntry[] = [
-    { syntax: "**bold**", meaning: "Bold emphasis" },
-    { syntax: "*italic*", meaning: "Italic emphasis" },
-    { syntax: "~~strikethrough~~", meaning: "Strikethrough" },
-    { syntax: "==highlight==", meaning: "Highlighted text" },
-    { syntax: "`code`", meaning: "Inline code" },
-    { syntax: "[label](https://example.com)", meaning: "Link (Ctrl-click opens http, https, or mailto)" },
-    { syntax: "![](image.png)", meaning: "Image relative to the open document" },
-    { syntax: "# Heading", meaning: "Heading levels 1–6" },
-    { syntax: "- [ ] task", meaning: "Unchecked task; [x] marks it complete" },
-    { syntax: "> quote", meaning: "Blockquote; nested quotes are supported" },
-    { syntax: "> [!NOTE] text", meaning: "Callout types: note, tip, info, success, question, warning, danger, example, quote" },
-    { syntax: "$x^2$", meaning: "Inline formula" },
-    { syntax: "$$x^2$$", meaning: "Block formula" },
-    { syntax: "[^1] … [^1]: text", meaning: "Footnote reference and definition" },
+    { syntax: "**bold**", meaningKey: "help.meaning.bold" },
+    { syntax: "*italic*", meaningKey: "help.meaning.italic" },
+    { syntax: "~~strikethrough~~", meaningKey: "help.meaning.strikethrough" },
+    { syntax: "==highlight==", meaningKey: "help.meaning.highlight" },
+    { syntax: "`code`", meaningKey: "help.meaning.inlineCode" },
+    { syntax: "[label](https://example.com)", meaningKey: "help.meaning.link" },
+    { syntax: "![](image.png)", meaningKey: "help.meaning.image" },
+    { syntax: "# Heading", meaningKey: "help.meaning.heading" },
+    { syntax: "- [ ] task", meaningKey: "help.meaning.task" },
+    { syntax: "> quote", meaningKey: "help.meaning.quote" },
+    { syntax: "> [!NOTE] text", meaningKey: "help.meaning.callout" },
+    { syntax: "$x^2$", meaningKey: "help.meaning.inlineFormula" },
+    { syntax: "$$x^2$$", meaningKey: "help.meaning.blockFormula" },
+    { syntax: "[^1] … [^1]: text", meaningKey: "help.meaning.footnote" },
   ];
 
   function handleKeydown(event: KeyboardEvent): void {
@@ -91,47 +92,39 @@
     onkeydown={handleKeydown}
   >
     <header class="dialog-header">
-      <h2 id="help-dialog-title">
-        {#if mode === "shortcuts"}
-          Keyboard Shortcuts
-        {:else if mode === "markdownReference"}
-          Markdown Reference
-        {:else}
-          About
-        {/if}
-      </h2>
-      <button type="button" class="close-button" aria-label="Close help" onclick={() => onClose?.()}>×</button>
+      <h2 id="help-dialog-title">{mode === "shortcuts" ? t("menu.keyboardShortcuts") : mode === "markdownReference" ? t("menu.markdownReference") : t("menu.about")}</h2>
+      <button type="button" class="close-button" aria-label={t("help.close")} onclick={() => onClose?.()}>×</button>
     </header>
 
     {#if mode === "shortcuts"}
-      <p class="intro">Editor shortcuts. File, search, zoom, and window commands are available when the application shell supplies their handlers.</p>
+      <p class="intro">{t("help.keyboardIntro")}</p>
       <div class="table-wrap">
         <table>
           <thead>
-            <tr><th>Shortcut</th><th>Action</th></tr>
+            <tr><th>{t("help.shortcutsColumn")}</th><th>{t("help.actionColumn")}</th></tr>
           </thead>
           <tbody>
             {#each shortcuts as shortcut}
               <tr>
                 <td><kbd>{shortcut.keys}</kbd></td>
-                <td>{shortcut.action}</td>
+                <td>{t(shortcut.actionKey)}</td>
               </tr>
             {/each}
           </tbody>
         </table>
       </div>
     {:else if mode === "markdownReference"}
-      <p class="intro">A quick reference for the Markdown features supported by MarkNote.</p>
+      <p class="intro">{t("help.markdownIntro")}</p>
       <div class="table-wrap">
         <table>
           <thead>
-            <tr><th>Syntax</th><th>What it does</th></tr>
+            <tr><th>{t("help.syntaxColumn")}</th><th>{t("help.meaningColumn")}</th></tr>
           </thead>
           <tbody>
             {#each markdownEntries as entry}
               <tr>
                 <td><code>{entry.syntax}</code></td>
-                <td>{entry.meaning}</td>
+                <td>{t(entry.meaningKey)}</td>
               </tr>
             {/each}
           </tbody>
@@ -139,11 +132,11 @@
       </div>
     {:else}
       <div class="about-content">
-        <p class="app-name">MarkNote</p>
-        <p>A fast Markdown editor with live preview and support for common text formats.</p>
+        <p class="app-name">{t("app.name")}</p>
+        <p>{t("about.description")}</p>
         <dl>
-          <div><dt>Version</dt><dd>{version}</dd></div>
-          <div><dt>License</dt><dd>MIT</dd></div>
+          <div><dt>{t("about.version")}</dt><dd>{version}</dd></div>
+          <div><dt>{t("about.license")}</dt><dd>{t("about.licenseName")}</dd></div>
         </dl>
       </div>
     {/if}
@@ -245,7 +238,7 @@
   td {
     padding: 8px 10px;
     border-bottom: 1px solid var(--bg-modifier-border);
-    text-align: left;
+    text-align: start;
     vertical-align: top;
   }
 

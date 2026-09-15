@@ -2,6 +2,7 @@
   import { onMount } from "svelte";
   import type { SaveStatus } from "../state/document.svelte";
   import type { FormatCapabilities } from "../state/formats.svelte";
+  import { formatTime, interfaceLanguage, translate as t } from "../i18n";
   import { createMenuModel, type MenuItem, type MenuSection, type MenuState } from "./menuModel";
 
   export type MenuAction = (id: string) => void;
@@ -19,7 +20,7 @@
   };
 
   let {
-    title = "Untitled.md — MarkNote",
+    title,
     saveStatus = "unsaved",
     lastSavedAt = null,
     formats = [],
@@ -35,20 +36,22 @@
   let activeItemIndex = $state(0);
   let activeSubmenuId = $state<string | null>(null);
   let activeSubmenuIndex = $state(0);
-  let popupLeft = $state(4);
-  let submenuOpensLeft = $state(false);
+  let popupInlineStart = $state(4);
+  let submenuOpensOpposite = $state(false);
 
+  const displayTitle = $derived(title ?? t("menu.windowTitle"));
+  const rtl = $derived(interfaceLanguage.locale === "ar");
   const model = $derived(createMenuModel(formats, menuState));
   const statusLabel = $derived(
     saveStatus === "pending"
-      ? "Saving…"
+      ? t("save.saving")
       : saveStatus === "saved"
         ? lastSavedAt
-          ? `Saved ${lastSavedAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
-          : "Saved"
+          ? t("save.savedAt", { time: formatTime(lastSavedAt) })
+          : t("save.saved")
         : saveStatus === "readonly"
-          ? "Read-only"
-          : "Unsaved",
+          ? t("save.readOnly")
+          : t("save.unsaved"),
   );
 
   function sectionById(id: string | null): MenuSection | undefined {
@@ -70,8 +73,9 @@
   function positionPopup(button?: HTMLElement): void {
     const width = 280;
     const rect = button?.getBoundingClientRect();
-    const idealLeft = rect?.left ?? 4;
-    popupLeft = Math.max(4, Math.min(idealLeft, window.innerWidth - width - 4));
+    const idealLeft = rect ? (rtl ? rect.right - width : rect.left) : 4;
+    const physicalLeft = Math.max(4, Math.min(idealLeft, window.innerWidth - width - 4));
+    popupInlineStart = rtl ? window.innerWidth - physicalLeft - width : physicalLeft;
   }
 
   function openSection(id: string, button?: HTMLElement): void {
@@ -101,9 +105,12 @@
     activeSubmenuId = item.id;
     activeSubmenuIndex = 0;
     const rect = node?.getBoundingClientRect();
-    submenuOpensLeft = Boolean(
-      (rect && rect.right + 276 > window.innerWidth) || (!rect && popupLeft + 280 + 276 > window.innerWidth),
-    );
+    const preferredSpace = rect
+      ? rtl ? rect.left : window.innerWidth - rect.right
+      : rtl
+        ? window.innerWidth - popupInlineStart - 280
+        : window.innerWidth - popupInlineStart - 280;
+    submenuOpensOpposite = preferredSpace < 276;
     focusMenuItem(item.submenu.find((child) => !child.disabled && !child.separator));
   }
 
@@ -153,7 +160,16 @@
         break;
       case "ArrowRight": {
         event.preventDefault();
-        if (activeSubmenuId) {
+        if (rtl) {
+          if (activeSubmenuId) {
+            activeSubmenuId = null;
+            activeSubmenuIndex = 0;
+            focusMenuItem(activeSectionItems()[activeItemIndex]);
+          } else {
+            const sectionIndex = (model.findIndex((section) => section.id === openSectionId) - 1 + model.length) % model.length;
+            openSection(model[sectionIndex]?.id ?? "");
+          }
+        } else if (activeSubmenuId) {
           const sectionIndex = (model.findIndex((section) => section.id === openSectionId) + 1) % model.length;
           openSection(model[sectionIndex]?.id ?? "");
         } else {
@@ -168,7 +184,19 @@
       }
       case "ArrowLeft":
         event.preventDefault();
-        if (activeSubmenuId) {
+        if (rtl) {
+          if (activeSubmenuId) {
+            const sectionIndex = (model.findIndex((section) => section.id === openSectionId) + 1) % model.length;
+            openSection(model[sectionIndex]?.id ?? "");
+          } else {
+            const item = activeSectionItems()[activeItemIndex];
+            if (item?.submenu) openSubmenu(item);
+            else {
+              const sectionIndex = (model.findIndex((section) => section.id === openSectionId) + 1) % model.length;
+              openSection(model[sectionIndex]?.id ?? "");
+            }
+          }
+        } else if (activeSubmenuId) {
           activeSubmenuId = null;
           activeSubmenuIndex = 0;
           focusMenuItem(activeSectionItems()[activeItemIndex]);
@@ -230,10 +258,10 @@
   });
 </script>
 
-<header class="menu-bar" bind:this={menuRoot} aria-label="Main menu">
+<header class="menu-bar" bind:this={menuRoot} aria-label={t("menu.mainMenu")}>
   <div class="menu-groups">
-    <span class="window-title" title={title}>{title}</span>
-    <div class="menu-tabs" aria-label="Menu sections" role="menubar" tabindex="-1">
+    <span class="window-title" title={displayTitle}>{displayTitle}</span>
+    <div class="menu-tabs" aria-label={t("menu.sections")} role="menubar" tabindex="-1">
       {#each model as section}
         <button
           type="button"
@@ -248,15 +276,15 @@
     </div>
   </div>
 
-  <div class="save-controls" aria-label="Document save controls">
+  <div class="save-controls" aria-label={t("menu.documentSaveControls")}>
     <span class:status-pending={saveStatus === "pending"} class:status-saved={saveStatus === "saved"}>{statusLabel}</span>
-    <button type="button" onclick={() => onSave?.()} disabled={saveStatus === "pending" || saveStatus === "readonly"}>Save</button>
-    <button type="button" onclick={() => onSaveAs?.()}>Save as…</button>
+    <button type="button" onclick={() => onSave?.()} disabled={saveStatus === "pending" || saveStatus === "readonly"}>{t("menu.save")}</button>
+    <button type="button" onclick={() => onSaveAs?.()}>{t("menu.saveAs")}</button>
   </div>
 
   {#if openSectionId}
     {@const section = sectionById(openSectionId)}
-    <div class="menu-popup" role="menu" aria-label={section?.label} style:left={`${popupLeft}px`}>
+    <div class="menu-popup" role="menu" aria-label={section?.label} style={`inset-inline-start: ${popupInlineStart}px`}>
       {#each section?.items ?? [] as menuItem}
         {#if menuItem.separator}
           <div class="menu-separator" role="separator"></div>
@@ -279,7 +307,7 @@
             </span>
           </button>
           {#if activeSubmenuId === menuItem.id && menuItem.submenu}
-            <div class:submenu-left={submenuOpensLeft} class="submenu-panel" role="menu">
+            <div class:submenu-opposite={submenuOpensOpposite} class="submenu-panel" role="menu">
               {#each menuItem.submenu as submenuItem}
                 <button
                   type="button"
@@ -324,7 +352,7 @@
   .window-title {
     max-width: min(30vw, 320px);
     overflow: hidden;
-    margin-right: 8px;
+    margin-inline-end: 8px;
     color: var(--text-faint);
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -364,16 +392,17 @@
     border-radius: var(--radius-m);
     box-shadow: 0 10px 28px var(--bg-secondary-alt);
   }
-  .menu-popup > button, .submenu-panel button { display: flex; align-items: center; justify-content: space-between; width: 100%; min-height: 28px; padding: 5px 9px; text-align: left; }
+  .menu-popup > button, .submenu-panel button { display: flex; align-items: center; justify-content: space-between; width: 100%; min-height: 28px; padding: 5px 9px; text-align: start; }
   .item-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .item-trailing { display: flex; align-items: center; gap: 14px; margin-left: 18px; }
+  .item-trailing { display: flex; align-items: center; gap: 14px; margin-inline-start: 18px; }
   .shortcut { color: var(--text-faint); font-family: var(--font-mono); font-size: var(--font-size-mono); white-space: nowrap; }
   .submenu-arrow { color: var(--text-muted); font-size: 18px; line-height: 0.7; }
+  :global([dir="rtl"]) .submenu-arrow { transform: scaleX(-1); }
   .menu-separator { height: 1px; margin: 4px 5px; background: var(--bg-modifier-border); }
   .submenu-panel {
     position: absolute;
     top: 4px;
-    left: calc(100% - 4px);
+    inset-inline-start: calc(100% - 4px);
     z-index: 31;
     width: min(260px, calc(100vw - 8px));
     max-height: min(520px, calc(100vh - var(--menubar-height) - 8px));
@@ -384,7 +413,7 @@
     border-radius: var(--radius-m);
     box-shadow: 0 10px 28px var(--bg-secondary-alt);
   }
-  .submenu-panel.submenu-left { right: calc(100% - 4px); left: auto; }
+  .submenu-panel.submenu-opposite { inset-inline-end: calc(100% - 4px); inset-inline-start: auto; }
 
   @media (max-width: 760px) {
     .window-title { display: none; }

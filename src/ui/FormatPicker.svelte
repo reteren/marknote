@@ -2,6 +2,7 @@
   import { invoke } from "@tauri-apps/api/core";
   import { onMount } from "svelte";
   import type { FormatCapabilities } from "../state/formats.svelte";
+  import { formatLabel, translate as t } from "../i18n";
 
   export type FormatPickerMode = "grid" | "list" | "menu" | "dropdown";
 
@@ -104,11 +105,11 @@
   class:mode-list={mode === "list" || mode === "menu"}
   class:mode-dropdown={mode === "dropdown"}
   role="region"
-  aria-label="Choose document format"
+  aria-label={t("formatPicker.choose")}
   onkeydown={handleKeyDown}
 >
   {#if mode === "grid"}
-    <div class="grid-container" role="grid" aria-label="Format grid">
+    <div class="grid-container" role="grid" aria-label={t("formatPicker.grid")}>
       {#each primaryFormats as format (format.id)}
         <button
           type="button"
@@ -117,7 +118,7 @@
           class:selected={selectedId === format.id}
           onclick={() => handleSelect(format)}
         >
-          <span class="tile-label">{format.label}</span>
+          <span class="tile-label">{formatLabel(format.id, format.label)}</span>
           <span class="tile-ext">.{format.defaultExtension}</span>
         </button>
       {/each}
@@ -130,7 +131,7 @@
           onclick={() => { showMore = !showMore; }}
           aria-expanded={showMore}
         >
-          <span class="tile-label">{showMore ? "Less…" : "More…"}</span>
+          <span class="tile-label">{showMore ? t("formatPicker.less") : t("formatPicker.more")}</span>
           <span class="tile-arrow">{showMore ? "▴" : "▾"}</span>
         </button>
       {/if}
@@ -139,7 +140,7 @@
     <div
       class="list-container"
       role="menu"
-      aria-label="Format list"
+      aria-label={t("formatPicker.list")}
     >
       {#each primaryFormats as format (format.id)}
         <button
@@ -153,7 +154,7 @@
             {#if selectedId === format.id}
               <span class="checkmark" aria-hidden="true">✓ </span>
             {/if}
-            {format.label}
+            {formatLabel(format.id, format.label)}
           </span>
           <span class="item-ext">.{format.defaultExtension}</span>
         </button>
@@ -167,7 +168,7 @@
           onclick={() => { showMore = !showMore; }}
           aria-expanded={showMore}
         >
-          <span class="item-label">{showMore ? "Less…" : "More…"}</span>
+          <span class="item-label">{showMore ? t("formatPicker.less") : t("formatPicker.more")}</span>
           <span class="item-arrow">{showMore ? "▴" : "▾"}</span>
         </button>
       {/if}
@@ -281,7 +282,7 @@
     color: var(--text-normal);
     font: inherit;
     font-size: var(--font-size-ui);
-    text-align: left;
+    text-align: start;
     cursor: pointer;
     outline: none;
     transition: background 0.08s ease;
@@ -314,11 +315,11 @@
 
   .checkmark {
     color: var(--accent);
-    margin-right: 4px;
+    margin-inline-end: 4px;
   }
 
   .item-ext {
-    margin-left: 12px;
+    margin-inline-start: 12px;
     font-family: var(--font-mono);
     font-size: 11px;
     color: var(--text-faint);

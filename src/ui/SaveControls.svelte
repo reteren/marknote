@@ -1,5 +1,6 @@
 <script lang="ts">
   import { invoke } from "@tauri-apps/api/core";
+  import { formatTime, translate as t } from "../i18n";
   import type { FormatCapabilities } from "../state/formats.svelte";
   import type { LineEnding, SaveStatus, SaveResult } from "../state/document.svelte";
 
@@ -59,16 +60,15 @@
   const isEmptyUntitled = $derived(path === null && !dirty && text.length === 0);
 
   const statusLabel = $derived.by(() => {
-    if (isReadOnly) return "Read-only";
-    if (isPending) return "Saving…";
-    if (format.lossy && dirty) return "● Unsaved changes";
+    if (isReadOnly) return t("save.readOnly");
+    if (isPending) return t("save.saving");
+    if (format.lossy && dirty) return `● ${t("save.unsavedChanges")}`;
     if (saveStatus === "saved") {
-      if (!lastSavedAt) return "Saved";
+      if (!lastSavedAt) return t("save.saved");
       const parsed = typeof lastSavedAt === "string" ? new Date(lastSavedAt) : lastSavedAt;
-      const time = parsed.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-      return `Saved ${time}`;
+      return t("save.savedAt", { time: formatTime(parsed) });
     }
-    return "● Unsaved";
+    return `● ${t("save.unsaved")}`;
   });
 
   const saveDisabled = $derived(
@@ -143,14 +143,14 @@
   }
 </script>
 
-<div class="save-controls" aria-label="Document save controls">
+<div class="save-controls" aria-label={t("menu.documentSaveControls")}>
   <span
     class="status-indicator"
     class:status-pending={isPending}
     class:status-saved={isSaved}
     class:status-readonly={isReadOnly}
     class:status-faint={isEmptyUntitled}
-    title={isReadOnly ? "Document is read-only" : statusLabel}
+    title={isReadOnly ? t("save.documentReadOnly") : statusLabel}
   >
     {statusLabel}
   </span>
@@ -160,9 +160,9 @@
     class="save-btn"
     disabled={saveDisabled}
     onclick={handleSave}
-    title={isReadOnly ? "File is read-only (saving is disabled)" : "Save (Ctrl+S)"}
+    title={isReadOnly ? t("save.fileReadOnly") : t("save.saveShortcut")}
   >
-    Save
+    {t("menu.save")}
   </button>
 
   <button
@@ -170,9 +170,9 @@
     class="save-as-btn"
     disabled={saveAsDisabled}
     onclick={handleSaveAs}
-    title={isReadOnly ? "Save as a Markdown document" : "Save as… (Ctrl+Shift+S)"}
+    title={isReadOnly ? t("save.saveAsMarkdown") : t("save.saveAsShortcut")}
   >
-    {isReadOnly && !format.editable ? "Save as Markdown…" : "Save as…"}
+    {isReadOnly && !format.editable ? t("save.saveAsMarkdownButton") : t("menu.saveAs")}
   </button>
 </div>
 

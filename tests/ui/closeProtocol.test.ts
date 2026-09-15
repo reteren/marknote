@@ -26,6 +26,8 @@ vi.mock("@tauri-apps/api/window", () => ({
 import App from "../../src/App.svelte";
 import { documentState, resetDocument } from "../../src/state/document.svelte";
 import { markdownFormat } from "../../src/state/formats.svelte";
+import { translate as t } from "../../src/i18n";
+import { formatLabel } from "../../src/i18n";
 
 async function settle(): Promise<void> {
   for (let index = 0; index < 12; index += 1) await Promise.resolve();
@@ -33,7 +35,7 @@ async function settle(): Promise<void> {
 
 async function createEditedUntitled(): Promise<void> {
   const markdownTile = Array.from(document.querySelectorAll<HTMLButtonElement>("button"))
-    .find((button) => button.textContent?.includes("Markdown") && button.textContent.includes(".md"));
+    .find((button) => button.textContent?.includes(formatLabel("markdown", "Markdown")) && button.textContent.includes(".md"));
   expect(markdownTile).toBeDefined();
   await fireEvent.click(markdownTile!);
   await settle();
@@ -81,7 +83,7 @@ describe("native close confirmation", () => {
     await settle();
 
     expect(document.querySelector('[role="dialog"]')).not.toBeNull();
-    expect(document.querySelector('[role="dialog"]')?.textContent).toContain("Save changes?");
+    expect(document.querySelector('[role="dialog"]')?.textContent).toContain(t("dialog.close.title"));
     expect(tauri.invoke).not.toHaveBeenCalledWith("respond_to_close", expect.anything());
   });
 
@@ -163,9 +165,9 @@ describe("native close confirmation", () => {
   });
 
   it.each([
-    ["Save", true],
-    ["Discard", true],
-    ["Cancel", false],
+    [t("dialog.close.save"), true],
+    [t("dialog.close.discard"), true],
+    [t("dialog.close.cancel"), false],
   ] as const)("handles the %s choice for an untitled dirty document", async (choice, allowed) => {
     tauri.invoke.mockImplementation(async (command: string) => {
       if (command === "list_creatable_formats") return [markdownFormat];
@@ -193,14 +195,14 @@ describe("native close confirmation", () => {
 
     expect(document.querySelector('[role="dialog"]')).toBeNull();
     expect(tauri.invoke).toHaveBeenCalledWith("respond_to_close", { allow: allowed });
-    if (choice === "Save") {
+    if (choice === t("dialog.close.save")) {
       expect(tauri.invoke).toHaveBeenCalledWith("save_as", expect.objectContaining({ text: "qa-unsaved" }));
       expect(documentState.dirty).toBe(false);
       expect(documentState.path).toBe("C:/notes/qa-unsaved.md");
     } else {
       expect(tauri.invoke).not.toHaveBeenCalledWith("save_as", expect.anything());
     }
-    if (choice === "Cancel") {
+    if (choice === t("dialog.close.cancel")) {
       expect(documentState.dirty).toBe(true);
       expect(documentState.text).toBe("qa-unsaved");
     }
