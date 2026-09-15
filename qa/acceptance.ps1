@@ -747,11 +747,14 @@ function Test-UnsavedClose {
     }
     $window = Get-WindowForProcess -State $windowWait.State -ProcessId $process.Id
     [void](Bring-WindowToFront -Window $window)
-    $markdownTile = Wait-UiText -ProcessId $process.Id -Expected "Markdown" -TestId "TC-09-format-tile" -TimeoutSec 15
+    # Имя плитки на стартовом экране — «Markdown .md», с расширением.
+    # Короткое «Markdown» попадает в кнопку типа документа в строке
+    # состояния, и сценарий кликал не туда.
+    $markdownTile = Wait-UiText -ProcessId $process.Id -Expected "Markdown .md" -TestId "TC-09-format-tile" -TimeoutSec 15
     if (-not $markdownTile.Found) {
         return New-Outcome -Passed $false -Details "Плитка Markdown не появилась на стартовом экране" -ElapsedMs $markdownTile.ElapsedMs
     }
-    if (-not (Click-UiElement -ProcessId $process.Id -Name "Markdown")) {
+    if (-not (Click-UiElement -ProcessId $process.Id -Name "Markdown .md")) {
         return New-Outcome -Passed $false -Details "Плитка Markdown не нажимается через UI Automation" -ElapsedMs $markdownTile.ElapsedMs
     }
     $screenGone = Wait-UiText -ProcessId $process.Id -Expected "Choose document format" -Absent $true -TestId "TC-09-start-screen-closed" -TimeoutSec 10
