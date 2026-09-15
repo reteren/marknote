@@ -518,16 +518,6 @@ function Send-WindowKeys {
         [MarkNote.Acceptance.Native]::keybd_event(0x12, 0, 2, [UIntPtr]::Zero)
         return $true
     }
-    if ($Keys -eq "qa-unsaved") {
-        # q=0x51, a=0x41, -=0xBD, u=0x55, n=0x4E, s=0x53, a=0x41, v=0x56, e=0x45, d=0x44
-        $vks = @(0x51, 0x41, 0xBD, 0x55, 0x4E, 0x53, 0x41, 0x56, 0x45, 0x44)
-        foreach ($vk in $vks) {
-            [MarkNote.Acceptance.Native]::keybd_event($vk, 0, 0, [UIntPtr]::Zero)
-            [MarkNote.Acceptance.Native]::keybd_event($vk, 0, 2, [UIntPtr]::Zero)
-            Start-Sleep -Milliseconds 20
-        }
-        return $true
-    }
     try {
         [System.Windows.Forms.SendKeys]::SendWait($Keys)
         return $true
@@ -703,8 +693,10 @@ function Test-SecondWindow {
     $shot = Capture-Window -ProcessId $p1.Id -OutputPath (Get-ShotPath "06_second_window.png") -TitleFilter "showcase.md"
     $screenshot = if ($shot) { $shot.OutputPath } else { "" }
     $titles = ($windows | ForEach-Object { "'$($_.Title)' $($_.Width)x$($_.Height) visible=$($_.Visible)" }) -join "; "
-    $passed = $first.Found -and $secondExit.Found -and $windowWait.Found
-    $details = "firstWindow=$($first.Found), secondExited=$($secondExit.Found), windows=$($windows.Count), processes=$($state.ProcessCount): $titles"
+    $firstTitlePreserved = @($windows | Where-Object { $_.Title -like "*showcase.md*" }).Count -gt 0
+    $secondTitleRouted = @($windows | Where-Object { $_.Title -like "*crlf.md*" }).Count -gt 0
+    $passed = $first.Found -and $secondExit.Found -and $windowWait.Found -and $firstTitlePreserved -and $secondTitleRouted
+    $details = "firstWindow=$($first.Found), secondExited=$($secondExit.Found), firstTitle=$firstTitlePreserved, secondTitle=$secondTitleRouted, windows=$($windows.Count), processes=$($state.ProcessCount): $titles"
     return New-Outcome -Passed $passed -Details $details -ElapsedMs ($first.ElapsedMs + $secondExit.ElapsedMs + $windowWait.ElapsedMs) -Screenshot $screenshot
 }
 
@@ -729,7 +721,8 @@ function Test-BinaryRejected {
     $path = Join-Path $FixturesDir "logo.png"
     $process = Start-MarkNote -Path $path
     $windowWait = Wait-MarkNoteWindow -ProcessId $process.Id -TestId "TC-08-window" -TimeoutSec 15
-    $noticeWait = Wait-UiText -ProcessId $process.Id -Expected "двоичный файл нельзя открыть как текст" -TestId "TC-08" -TimeoutSec 15
+    # Match the actual backend message, not a translated phrase the app does not show.
+    $noticeWait = Wait-UiText -ProcessId $process.Id -Expected "This file appears to be binary and cannot be opened as text." -TestId "TC-08" -TimeoutSec 15
     $state = $noticeWait.State
     $alive = @($state.ProcessIds | Where-Object { $_ -eq $process.Id }).Count -gt 0
     $shot = Capture-Window -ProcessId $process.Id -OutputPath (Get-ShotPath "08_binary_rejected.png")
@@ -757,18 +750,21 @@ function Test-UnsavedClose {
     if (-not (Click-UiElement -ProcessId $process.Id -Name "Markdown .md")) {
         return New-Outcome -Passed $false -Details "Плитка Markdown не нажимается через UI Automation" -ElapsedMs $markdownTile.ElapsedMs
     }
-    $screenGone = Wait-UiText -ProcessId $process.Id -Expected "Choose document format" -Absent $true -TestId "TC-09-start-screen-closed" -TimeoutSec 10
+    # "Choose document format" labels the persistent status-bar format picker,
+    # not just the start screen. The Markdown tile is unique to the start screen.
+    $screenGone = Wait-UiText -ProcessId $process.Id -Expected "Markdown .md" -Absent $true -TestId "TC-09-start-screen-closed" -TimeoutSec 10
+    if (-not $screenGone.Found) {
+        return New-Outcome -Passed $false -Details "Стартовый экран остался виден после выбора Markdown" -ElapsedMs ($markdownTile.ElapsedMs + $screenGone.ElapsedMs)
+    }
     [void](Bring-WindowToFront -Window (Get-WindowForProcess -State $screenGone.State -ProcessId $process.Id))
     [void](Send-WindowKeys -Keys "qa-unsaved")
-    $typed = Wait-Until -TestId "TC-09" -Phase "ui-unsaved" -TimeoutSec 5 -Condition {
-        param($state)
-        $w = Get-WindowForProcess -State $state -ProcessId $process.Id
-        if (-not $w) { return $false }
-        $names = @(Get-UiAutomationNames -Handle ([IntPtr]$w.Handle))
-        return (@($names | Where-Object { $_ -like "*Unsaved*" -or $_ -like "*qa-unsaved*" }).Count -gt 0)
-    }
+    $typed = Wait-UiText -ProcessId $process.Id -Expected "10 chars" -TestId "TC-09" -TimeoutSec 5
     if (-not $typed.Found) {
-        return New-Outcome -Passed $false -Details "Документ не перешёл в состояние Unsaved; startScreenClosed=$($screenGone.Found)" -ElapsedMs ($markdownTile.ElapsedMs + $screenGone.ElapsedMs + $typed.ElapsedMs)
+        $state = Get-MarkNoteState
+        $w = Get-WindowForProcess -State $state -ProcessId $process.Id
+        $names = if ($w) { @(Get-UiAutomationNames -Handle ([IntPtr]$w.Handle)) } else { @() }
+        $status = ($names | Where-Object { $_ -match "\b\d+ chars\b" } | Select-Object -First 1)
+        return New-Outcome -Passed $false -Details "В редактор не попал текст qa-unsaved; startScreenClosed=$($screenGone.Found), status='$status'" -ElapsedMs ($markdownTile.ElapsedMs + $screenGone.ElapsedMs + $typed.ElapsedMs)
     }
     [void](Send-WindowKeys -Keys "%{F4}")
     $prompt = Wait-Until -TestId "TC-09" -Phase "ui-close-prompt" -TimeoutSec 5 -Condition {

@@ -11,7 +11,7 @@ use std::{
 
 use tauri::{
     webview::{PageLoadEvent, WebviewWindowBuilder},
-    Emitter, Manager, WebviewWindow, WindowEvent,
+    Emitter, EventTarget, Manager, WebviewWindow, WindowEvent,
 };
 
 use crate::{messages::UserMessage, watcher::FileWatcher};
@@ -337,7 +337,8 @@ pub fn route_file(app: &tauri::AppHandle, path: impl AsRef<Path>) -> Result<(), 
     // subsequent opens). For a window whose webview is still loading this
     // may be missed, but the pending IPC value above remains available.
     window
-        .emit(
+        .emit_to(
+            EventTarget::webview_window(window.label()),
             "open-file-request",
             serde_json::json!({ "path": canonical.to_string_lossy().into_owned() }),
         )
@@ -413,7 +414,11 @@ fn install_window_handlers(window: &WebviewWindow, app: &tauri::AppHandle) {
                 // whether to call `respond_to_close(allow = true/false)`.
                 // An unresponsive webview must not make its native window
                 // impossible to close, so arm a bounded fallback as well.
-                let _ = event_window.emit("save-before-close", serde_json::json!({}));
+                let _ = event_window.emit_to(
+                    EventTarget::webview_window(&label),
+                    "save-before-close",
+                    serde_json::json!({}),
+                );
                 let timeout_window = event_window.clone();
                 let timeout_app = app.clone();
                 let timeout_label = label.clone();

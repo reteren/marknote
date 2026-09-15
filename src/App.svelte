@@ -3,7 +3,7 @@
   import { EditorSelection } from "@codemirror/state";
   import type { Command } from "@codemirror/view";
   import { invoke } from "@tauri-apps/api/core";
-  import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import type { UnlistenFn } from "@tauri-apps/api/event";
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import { onMount } from "svelte";
   import { toggleWrapper } from "./editor/keymap";
@@ -640,12 +640,13 @@ import HelpDialog, { type HelpMode } from "./ui/HelpDialog.svelte";
 
     const setup = async (): Promise<void> => {
       try {
-        unlistenNativeClose = await listen("save-before-close", handleNativeCloseRequest);
+        const currentWindow = getCurrentWindow();
+        unlistenNativeClose = await currentWindow.listen("save-before-close", handleNativeCloseRequest);
         nativeCloseReady = true;
-        unlistenOpen = await listen<OpenFileRequest>("open-file-request", ({ payload }) => {
+        unlistenOpen = await currentWindow.listen<OpenFileRequest>("open-file-request", ({ payload }) => {
           if (payload?.path) void openFile(payload.path);
         });
-        unlistenNativeDrop = await listen<{ paths?: string[] }>("tauri://drag-drop", ({ payload }) => {
+        unlistenNativeDrop = await currentWindow.listen<{ paths?: string[] }>("tauri://drag-drop", ({ payload }) => {
           handleDroppedPaths(payload?.paths ?? []);
         });
         if (disposed) {
@@ -734,7 +735,7 @@ import HelpDialog, { type HelpMode } from "./ui/HelpDialog.svelte";
       />
     {/if}
     {#if errorMessage}
-      <div class="notice" role="status">{errorMessage}</div>
+      <div class="notice" role="alert" aria-label={errorMessage}>{errorMessage}</div>
     {/if}
   </main>
 
@@ -743,7 +744,7 @@ import HelpDialog, { type HelpMode } from "./ui/HelpDialog.svelte";
   <div
     class="status-area"
     role="region"
-    aria-label="Choose document format"
+    aria-label={`Document format: ${documentState.format.label}; ${stats.chars} chars`}
     onclick={(event) => {
       if ((event.target as Element | null)?.closest(".format-info")) formatPickerOpen = true;
     }}

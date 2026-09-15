@@ -26,6 +26,7 @@ pub trait FormatAdapter: Send + Sync {
 
 pub mod code;
 pub mod docx;
+pub mod epub;
 pub mod extra;
 pub mod json;
 pub mod markdown;

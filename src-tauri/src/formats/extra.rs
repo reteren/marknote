@@ -1,5 +1,6 @@
 use super::code;
 use super::docx;
+use super::epub;
 use super::json;
 use super::pdf;
 use super::rtf;
@@ -12,10 +13,11 @@ pub fn adapters() -> Vec<Box<dyn FormatAdapter>> {
     list.push(Box::new(json::JsonAdapter));
     list.extend(code::code_adapters());
     // Классы D и E из docs/FORMATS.md идут последними: RTF сохраняется с
-    // потерями, PDF и DOCX открываются только на чтение.
+    // потерями, PDF, DOCX и EPUB открываются только на чтение.
     list.extend(rtf::adapters());
     list.extend(pdf::adapters());
     list.extend(docx::adapters());
+    list.extend(epub::adapters());
     list
 }
 
@@ -28,8 +30,8 @@ mod tests {
     #[test]
     fn test_adapters_order_and_count() {
         let all = adapters();
-        // 1 (JSON) + 14 (код и данные) + 3 (RTF, PDF, DOCX) = 18 адаптеров
-        assert_eq!(all.len(), 18);
+        // 1 (JSON) + 14 (код и данные) + 4 (RTF, PDF, DOCX, EPUB) = 19 адаптеров
+        assert_eq!(all.len(), 19);
 
         let ids: Vec<String> = all.iter().map(|a| a.caps().id).collect();
         assert_eq!(ids[0], "json");
@@ -52,6 +54,7 @@ mod tests {
         assert_eq!(ids[15], "rtf");
         assert_eq!(ids[16], "pdf");
         assert_eq!(ids[17], "docx");
+        assert_eq!(ids[18], "epub");
     }
 
     #[test]
@@ -67,7 +70,7 @@ mod tests {
             match caps.id.as_str() {
                 // Класс E: только чтение. Сохранять нельзя, создавать нечего,
                 // автосохранение бессмысленно, содержимое приходит с потерями.
-                "pdf" | "docx" => {
+                "pdf" | "docx" | "epub" => {
                     assert!(!caps.editable, "{} обязан быть только для чтения", caps.id);
                     assert!(!caps.creatable);
                     assert!(!caps.autosave);
@@ -99,8 +102,8 @@ mod tests {
         let all = crate::formats::all();
         let creatable = crate::formats::creatable();
 
-        // 2 встроенных (markdown, plain) + 18 из extra = 20 форматов
-        assert_eq!(all.len(), 20);
+        // 2 встроенных (markdown, plain) + 19 из extra = 21 формат
+        assert_eq!(all.len(), 21);
         // PDF, DOCX и RTF с нуля не создаются: их нет на стартовом экране.
         assert_eq!(creatable.len(), 17);
 

@@ -2309,6 +2309,7 @@ dependencies = [
  "notify",
  "notify-debouncer-full",
  "pdf-extract",
+ "quick-xml 0.41.0",
  "serde",
  "serde_json",
  "tauri",
@@ -2320,6 +2321,7 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.20",
  "windows-sys 0.59.0",
+ "zip",
 ]
 
 [[package]]
