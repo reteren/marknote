@@ -231,6 +231,7 @@ pub fn initialize(app: &mut tauri::App) -> tauri::Result<()> {
     if let Some(main) = app.get_webview_window(MAIN_WINDOW_LABEL) {
         install_window_handlers(&main, app.handle());
         apply_dark_titlebar(&main);
+        let _ = main.set_title(INITIAL_WINDOW_TITLE);
 
         // В конфигурации окно скрыто, чтобы не показывать белый webview до
         // загрузки Svelte. Показ выполняется сразу после создания webview.
@@ -366,6 +367,7 @@ fn create_window(app: &tauri::AppHandle, label: &str) -> Result<WebviewWindow, S
         .cloned()
         .ok_or_else(|| UserMessage::MainWindowUnavailable.to_string())?;
     config.label = label.to_owned();
+    config.title = INITIAL_WINDOW_TITLE.to_owned();
     config.visible = false;
 
     let window = WebviewWindowBuilder::from_config(app, &config)
@@ -448,26 +450,12 @@ fn raise_window(window: &WebviewWindow) {
     let _ = window.set_focus();
 }
 
-/// Формирует заголовок окна по единому правилу из SPEC §2.6.
-pub(crate) fn document_window_title(path: Option<&Path>, default_extension: &str) -> String {
-    let name = path
-        .and_then(|path| path.file_name())
-        .and_then(|name| name.to_str())
-        .filter(|name| !name.is_empty())
-        .map(str::to_owned)
-        .unwrap_or_else(|| format!("Untitled.{default_extension}"));
-    format!("{name} — MarkNote")
-}
+/// Начальный заголовок окна до передачи заголовка документа фронтендом.
+pub const INITIAL_WINDOW_TITLE: &str = "MarkNote";
 
-/// Применяет заголовок к окну, используя общее форматирование для всех команд.
-pub(crate) fn apply_document_title(
-    window: &WebviewWindow,
-    path: Option<&Path>,
-    default_extension: &str,
-) -> Result<(), String> {
-    window
-        .set_title(&document_window_title(path, default_extension))
-        .map_err(|error| error.to_string())
+/// Применяет готовый заголовок к окну.
+pub(crate) fn apply_document_title(window: &WebviewWindow, title: &str) -> Result<(), String> {
+    window.set_title(title).map_err(|error| error.to_string())
 }
 
 pub(crate) fn canonical_path(path: &Path) -> Result<PathBuf, String> {
@@ -527,7 +515,7 @@ pub fn apply_dark_titlebar(_window: &WebviewWindow) {}
 
 #[cfg(test)]
 mod tests {
-    use super::{document_window_title, preserve_extended_path};
+    use super::{preserve_extended_path, INITIAL_WINDOW_TITLE};
     use std::path::PathBuf;
 
     #[test]
@@ -544,26 +532,7 @@ mod tests {
     }
 
     #[test]
-    fn opened_file_title_uses_file_name() {
-        assert_eq!(
-            document_window_title(Some(std::path::Path::new(r"C:\notes\showcase.md")), "md"),
-            "showcase.md — MarkNote"
-        );
-    }
-
-    #[test]
-    fn new_document_title_uses_untitled_name_and_selected_extension() {
-        assert_eq!(
-            document_window_title(None, "json"),
-            "Untitled.json — MarkNote"
-        );
-    }
-
-    #[test]
-    fn save_as_title_uses_new_file_name() {
-        assert_eq!(
-            document_window_title(Some(std::path::Path::new(r"D:\notes\notes.md")), "md"),
-            "notes.md — MarkNote"
-        );
+    fn initial_window_title_is_plain_app_name() {
+        assert_eq!(INITIAL_WINDOW_TITLE, "MarkNote");
     }
 }

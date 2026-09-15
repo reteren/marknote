@@ -119,6 +119,37 @@ describe("native close confirmation", () => {
     expect(tauri.handlers.has("save-before-close")).toBe(true);
   });
 
+  it("opens Settings from File and Ctrl+, and closes it with Escape", async () => {
+    render(App);
+    await settle();
+
+    const fileButton = Array.from(document.querySelectorAll<HTMLButtonElement>('[role="menubar"] button'))
+      .find((button) => button.textContent?.trim() === t("menu.file"));
+    expect(fileButton).toBeDefined();
+    await fireEvent.click(fileButton!);
+    await settle();
+
+    const settingsItem = document.querySelector<HTMLButtonElement>('[data-menu-item-id="file.settings"]');
+    expect(settingsItem).not.toBeNull();
+    expect(settingsItem?.textContent).toContain(t("menu.settings"));
+    await fireEvent.click(settingsItem!);
+    await settle();
+
+    let settingsDialog = document.querySelector<HTMLElement>('[role="dialog"][aria-label="Settings"]');
+    expect(settingsDialog).not.toBeNull();
+    await fireEvent.keyDown(settingsDialog!, { key: "Escape" });
+    await settle();
+    expect(document.querySelector('[role="dialog"][aria-label="Settings"]')).toBeNull();
+
+    await fireEvent.keyDown(window, { key: ",", ctrlKey: true });
+    await settle();
+    settingsDialog = document.querySelector<HTMLElement>('[role="dialog"][aria-label="Settings"]');
+    expect(settingsDialog).not.toBeNull();
+    await fireEvent.keyDown(settingsDialog!, { key: "Escape" });
+    await settle();
+    expect(document.querySelector('[role="dialog"][aria-label="Settings"]')).toBeNull();
+  });
+
   it("autosaves a dirty named document before closing without asking", async () => {
     tauri.invoke.mockImplementation(async (command: string) => {
       if (command === "list_creatable_formats") return [markdownFormat];

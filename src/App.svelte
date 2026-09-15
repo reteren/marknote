@@ -36,6 +36,7 @@ import ContextMenu, { type ContextMenuAction } from "./ui/ContextMenu.svelte";
 import FormatPicker from "./ui/FormatPicker.svelte";
 import Notice from "./ui/Notice.svelte";
 import HelpDialog, { type HelpMode } from "./ui/HelpDialog.svelte";
+import SettingsWindow from "./ui/SettingsWindow.svelte";
   import { formatLabel, translate as t } from "./i18n";
   import type { EditorView } from "@codemirror/view";
 
@@ -59,6 +60,7 @@ import HelpDialog, { type HelpMode } from "./ui/HelpDialog.svelte";
   let nativeClosePending = $state(false);
   let closeAfterDecision = $state(false);
   let helpMode = $state<HelpMode | null>(null);
+  let settingsOpen = $state(false);
   let stats = $state<EditorStats>({
     line: 1,
     col: 1,
@@ -143,6 +145,9 @@ import HelpDialog, { type HelpMode } from "./ui/HelpDialog.svelte";
     getFormats: () => formatsState.items,
     notify: reportError,
     closeWindow: () => void requestClose(),
+    openSettings: () => {
+      settingsOpen = true;
+    },
     zoomIn: () => {
       if (editorView) zoomIn(editorView);
     },
@@ -526,6 +531,7 @@ import HelpDialog, { type HelpMode } from "./ui/HelpDialog.svelte";
       case "file.save": void saveNow(); break;
       case "file.saveAs": void saveDocumentAs(); break;
       case "file.close": void requestClose(); break;
+      case "file.settings": void actions.run(id); break;
       case "edit.undo": runEditor(undo); break;
       case "edit.redo": runEditor(redo); break;
       case "edit.cut": clipboard("cut"); break;
@@ -570,6 +576,13 @@ import HelpDialog, { type HelpMode } from "./ui/HelpDialog.svelte";
   function handleDragOver(event: DragEvent): void {
     event.preventDefault();
     if (event.dataTransfer) event.dataTransfer.dropEffect = "copy";
+  }
+
+  function handleWindowKeydown(event: KeyboardEvent): void {
+    if ((event.ctrlKey || event.metaKey) && event.key === ",") {
+      event.preventDefault();
+      settingsOpen = true;
+    }
   }
 
   function fileUriToPath(value: string): string {
@@ -689,6 +702,8 @@ import HelpDialog, { type HelpMode } from "./ui/HelpDialog.svelte";
   });
 </script>
 
+<svelte:window onkeydown={handleWindowKeydown} />
+
 <svelte:head>
   <title>{title}</title>
 </svelte:head>
@@ -789,6 +804,14 @@ import HelpDialog, { type HelpMode } from "./ui/HelpDialog.svelte";
 
   {#if helpMode}
     <HelpDialog mode={helpMode} onClose={() => (helpMode = null)} />
+  {/if}
+
+  {#if settingsOpen}
+    <SettingsWindow
+      {editorView}
+      onClose={() => (settingsOpen = false)}
+      onFocusEditor={() => editorView?.focus()}
+    />
   {/if}
 
   {#if closePromptOpen}

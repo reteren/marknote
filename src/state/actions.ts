@@ -47,6 +47,7 @@ export type ActionsDependencies = {
   notify?: (message: string) => void;
   onDocumentReplaced?: () => void;
   closeWindow?: () => void | Promise<void>;
+  openSettings?: () => void | Promise<void>;
   goToLine?: () => void | Promise<void>;
   zoomIn?: () => void | Promise<void>;
   zoomOut?: () => void | Promise<void>;
@@ -106,6 +107,7 @@ const menuActionIds = new Set([
   "file.save",
   "file.saveAs",
   "file.close",
+  "file.settings",
   "edit.undo",
   "edit.redo",
   "edit.cut",
@@ -507,6 +509,7 @@ export function createActions(dependencies: ActionsDependencies = {}): AppAction
     ["file.save", () => save()],
     ["file.saveAs", () => saveAs()],
     ["file.close", () => invokeUi(dependencies.closeWindow)],
+    ["file.settings", () => invokeUi(dependencies.openSettings, notify)],
     ["edit.undo", () => command(getView(), undo)],
     ["edit.redo", () => command(getView(), redo)],
     ["edit.cut", () => cut()],
@@ -586,6 +589,7 @@ export function createActions(dependencies: ActionsDependencies = {}): AppAction
     if (id === "open-link" || id === "copy-link" || id === "edit-link") return Boolean(payload);
     if (id === "open-image" || id === "copy-image") return Boolean(payload);
     if (id === "file.close") return Boolean(dependencies.closeWindow);
+    if (id === "file.settings") return Boolean(dependencies.openSettings);
     if (id === "help.shortcuts" || id === "help.markdownReference" || id === "help.about") return Boolean(dialogs.showHelp);
     if (id === "view.zoomIn") return Boolean(dependencies.zoomIn);
     if (id === "view.zoomOut") return Boolean(dependencies.zoomOut);

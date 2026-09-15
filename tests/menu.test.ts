@@ -48,6 +48,7 @@ describe("menu model", () => {
     expect(shortcuts.get("file.save")).toBe("Ctrl+S");
     expect(shortcuts.get("file.saveAs")).toBe("Ctrl+Shift+S");
     expect(shortcuts.get("file.close")).toBe("Ctrl+W");
+    expect(shortcuts.get("file.settings")).toBe("Ctrl+,");
     expect(shortcuts.get("edit.undo")).toBe("Ctrl+Z");
     expect(shortcuts.get("edit.redo")).toBe("Ctrl+Shift+Z / Ctrl+Y");
     expect(shortcuts.get("edit.cut")).toBe("Ctrl+X");

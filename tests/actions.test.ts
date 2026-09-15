@@ -75,6 +75,16 @@ beforeEach(() => {
 });
 
 describe("application actions", () => {
+  it("routes the File → Settings command to the injected settings-window action", async () => {
+    const openSettings = vi.fn();
+    const actions = createActions({ openSettings });
+
+    expect(actions.hasAction("file.settings")).toBe(true);
+    expect(actions.isAvailable("file.settings")).toBe(true);
+    expect(await actions.run("file.settings")).toBe(true);
+    expect(openSettings).toHaveBeenCalledOnce();
+  });
+
   it("creates a document through new_document and updates the shared state", async () => {
     invoke.mockResolvedValueOnce({ text: "", format: plainFormat });
     const view = viewFor("");

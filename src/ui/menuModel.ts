@@ -102,6 +102,8 @@ export function createMenuModel(
         item("file.saveAs", t("menu.saveAs"), "Ctrl+Shift+S"),
         separator("file.separator.close"),
         item("file.close", t("menu.close"), "Ctrl+W"),
+        separator("file.separator.settings"),
+        item("file.settings", t("menu.settings"), "Ctrl+,"),
       ],
     },
     {
