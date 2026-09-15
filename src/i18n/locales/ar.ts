@@ -39,7 +39,7 @@ const ar = {
   "menu.resetZoom": "إعادة ضبط التكبير",
   "menu.keyboardShortcuts": "اختصارات لوحة المفاتيح",
   "menu.markdownReference": "مرجع Markdown",
-  "menu.about": "حول البرنامج",
+  "menu.about": "حول",
   "menu.mainMenu": "القائمة الرئيسية",
   "menu.sections": "أقسام القائمة",
   "menu.documentSaveControls": "عناصر التحكم في حفظ المستند",
