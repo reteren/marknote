@@ -11,7 +11,8 @@ use thiserror::Error;
 
 use crate::atomic_write;
 
-const UI_LANGUAGES: &[&str] = &["en", "ru", "de", "es", "pt", "it", "fr", "zh", "ja", "ar"];
+pub(crate) const UI_LANGUAGES: &[&str] =
+    &["en", "ru", "de", "es", "pt", "it", "fr", "zh", "ja", "ar"];
 const MIN_ZOOM_PERCENT: i32 = 50;
 const MAX_ZOOM_PERCENT: i32 = 200;
 const MIN_AUTOSAVE_DELAY_MS: i64 = 250;

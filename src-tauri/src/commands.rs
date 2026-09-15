@@ -18,6 +18,7 @@ use crate::{
     formats::{self, FormatCapabilities},
     messages::UserMessage,
     settings::{Settings, SettingsError, SettingsState},
+    spellcheck,
     windows::{self, AppState, FileSnapshot},
 };
 
@@ -427,6 +428,11 @@ pub fn get_settings(state: State<'_, SettingsState>) -> Settings {
 #[tauri::command]
 pub fn get_resolved_language(state: State<'_, SettingsState>) -> String {
     state.get().resolved_language()
+}
+
+#[tauri::command]
+pub fn list_spellcheck_languages() -> Vec<String> {
+    spellcheck::available_language_codes()
 }
 
 #[tauri::command]

@@ -128,6 +128,7 @@ impl FileWatcher {
 | `reset_settings` | — | `Settings` — умолчания |
 | `get_resolved_language` | — | `String` — язык интерфейса с учётом значения `system` |
 | `reveal_settings_file` | — | `()` — показать `settings.json` в проводнике |
+| `list_spellcheck_languages` | — | `string[]` — языки, для которых в системе есть словарь |
 
 ```ts
 // то, что видит фронтенд (serde camelCase)
