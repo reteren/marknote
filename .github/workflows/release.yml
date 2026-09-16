@@ -41,11 +41,27 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
+      # Тег и версия в манифесте задаются вручную и в разных файлах, поэтому
+      # разъехаться они могут молча. Проверяем до сборки: иначе получасовая
+      # сборка закончится установщиком не с той версией на вкладке релиза.
+      - name: Check tag matches manifest version
+        shell: pwsh
+        run: |
+          $tag = "${{ github.ref_name }}" -replace '^v', ''
+          $manifest = (Get-Content src-tauri/tauri.conf.json -Raw | ConvertFrom-Json).version
+          if ($tag -ne $manifest) {
+            throw "Тег v$tag не совпадает с версией $manifest в tauri.conf.json"
+          }
+          "VERSION=$manifest" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
       - name: Build and publish release
         run: npm run tauri build
 
       - name: Upload installer to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: src-tauri/target/release/bundle/nsis/MarkNote_1.0.0_x64-setup.exe
+          # Имя собирается из версии, а не из маски: каталог bundle переживает
+          # сборки (он лежит в кэше Cargo), и маска подхватила бы заодно
+          # установщики прошлых версий.
+          files: src-tauri/target/release/bundle/nsis/MarkNote_${{ env.VERSION }}_x64-setup.exe
           body_path: scripts/RELEASE_NOTES.md
