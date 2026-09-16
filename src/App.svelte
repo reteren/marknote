@@ -837,7 +837,7 @@ import HelpDialog, { type HelpMode } from "./ui/HelpDialog.svelte";
 <style>
   .app-shell {
     display: grid;
-    grid-template-rows: auto auto minmax(0, 1fr) auto;
+    grid-template-rows: auto auto auto minmax(0, 1fr) auto;
     height: 100vh;
     overflow: hidden;
     background: var(--bg-primary);
@@ -846,6 +846,13 @@ import HelpDialog, { type HelpMode } from "./ui/HelpDialog.svelte";
   .menu-row {
     position: relative;
     min-width: 0;
+  }
+
+  :global(.menu-row .menu-tabs) { order: 0; }
+  :global(.menu-row .window-title) {
+    order: 1;
+    margin-inline-start: 8px;
+    margin-inline-end: 0;
   }
 
   /* MenuBar has a legacy fallback; the shared component below owns the save state. */

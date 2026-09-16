@@ -208,7 +208,7 @@
 
   .window-control:hover { background: var(--bg-modifier-hover); color: var(--text-normal); }
   .window-control:active { background: var(--bg-modifier-active); }
-  .close-control:hover { background: var(--text-error); color: var(--text-on-accent); }
+  .close-control:hover { background: var(--text-error); color: var(--text-on-danger); }
   .close-control:active { background: var(--text-error); }
 
   .window-control svg {

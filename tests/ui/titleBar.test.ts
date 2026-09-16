@@ -48,6 +48,7 @@ describe("TitleBar", () => {
     await waitFor(() => expect(mocks.window.onResized).toHaveBeenCalledOnce());
     expect(screen.getByText("notes.md — MarkNote")).toBeInTheDocument();
     expect(container.querySelector(".titlebar-drag-region")).toHaveAttribute("data-tauri-drag-region");
+    expect(container.querySelector(".window-controls")?.closest("[data-tauri-drag-region]")).toBeNull();
     expect(container.querySelectorAll(".window-control")).toHaveLength(3);
   });
 

@@ -20,14 +20,19 @@
   --text-normal: #dadada;
   --text-muted: #999999;
   --text-faint: #666666;
-  --text-on-accent: #ffffff;
+  --text-on-accent: #1e1e1e;
+  /* Текст на красной заливке — своё значение, а не текст на акценте:
+     акцент стал светлым и требует тёмной подписи, красный по-прежнему
+     требует белой. Один общий токен на две заливки давал тёмный крестик
+     на красной кнопке закрытия. */
+  --text-on-danger: #ffffff;
   --text-error: #e35d5d;
   --text-success: #6bb96b;
 
   /* Акцент */
-  --accent: #7c6cf0;
-  --accent-hover: #8b7cf5;
-  --text-accent: #a292f5;
+  --accent: #5EACC7;
+  --accent-hover: #6CB3CC;
+  --text-accent: #7EB8CC;
 
   /* Выделение и курсор */
   --text-selection: rgba(80, 100, 155, 0.38);
@@ -107,6 +112,11 @@ body {
   font-size: var(--font-size-ui);
   line-height: var(--line-height-ui);
   -webkit-font-smoothing: antialiased;
+}
+
+#app {
+  height: 100%;
+  background: var(--bg-primary);
 }
 
 /* Выделение текста не должно ничего перекрашивать — только подложку */
