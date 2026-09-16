@@ -7,7 +7,10 @@ import { calloutTheme } from "./callouts";
 import { footnoteTheme, footnoteTooltip } from "./footnotes";
 
 export function livePreview(opts?: {
-  /** Выше этого размера документа предпросмотр выключается. По умолчанию 5 МБ. */
+  /** Жёсткий порог размера документа, перекрывающий настройку
+   *  livePreview.disableAboveBytes. Нужен тестам, чтобы не собирать
+   *  пятимегабайтный документ; в приложении не задаётся — иначе настройка
+   *  перестанет действовать, и человек не поймёт почему. */
   maxBytes?: number;
   /** Отдаёт data-URL для картинки, относительной к документу. */
   resolveImage?: (src: string) => Promise<string>;
@@ -25,3 +28,4 @@ export function livePreview(opts?: {
 
 export { livePreviewPlugin } from "./plugin";
 export { isNodeActive } from "./isNodeActive";
+export { livePreviewSettings } from "./settings";

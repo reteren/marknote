@@ -2,6 +2,7 @@ import type { EditorState } from "@codemirror/state";
 import { Decoration, EditorView, WidgetType } from "@codemirror/view";
 import type { SyntaxNode } from "@lezer/common";
 import type { DecorationSpec } from "./inline";
+import type { LivePreviewConfig } from "./settings";
 import { CheckboxWidget } from "./widgets/Checkbox";
 import { HrWidget } from "./widgets/Hr";
 import { MathWidget } from "./widgets/Math";
@@ -46,7 +47,12 @@ function isTaskChecked(node: SyntaxNode, state: EditorState) {
 }
 
 /** Построение заголовков, списков, цитат и блочных виджетов. */
-export function decorationsForBlockNode(node: SyntaxNode, active: boolean, state: EditorState): DecorationSpec[] {
+export function decorationsForBlockNode(
+  node: SyntaxNode,
+  active: boolean,
+  state: EditorState,
+  config?: LivePreviewConfig,
+): DecorationSpec[] {
   if (/^ATXHeading[1-6]$/.test(node.name)) {
     const level = Number(node.name.slice(-1));
     const specs: DecorationSpec[] = [mark(node.from, node.to, `cm-marknote-heading cm-marknote-heading-${level}`)];
@@ -110,6 +116,9 @@ export function decorationsForBlockNode(node: SyntaxNode, active: boolean, state
   }
 
   if (node.name === "MathBlock") {
+    if (config?.renderFormulas === false) {
+      return [mark(node.from, node.to, "cm-marknote-math-source")];
+    }
     const marks = children(node, "MathMark");
     const sourceFrom = marks[0]?.to ?? node.from + 2;
     const sourceTo = marks.length > 1 ? marks[marks.length - 1].from : node.to;

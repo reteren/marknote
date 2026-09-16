@@ -5,10 +5,8 @@
 
 import type { Extension } from "@codemirror/state";
 import type { Settings } from "../../state/settings.svelte";
+import { livePreviewSettings } from "../livePreview";
 
 export function livePreviewSettingsExtensions(settings: Settings | null): Extension[] {
-  // Пока раздел не перенесён: предпросмотр подключается в createEditor
-  // безусловно, и отсутствие настроек обязано означать именно это.
-  void settings;
-  return [];
+  return [livePreviewSettings(settings?.livePreview)];
 }

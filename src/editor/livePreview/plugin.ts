@@ -15,12 +15,14 @@ import { tableBuilder } from "./tables";
 import { calloutBuilder } from "./callouts";
 import { footnoteBuilder } from "./footnotes";
 import { decorationsForInlineNode, safeLinkHref, type DecorationSpec } from "./inline";
+import { livePreviewConfigFacet, type LivePreviewConfig } from "./settings";
 import type { BlockBuilder, BuilderContext } from "./types";
 import type { ImageResolver } from "./widgets/Image";
 
 export interface LivePreviewOptions {
   maxBytes?: number;
   resolveImage?: ImageResolver;
+  config?: Partial<LivePreviewConfig>;
 }
 
 export interface PreviewBuildResult {
@@ -112,8 +114,11 @@ function buildDecorationSetsInternal(
   options: LivePreviewOptions,
   view?: EditorView,
 ): PreviewBuildResult {
-  const maxBytes = options.maxBytes ?? 5 * 1024 * 1024;
-  if (byteLength(state) > maxBytes) return { decorations: Decoration.none, atomicRanges: Decoration.none, disabled: true };
+  const stateConfig = state.facet(livePreviewConfigFacet);
+  const config = options.config ? { ...stateConfig, ...options.config } : stateConfig;
+
+  const maxBytes = options.maxBytes ?? config.disableAboveBytes;
+  if (!config.enabled || byteLength(state) > maxBytes) return { decorations: Decoration.none, atomicRanges: Decoration.none, disabled: true };
 
   const specs: DecorationSpec[] = [];
   const builderAtomicRanges: Array<Range<Decoration>> = [];
@@ -130,12 +135,12 @@ function buildDecorationSetsInternal(
         if (seen.has(key)) return;
         seen.add(key);
 
-        const active = isNodeActive(node, state.selection, state.doc);
+        const active = isNodeActive(node, state.selection, state.doc, config.revealMarkup);
         if (view && runBlockBuilders(view, node, active, specs, builderAtomicRanges)) return false;
 
         const nodeSpecs = isBlockNode(node)
-          ? decorationsForBlockNode(node, active, state)
-          : decorationsForInlineNode(node, active, state, options.resolveImage);
+          ? decorationsForBlockNode(node, active, state, config)
+          : decorationsForInlineNode(node, active, state, options.resolveImage, config);
         specs.push(...nodeSpecs);
       },
     });
@@ -176,24 +181,30 @@ export class LivePreviewValue {
   decorations: DecorationSet = Decoration.none;
   atomicRanges: DecorationSet = Decoration.none;
   disabled = false;
-  readonly maxBytes: number;
-  readonly resolveImage?: ImageResolver;
+  readonly options: LivePreviewOptions;
 
   constructor(view: EditorView, options: LivePreviewOptions = {}) {
-    this.maxBytes = options.maxBytes ?? 5 * 1024 * 1024;
-    this.resolveImage = options.resolveImage;
+    this.options = options;
     this.rebuild(view);
   }
 
+  get maxBytes(): number {
+    return this.options.maxBytes ?? 5 * 1024 * 1024;
+  }
+
+  get resolveImage(): ImageResolver | undefined {
+    return this.options.resolveImage;
+  }
+
   update(update: ViewUpdate) {
-    if (update.docChanged || update.selectionSet || update.viewportChanged) this.rebuild(update.view);
+    const configChanged = update.state.facet(livePreviewConfigFacet) !== update.startState.facet(livePreviewConfigFacet);
+    if (update.docChanged || update.selectionSet || update.viewportChanged || configChanged) {
+      this.rebuild(update.view);
+    }
   }
 
   private rebuild(view: EditorView) {
-    const result = buildDecorationSetsInternal(view.state, view.visibleRanges, {
-      maxBytes: this.maxBytes,
-      resolveImage: this.resolveImage,
-    }, view);
+    const result = buildDecorationSetsInternal(view.state, view.visibleRanges, this.options, view);
     this.disabled = result.disabled;
     this.decorations = result.decorations;
     this.atomicRanges = result.atomicRanges;

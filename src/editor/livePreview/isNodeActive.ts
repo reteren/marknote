@@ -1,5 +1,6 @@
 import type { EditorSelection, Text } from "@codemirror/state";
 import type { SyntaxNode } from "@lezer/common";
+import type { MarkupRevealMode } from "../../state/settings.svelte";
 
 const lineScopedNames = new Set([
   "ATXHeading1",
@@ -30,9 +31,27 @@ export function nodeActivationRange(node: SyntaxNode, doc?: Text): { from: numbe
 /**
  * Единое правило живого предпросмотра: выделение пересекает узел, включая
  * обе границы. Для маркеров заголовка, списка и цитаты берётся вся строка.
+ *
+ * Режим revealMarkup управляет тем, когда разметка раскрывается:
+ * - "cursor": узел раскрывается только когда курсор пересекает его зону;
+ * - "line": раскрывается вся строка с курсором;
+ * - "never": разметка не прячется вообще (узел всегда активен).
  */
-export function isNodeActive(node: SyntaxNode, selection: EditorSelection, doc?: Text): boolean {
-  const range = nodeActivationRange(node, doc);
+export function isNodeActive(
+  node: SyntaxNode,
+  selection: EditorSelection,
+  doc?: Text,
+  mode: MarkupRevealMode = "cursor",
+): boolean {
+  if (mode === "never") return true;
+
+  const range = mode === "line" && doc
+    ? {
+        from: doc.lineAt(Math.min(node.from, doc.length)).from,
+        to: doc.lineAt(Math.min(node.to, doc.length)).to,
+      }
+    : nodeActivationRange(node, doc);
+
   return selection.ranges.some((selectionRange) =>
     selectionRange.from <= range.to && selectionRange.to >= range.from,
   );

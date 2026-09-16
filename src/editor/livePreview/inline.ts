@@ -1,6 +1,7 @@
 import type { EditorState } from "@codemirror/state";
 import { Decoration } from "@codemirror/view";
 import type { SyntaxNode } from "@lezer/common";
+import type { LivePreviewConfig } from "./settings";
 import { ImageWidget, type ImageResolver } from "./widgets/Image";
 import { MathWidget } from "./widgets/Math";
 
@@ -86,6 +87,7 @@ export function decorationsForInlineNode(
   active: boolean,
   state: EditorState,
   resolveImage?: ImageResolver,
+  config?: LivePreviewConfig,
 ): DecorationSpec[] {
   switch (node.name) {
     case "StrongEmphasis": {
@@ -114,6 +116,9 @@ export function decorationsForInlineNode(
       return [mark(range.from, range.to, "cm-marknote-inline-code"), ...(active ? [] : hideChildren(node, "CodeMark"))];
     }
     case "InlineMath": {
+      if (config?.renderFormulas === false) {
+        return [mark(node.from, node.to, "cm-marknote-math-source")];
+      }
       const source = sourceBetween(node, "MathMark", state);
       if (!active) {
         return [{
@@ -137,6 +142,9 @@ export function decorationsForInlineNode(
       return specs;
     }
     case "Image": {
+      if (config?.renderImages === false) {
+        return [mark(node.from, node.to, "cm-marknote-image-source")];
+      }
       const marks = children(node, "LinkMark");
       const url = node.getChild("URL");
       const altRange = linkTextRange(node, marks, url);
