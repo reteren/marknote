@@ -11,6 +11,8 @@ import type { UnlistenFn } from "@tauri-apps/api/event";
   import { safeLinkHref } from "./editor/livePreview/inline";
   import { createActions } from "./state/actions";
   import { createEditor, setEditorDocumentPath, setEditorFormat, type EditorStats } from "./editor/createEditor";
+  import { applyEditorSettings } from "./editor/settings";
+  import { settingsState } from "./state/settings.svelte";
   import { dispatchSearchOpen } from "./editor/search";
   import { createAutosave, saveAs } from "./state/autosave";
   import {
@@ -168,6 +170,7 @@ import HelpDialog, { type HelpMode } from "./ui/HelpDialog.svelte";
       doc: documentState.text,
       path: documentState.path,
       format: documentState.format,
+      settings: settingsState.ready ? settingsState.settings : null,
       handlers: actions.handlers,
       onChange: (text) => {
         setDocumentText(text);
@@ -650,6 +653,19 @@ import HelpDialog, { type HelpMode } from "./ui/HelpDialog.svelte";
     const text = documentState.text;
     const view = editorView;
     if (view && view.state.doc.toString() !== text) replaceEditorText(text);
+  });
+
+  $effect(() => {
+    // Настройки грузятся сами при импорте модуля и приходят из Rust уже после
+    // того, как редактор поднялся на умолчаниях. Дальше этот эффект держит
+    // редактор в согласии с окном настроек: переключатель перенастраивает
+    // отсек, а не пересоздаёт редактор.
+    // Читаем settings до проверки готовности, чтобы эффект подписался на
+    // изменения и после первой загрузки: Svelte отслеживает то, что прочитано.
+    const settings = settingsState.settings;
+    const ready = settingsState.ready;
+    const view = editorView;
+    if (view && ready) applyEditorSettings(view, settings);
   });
 
   onMount(() => {

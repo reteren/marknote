@@ -17,6 +17,8 @@ import { keymap } from "@codemirror/view";
 import { marknoteTheme } from "./theme";
 import { createImageResolver } from "./imageResolver";
 import type { FormatCapabilities } from "../state/formats.svelte";
+import type { Settings } from "../state/settings.svelte";
+import { editorSettingsExtensions, settingsCompartment } from "./settings";
 
 export type EditorStats = {
   line: number;
@@ -293,6 +295,9 @@ export function createEditor(opts: {
   handlers?: MarknoteKeymapHandlers;
   onChange: (doc: string) => void;
   onStats: (stats: EditorStats) => void;
+  /** Настройки пользователя. Может не быть: редактор поднимается раньше,
+   *  чем Rust успевает отдать settings.json. */
+  settings?: Settings | null;
 }): EditorView {
   const imageResolver = createImageResolver(opts.path ?? null);
   const formatCompartment = new Compartment();
@@ -328,7 +333,10 @@ export function createEditor(opts: {
     keymap.of(tableKeymap),
     createMarknoteKeymap({ handlers: opts.handlers }),
     marknoteSearch(),
-    EditorView.lineWrapping,
+    // Всё, что зависит от настроек, — в одном отсеке: смена настройки
+    // перенастраивает его, а не пересоздаёт редактор, и история отмены,
+    // курсор и прокрутка остаются на месте.
+    settingsCompartment.of(editorSettingsExtensions(opts.settings ?? null)),
     syntaxHighlighting(classHighlighter),
     syntaxTokenTheme,
     marknoteTheme,
