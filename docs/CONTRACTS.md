@@ -337,9 +337,16 @@ export type BlockBuilder = (ctx: BuilderContext) => boolean; // true — узе�
 | Файл | Экспорт | Владелец |
 | --- | --- | --- |
 | `src/editor/settings.ts` | `settingsCompartment`, `editorSettingsExtensions(settings)`, `applyEditorSettings(view, settings)` | координатор |
-| `src/editor/theme.ts`, шрифты и метрики | расширения под `settings.editor.*` | W85 |
-| `src/editor/livePreview/**` | расширения под `settings.livePreview.*` | W86 |
-| `src/editor/spellcheck.ts` (новый) | расширения под `settings.spellcheck` и `settings.autoCorrect` | W87 |
+| `src/editor/settings/appearance.ts` | `editorAppearanceExtensions(settings)` — раздел `settings.editor.*` | W85 |
+| `src/editor/settings/preview.ts` | `livePreviewSettingsExtensions(settings)` — раздел `settings.livePreview.*` | W86 |
+| `src/editor/settings/spellcheck.ts` | `spellcheckSettingsExtensions(settings)` — `settings.spellcheck` и `settings.autoCorrect` | W87 |
+
+Три раздела пишутся параллельно, поэтому у каждого свой файл и своя функция.
+`settings.ts` только складывает их результаты и не правится никем, кроме
+координатора: иначе три автора сойдутся в одном файле и затрут друг друга.
+Владелец раздела волен заводить рядом сколько угодно своих файлов, менять
+`src/editor/theme.ts` (W85) или `src/editor/livePreview/**` (W86) — но чужой
+функции сборки не касается.
 
 Правила стыка:
 

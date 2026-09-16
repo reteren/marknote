@@ -8,10 +8,16 @@
 // Всё, что зависит от настроек, живёт в одном отсеке (Compartment). Значит,
 // смена настройки не пересоздаёт редактор — не теряются ни история отмены, ни
 // положение курсора, ни прокрутка.
+//
+// Разделы настроек живут в отдельных файлах рядом, по одному владельцу на
+// файл. Здесь только сборка: этот файл никто, кроме координатора, не правит.
 
 import { Compartment, type Extension } from "@codemirror/state";
-import { EditorView } from "@codemirror/view";
+import type { EditorView } from "@codemirror/view";
 import type { Settings } from "../state/settings.svelte";
+import { editorAppearanceExtensions } from "./settings/appearance";
+import { livePreviewSettingsExtensions } from "./settings/preview";
+import { spellcheckSettingsExtensions } from "./settings/spellcheck";
 
 /** Отсек, в котором живут все зависящие от настроек расширения. */
 export const settingsCompartment = new Compartment();
@@ -23,13 +29,11 @@ export const settingsCompartment = new Compartment();
  *  Поэтому каждая проверка написана так, чтобы отсутствие значения давало то
  *  же поведение, что было зашито в createEditor до появления настроек. */
 export function editorSettingsExtensions(settings: Settings | null): Extension[] {
-  const editor = settings?.editor;
-  const extensions: Extension[] = [];
-
-  // Мягкий перенос: без него появляется горизонтальная прокрутка.
-  if (editor?.softWrap !== false) extensions.push(EditorView.lineWrapping);
-
-  return extensions;
+  return [
+    ...editorAppearanceExtensions(settings),
+    ...livePreviewSettingsExtensions(settings),
+    ...spellcheckSettingsExtensions(settings),
+  ];
 }
 
 /** Применить настройки к живому редактору, не пересоздавая его. */
