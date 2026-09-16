@@ -334,6 +334,53 @@ fn test_watcher_suppress_prevents_self_loop_and_allows_external() {
     watcher.unwatch("main");
 }
 
+#[test]
+fn test_watcher_keeps_two_paths_in_one_window() {
+    let app = tauri::Builder::default()
+        .any_thread()
+        .build(tauri::generate_context!())
+        .expect("build test tauri app failed");
+    let handle = app.handle().clone();
+
+    let events = Arc::new(Mutex::new(Vec::new()));
+    let events_clone = events.clone();
+    handle.listen_any("file-changed-externally", move |event| {
+        events_clone
+            .lock()
+            .unwrap()
+            .push(event.payload().to_string());
+    });
+
+    let watcher = FileWatcher::new(handle);
+    let temp_dir = tempfile::tempdir().expect("tempdir failed");
+    let first = temp_dir.path().join("first.md");
+    let second = temp_dir.path().join("second.md");
+    fs::write(&first, b"first\n").expect("write first failed");
+    fs::write(&second, b"second\n").expect("write second failed");
+
+    // Both files belong to the same native window, but must remain separate
+    // logical watches.  This used to replace `first` with `second`.
+    watcher.watch("main", &first);
+    watcher.watch("main", &second);
+    std::thread::sleep(Duration::from_millis(300));
+
+    atomic_write::write_atomic(&first, b"first changed\n").expect("write first failed");
+    atomic_write::write_atomic(&second, b"second changed\n").expect("write second failed");
+    std::thread::sleep(Duration::from_millis(900));
+
+    let captured = events.lock().unwrap().clone();
+    assert!(
+        captured.iter().any(|event| event.contains("first.md")),
+        "изменение первого файла должно прийти отдельным событием: {captured:?}"
+    );
+    assert!(
+        captured.iter().any(|event| event.contains("second.md")),
+        "изменение второго файла должно прийти отдельным событием: {captured:?}"
+    );
+
+    watcher.unwatch("main");
+}
+
 // =========================================================================
 // 5. Большой файл (big-10k.md)
 // =========================================================================

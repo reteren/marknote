@@ -211,6 +211,7 @@ const ar = {
   "dialog.close.title": "حفظ التغييرات؟",
   "dialog.close.unsavedDocument": "يحتوي هذا المستند على تغييرات غير محفوظة.",
   "dialog.close.unsavedUntitled": "يحتوي هذا المستند غير المعنون على تغييرات غير محفوظة.",
+  "dialog.close.unsavedMultiple": "توجد تغييرات غير محفوظة في علامات التبويب التالية:",
   "dialog.close.save": "حفظ",
   "dialog.close.discard": "تجاهل",
   "dialog.close.cancel": "إلغاء",

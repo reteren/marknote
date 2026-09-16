@@ -186,6 +186,7 @@ const en = {
   "dialog.close.title": "Save changes?",
   "dialog.close.unsavedDocument": "This document has unsaved changes.",
   "dialog.close.unsavedUntitled": "This untitled document has unsaved changes.",
+  "dialog.close.unsavedMultiple": "The following tabs have unsaved changes:",
   "dialog.close.save": "Save",
   "dialog.close.discard": "Discard",
   "dialog.close.cancel": "Cancel",

@@ -26,7 +26,10 @@ const CLOSE_RESPONSE_TIMEOUT_SECS: u64 = 5;
 
 /// Общее состояние процесса: реестр файлов, свободные стартовые окна и watcher.
 pub struct AppState {
-    pub(crate) open_files: Mutex<HashMap<PathBuf, String>>,
+    /// Путь может быть одновременно зарегистрирован в нескольких окнах
+    /// (например, когда `raiseExistingWindow` выключен).  Множество владельцев
+    /// не даёт закрытию одной вкладки затереть сведения о другой.
+    pub(crate) open_files: Mutex<HashMap<PathBuf, HashSet<String>>>,
     pub(crate) empty_windows: Mutex<HashSet<String>>,
     pending_files: Mutex<HashMap<String, PathBuf>>,
     pending_formats: Mutex<HashMap<String, String>>,
@@ -94,7 +97,7 @@ impl AppState {
             "reserve_file вызван при уже захваченном реестре открытых файлов"
         );
         if let Ok(mut open_files) = self.open_files.lock() {
-            open_files.insert(key, label.to_owned());
+            open_files.entry(key).or_default().insert(label.to_owned());
         }
         if let Ok(mut empty) = self.empty_windows.lock() {
             empty.remove(label);
@@ -205,16 +208,23 @@ impl AppState {
             .map(|open_files| {
                 open_files
                     .iter()
-                    .filter(|(_, owner)| owner.as_str() == label)
+                    .filter(|(_, owners)| owners.contains(label))
                     .map(|(path, _)| path.clone())
                     .collect::<HashSet<_>>()
             })
             .unwrap_or_default();
-        if let Ok(mut open_files) = self.open_files.lock() {
-            open_files.retain(|_, owner| owner != label);
-        }
+        let remaining_paths = if let Ok(mut open_files) = self.open_files.lock() {
+            open_files.retain(|_, owners| {
+                owners.remove(label);
+                !owners.is_empty()
+            });
+            open_files.keys().cloned().collect::<HashSet<_>>()
+        } else {
+            HashSet::new()
+        };
         if let Ok(mut snapshots) = self.file_snapshots.lock() {
-            snapshots.retain(|path, _| !owned_paths.contains(path));
+            snapshots
+                .retain(|path, _| !owned_paths.contains(path) || remaining_paths.contains(path));
         }
         if let Ok(mut empty) = self.empty_windows.lock() {
             empty.remove(label);
@@ -233,12 +243,23 @@ impl AppState {
     }
 
     fn forget_file(&self, key: &Path, label: &str) {
-        if let Ok(mut open_files) = self.open_files.lock() {
-            if open_files.get(key).is_some_and(|owner| owner == label) {
+        let should_forget_snapshot = if let Ok(mut open_files) = self.open_files.lock() {
+            let Some(owners) = open_files.get_mut(key) else {
+                return;
+            };
+            owners.remove(label);
+            if owners.is_empty() {
                 open_files.remove(key);
-                if let Ok(mut snapshots) = self.file_snapshots.lock() {
-                    snapshots.remove(key);
-                }
+                true
+            } else {
+                false
+            }
+        } else {
+            false
+        };
+        if should_forget_snapshot {
+            if let Ok(mut snapshots) = self.file_snapshots.lock() {
+                snapshots.remove(key);
             }
         }
     }
@@ -416,13 +437,17 @@ enum RouteTarget {
 
 fn existing_window_label(
     settings: &Settings,
-    open_files: &HashMap<PathBuf, String>,
+    open_files: &HashMap<PathBuf, HashSet<String>>,
     key: &Path,
 ) -> Option<String> {
     settings
         .windows
         .raise_existing_window
-        .then(|| open_files.get(key).cloned())
+        .then(|| {
+            open_files
+                .get(key)
+                .and_then(|owners| owners.iter().next().cloned())
+        })
         .flatten()
 }
 
@@ -606,7 +631,10 @@ pub fn apply_dark_titlebar(_window: &WebviewWindow) {}
 mod tests {
     use super::{existing_window_label, preserve_extended_path, INITIAL_WINDOW_TITLE};
     use crate::settings::Settings;
-    use std::{collections::HashMap, path::PathBuf};
+    use std::{
+        collections::{HashMap, HashSet},
+        path::PathBuf,
+    };
 
     #[test]
     fn extended_unc_path_keeps_unc_prefix() {
@@ -630,7 +658,7 @@ mod tests {
     fn raise_existing_window_setting_controls_registry_reuse() {
         let key = PathBuf::from(r"c:\notes\one.md");
         let mut open_files = HashMap::new();
-        open_files.insert(key.clone(), "win-1".to_owned());
+        open_files.insert(key.clone(), HashSet::from(["win-1".to_owned()]));
 
         let settings = Settings::default();
         assert_eq!(
@@ -641,5 +669,21 @@ mod tests {
         let mut settings = settings;
         settings.windows.raise_existing_window = false;
         assert_eq!(existing_window_label(&settings, &open_files, &key), None);
+    }
+
+    #[test]
+    fn registry_keeps_multiple_window_owners_for_one_path() {
+        let key = PathBuf::from(r"c:\notes\one.md");
+        let mut open_files = HashMap::new();
+        open_files.insert(
+            key.clone(),
+            HashSet::from(["win-1".to_owned(), "win-2".to_owned()]),
+        );
+
+        let settings = Settings::default();
+        assert!(matches!(
+            existing_window_label(&settings, &open_files, &key).as_deref(),
+            Some("win-1") | Some("win-2")
+        ));
     }
 }

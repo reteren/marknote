@@ -183,6 +183,7 @@ const ru = {
   "dialog.close.title": "Сохранить изменения?",
   "dialog.close.unsavedDocument": "В этом документе есть несохранённые изменения.",
   "dialog.close.unsavedUntitled": "В этом документе без имени есть несохранённые изменения.",
+  "dialog.close.unsavedMultiple": "В следующих вкладках есть несохранённые изменения:",
   "dialog.close.save": "Сохранить",
   "dialog.close.discard": "Не сохранять",
   "dialog.close.cancel": "Отмена",

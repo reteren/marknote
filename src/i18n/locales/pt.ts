@@ -185,6 +185,7 @@ const pt = {
   "dialog.close.title": "Guardar alterações?",
   "dialog.close.unsavedDocument": "Este documento tem alterações não guardadas.",
   "dialog.close.unsavedUntitled": "Este documento sem título tem alterações não guardadas.",
+  "dialog.close.unsavedMultiple": "Os seguintes separadores têm alterações não guardadas:",
   "dialog.close.save": "Guardar",
   "dialog.close.discard": "Não guardar",
   "dialog.close.cancel": "Cancelar",

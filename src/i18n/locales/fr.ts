@@ -185,6 +185,7 @@ const fr = {
   "dialog.close.title": "Enregistrer les modifications ?",
   "dialog.close.unsavedDocument": "Ce document contient des modifications non enregistrées.",
   "dialog.close.unsavedUntitled": "Ce document sans titre contient des modifications non enregistrées.",
+  "dialog.close.unsavedMultiple": "Les onglets suivants contiennent des modifications non enregistrées :",
   "dialog.close.save": "Enregistrer",
   "dialog.close.discard": "Ne pas enregistrer",
   "dialog.close.cancel": "Annuler",

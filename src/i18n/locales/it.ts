@@ -185,6 +185,7 @@ const it = {
   "dialog.close.title": "Salvare le modifiche?",
   "dialog.close.unsavedDocument": "Questo documento contiene modifiche non salvate.",
   "dialog.close.unsavedUntitled": "Questo documento senza titolo contiene modifiche non salvate.",
+  "dialog.close.unsavedMultiple": "Le seguenti schede contengono modifiche non salvate:",
   "dialog.close.save": "Salva",
   "dialog.close.discard": "Non salvare",
   "dialog.close.cancel": "Annulla",

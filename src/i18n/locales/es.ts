@@ -183,6 +183,7 @@ const es = {
   "dialog.close.title": "¿Guardar los cambios?",
   "dialog.close.unsavedDocument": "Este documento tiene cambios sin guardar.",
   "dialog.close.unsavedUntitled": "Este documento sin título tiene cambios sin guardar.",
+  "dialog.close.unsavedMultiple": "Las siguientes pestañas tienen cambios sin guardar:",
   "dialog.close.save": "Guardar",
   "dialog.close.discard": "Descartar",
   "dialog.close.cancel": "Cancelar",

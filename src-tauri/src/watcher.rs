@@ -14,7 +14,11 @@ const SUPPRESS_DURATION: Duration = Duration::from_millis(1_500);
 
 struct WatcherState {
     app: AppHandle,
-    watched: Mutex<HashMap<String, PathBuf>>,
+    /// Все файлы, открытые в каждом окне.  Раньше здесь был один PathBuf на
+    /// метку окна, поэтому открытие второй вкладки затирало наблюдение за
+    /// первой.  Идентификатор вкладки не нужен: путь уже приходит в payload,
+    /// а фронтенд сопоставляет его со своей вкладкой.
+    watched: Mutex<HashMap<String, HashSet<PathBuf>>>,
     roots: Mutex<HashMap<PathBuf, usize>>,
     suppressed: Mutex<HashMap<PathBuf, Instant>>,
     debouncer: Mutex<Option<DebouncerHandle>>,
@@ -55,22 +59,20 @@ impl FileWatcher {
         let normalized = normalize_path(path);
         let root = watch_root(&normalized);
 
-        let previous = self
+        let inserted = self
             .state
             .watched
             .lock()
             .expect("file watcher map poisoned")
-            .insert(window_label.to_owned(), normalized);
+            .entry(window_label.to_owned())
+            .or_default()
+            .insert(normalized);
 
-        if let Some(previous) = previous {
-            let previous_root = watch_root(&previous);
-            if same_path(&previous_root, &root) {
-                return;
-            }
-            release_root(&self.state, previous_root);
+        // Repeatedly opening the same path in one window is idempotent and
+        // must not inflate the directory root reference count.
+        if inserted {
+            acquire_root(&self.state, root);
         }
-
-        acquire_root(&self.state, root);
     }
 
     pub fn unwatch(&self, window_label: &str) {
@@ -81,12 +83,13 @@ impl FileWatcher {
             .expect("file watcher map poisoned")
             .remove(window_label);
 
-        let Some(path) = removed else {
+        let Some(paths) = removed else {
             return;
         };
 
-        let root = watch_root(&path);
-        release_root(&self.state, root);
+        for path in paths {
+            release_root(&self.state, watch_root(&path));
+        }
     }
 
     pub fn suppress(&self, path: &std::path::Path) {
@@ -146,12 +149,16 @@ fn handle_events(state: &Weak<WatcherState>, result: DebounceEventResult) {
                 .lock()
                 .expect("file watcher map poisoned")
                 .iter()
-                .filter(|(_, watched_path)| same_path(watched_path, &normalized))
+                .filter(|(_, watched_paths)| {
+                    watched_paths
+                        .iter()
+                        .any(|watched_path| same_path(watched_path, &normalized))
+                })
                 .map(|(label, _)| label.clone())
                 .collect::<Vec<_>>();
 
             for label in labels {
-                if !emitted.insert((label.clone(), event_name)) {
+                if !emitted.insert((label.clone(), event_name, normalized.clone())) {
                     continue;
                 }
                 let payload = serde_json::json!({

@@ -183,6 +183,7 @@ const de = {
   "dialog.close.title": "Änderungen speichern?",
   "dialog.close.unsavedDocument": "Dieses Dokument enthält ungespeicherte Änderungen.",
   "dialog.close.unsavedUntitled": "Dieses unbenannte Dokument enthält ungespeicherte Änderungen.",
+  "dialog.close.unsavedMultiple": "In den folgenden Tabs gibt es ungespeicherte Änderungen:",
   "dialog.close.save": "Speichern",
   "dialog.close.discard": "Verwerfen",
   "dialog.close.cancel": "Abbrechen",

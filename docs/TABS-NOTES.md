@@ -2,6 +2,10 @@
 
 ## State API
 
+**Статус W104:** состояние вкладок и прокси `documentState` подключены (W99),
+а сохранение `EditorState` при переключении реализовано (W101). Ниже оставлены
+рабочие детали контракта; новые хранилища для текста не заводятся.
+
 `src/state/workspace.svelte.ts` owns one reactive workspace with a stable
 one-tab invariant, lifecycle operations, and display labels.  `documentState`
 in `document.svelte.ts` remains the same exported object and is a Proxy view;
@@ -18,6 +22,10 @@ tab.
 
 ## Closing dirty tabs
 
+**Статус W104:** инвариант последней вкладки и запрос решения для одной грязной
+вкладки подключены; сводный протокол для нескольких грязных вкладок остаётся в
+работе у App/UI.
+
 `closeTab` refuses to remove the final tab, preserving the contract that a
 window never has zero tabs.  The tab UI should run the existing save/discard/
 cancel close protocol for a dirty tab before calling it; when the final tab is
@@ -28,13 +36,14 @@ an App/UI responsibility so no policy is silently changed in state.
 
 ## Rust watcher and open-file registry
 
-`src-tauri/src/watcher.rs` currently keys `watched` by window label and replaces
-the previous path for that label.  With tabs it must key watches by a stable
-`(window_label, tab_id)` (or keep a path-to-tab set) while retaining one native
-watch per directory root; emitted payloads already include the path and can be
-routed to the matching tab in the frontend.  `src-tauri/src/windows.rs` has the
-same shape in `AppState.open_files: HashMap<PathBuf, String>` and
-`track_file`/`forget_file`: those entries need tab ownership for in-window
-deduplication, while explorer opens can continue to resolve a file to a new
-window as required by the contract.
+**Статус W104:** структура многовкладочного наблюдения уже переведена на наборы
+путей (`watched: HashMap<String, HashSet<PathBuf>>`) и реестр владельцев файла
+(`open_files: HashMap<PathBuf, HashSet<String>>`). Окончательная маршрутизация и
+приёмка событий между вкладками всё ещё в работе, поэтому пункт не считается
+закрытым.
 
+`src-tauri/src/watcher.rs` keeps one native watch per directory root and emits
+the changed path; the frontend still has to finish matching that path to an
+inactive tab. `src-tauri/src/windows.rs` keeps tab/window ownership in the
+open-file registry, while explorer opens continue to resolve a file to a new
+window as required by the contract.

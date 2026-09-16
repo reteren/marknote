@@ -183,6 +183,7 @@ const zh = {
   "dialog.close.title": "保存更改？",
   "dialog.close.unsavedDocument": "此文档有未保存的更改。",
   "dialog.close.unsavedUntitled": "此未命名文档有未保存的更改。",
+  "dialog.close.unsavedMultiple": "以下标签页包含未保存的更改：",
   "dialog.close.save": "保存",
   "dialog.close.discard": "放弃",
   "dialog.close.cancel": "取消",

@@ -83,6 +83,8 @@ import { EditorView, type EditorView as EditorViewType } from "@codemirror/view"
   let closeRequestSource = $state<CloseRequestSource>(null);
   let nativeClosePending = $state(false);
   let closeAfterDecision = $state(false);
+  let pendingCloseTabId = $state<TabId | null>(null);
+  let closePromptTabs = $state<WorkspaceTab[]>([]);
   let helpMode = $state<HelpMode | null>(null);
   let settingsOpen = $state(false);
   let goToLineOpen = $state(false);
@@ -109,8 +111,16 @@ import { EditorView, type EditorView as EditorViewType } from "@codemirror/view"
   const documentLabel = $derived(
     `${documentFileName} · ${formatLabel(documentState.format.id, documentState.format.label)}`,
   );
+  function getTabDisplayName(tab: WorkspaceTab): string {
+    const label = tabLabel(tab);
+    return label.name === "Untitled" ? t("tabs.untitled") : label.name;
+  }
   const closePromptMessage = $derived.by(() => {
-    const message = getClosePromptMessage(documentState);
+    if (closePromptTabs.length > 1) {
+      return t("dialog.close.unsavedMultiple");
+    }
+    const targetDoc = closePromptTabs[0]?.document ?? documentState;
+    const message = getClosePromptMessage(targetDoc);
     const untitledMessage = getClosePromptMessage({ path: null });
     return t(message === untitledMessage ? "dialog.close.unsavedUntitled" : "dialog.close.unsavedDocument");
   });
@@ -1000,17 +1010,6 @@ import { EditorView, type EditorView as EditorViewType } from "@codemirror/view"
       onFocusEditor={() => editorView?.focus()}
     />
     <div class="save-controls-overlay">
-      {#if workspace.tabs.length < 2}
-        <button
-          type="button"
-          class="single-tab-new-btn"
-          title={t("tabs.newTab") + " (Ctrl+T)"}
-          aria-label={t("tabs.newTab")}
-          onclick={handleOpenNewTab}
-        >
-          +
-        </button>
-      {/if}
       <SaveControls
         saveStatus={documentState.saveStatus}
         lastSavedAt={documentState.lastSavedAt}

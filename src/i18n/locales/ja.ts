@@ -183,6 +183,7 @@ const ja = {
   "dialog.close.title": "変更を保存しますか？",
   "dialog.close.unsavedDocument": "このドキュメントには未保存の変更があります。",
   "dialog.close.unsavedUntitled": "この無題のドキュメントには未保存の変更があります。",
+  "dialog.close.unsavedMultiple": "以下のタブに未保存の変更があります：",
   "dialog.close.save": "保存",
   "dialog.close.discard": "保存しない",
   "dialog.close.cancel": "キャンセル",
