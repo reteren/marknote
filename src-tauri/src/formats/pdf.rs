@@ -76,4 +76,93 @@ mod tests {
         let result = PdfAdapter.decode(b"not a PDF");
         assert!(result.is_err());
     }
+
+    #[test]
+    fn decodes_real_pdf_fixture_extracting_plain_text() {
+        // Загружаем настоящий воспроизводимый PDF-документ из фикстур (src-tauri/tests/fixtures/sample.pdf).
+        // Документ сгенерирован без сторонних библиотек через generate_sample_pdf.py.
+        let bytes = include_bytes!("../../tests/fixtures/sample.pdf");
+        let decoded = PdfAdapter
+            .decode(bytes)
+            .expect("валидный настоящий PDF должен успешно декодироваться");
+
+        let text = &decoded.text;
+
+        // 1. Проверяем наличие всех смысловых элементов документа:
+        // - Заголовок документа
+        assert!(
+            text.contains("MarkNote PDF Extraction Test"),
+            "заголовок документа должен быть извлечён"
+        );
+        // - Первый абзац с переносом строки
+        assert!(
+            text.contains("This is the first paragraph of the test document."),
+            "первая строка первого абзаца должна быть извлечена"
+        );
+        assert!(
+            text.contains("It has a line break inside the paragraph to verify extraction."),
+            "вторая строка первого абзаца с переносом должна быть извлечена"
+        );
+        // - Второй абзац
+        assert!(
+            text.contains("The second paragraph introduces an itemized list below:"),
+            "второй абзац должен присутствовать"
+        );
+        // - Элементы списка
+        assert!(
+            text.contains("- First item in the list"),
+            "первый пункт списка должен быть извлечён"
+        );
+        assert!(
+            text.contains("- Second item in the list"),
+            "второй пункт списка должен быть извлечён"
+        );
+        assert!(
+            text.contains("- Third item with additional text"),
+            "третий пункт списка должен быть извлечён"
+        );
+        // - Заключительный абзац
+        assert!(
+            text.contains("Final conclusion paragraph verifying text flow and ordering."),
+            "заключительный абзац должен присутствовать"
+        );
+
+        // 2. Проверяем строгий порядок следования текста (порядок не должен быть нарушен):
+        let pos_heading = text.find("MarkNote PDF Extraction Test").unwrap();
+        let pos_p1_l1 = text.find("This is the first paragraph").unwrap();
+        let pos_p1_l2 = text.find("It has a line break inside").unwrap();
+        let pos_p2 = text.find("The second paragraph introduces").unwrap();
+        let pos_item1 = text.find("- First item").unwrap();
+        let pos_item2 = text.find("- Second item").unwrap();
+        let pos_item3 = text.find("- Third item").unwrap();
+        let pos_conclusion = text.find("Final conclusion paragraph").unwrap();
+
+        assert!(pos_heading < pos_p1_l1);
+        assert!(pos_p1_l1 < pos_p1_l2);
+        assert!(pos_p1_l2 < pos_p2);
+        assert!(pos_p2 < pos_item1);
+        assert!(pos_item1 < pos_item2);
+        assert!(pos_item2 < pos_item3);
+        assert!(pos_item3 < pos_conclusion);
+
+        // 3. Честная фиксация того, что ТЕРЯЕТСЯ при извлечении из PDF:
+        // - PDF — формат для печати, а не для разметки. Заголовок в нём — это лишь текст,
+        //   отрисованный шрифтом большего кегля (18pt против 12pt).
+        // - Семантическая структура Markdown (#, ##) отсутствует — извлекается чистый плоский текст.
+        assert!(
+            !text.contains("# MarkNote PDF Extraction Test"),
+            "PDF-адаптер отдаёт плоский текст без искусственного угадывания заголовков"
+        );
+        // - Форматирование шрифтов (размер 18pt/12pt, гарнитура Helvetica) полностью теряется.
+        // - Списки сохраняются как текст только благодаря символам дефиса '-', а не тегам разметки.
+        // - Координаты и геометрия вёрстки схлопываются в обычные переносы строк '\\n'.
+        //
+        // Чего эта проверка НЕ доказывает, чтобы зелёный тест не читали шире,
+        // чем он есть: фикстура — простой несжатый PDF 1.4 с одним шрифтом
+        // Helvetica и текстом в операторах Tj. Настоящие документы из Word и
+        // вёрстки приходят со сжатыми потоками (FlateDecode), встроенными
+        // подмножествами шрифтов и кернингом через массивы TJ, где слова как
+        // раз и рискуют слипнуться. Такой документ надо проверять отдельно и
+        // на настоящем файле.
+    }
 }
