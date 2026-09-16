@@ -97,6 +97,40 @@ describe("application actions", () => {
     expect(view.state.doc.toString()).toBe("");
   });
 
+  it("opens a fresh window for new-document actions without replacing the current state", async () => {
+    const openNewDocumentWindow = vi.fn().mockResolvedValue(undefined);
+    const chooseFormat = vi.fn().mockResolvedValue("plain");
+    const actions = createActions({
+      openNewDocumentWindow,
+      dialogs: { chooseFormat },
+      getFormats: () => [editableFormat, plainFormat],
+      notify: vi.fn(),
+    });
+
+    resetDocument(editableFormat, "unsaved text");
+    expect(await actions.run("file.newWindow")).toBe(true);
+    expect(await actions.newDocument("markdown")).toBe(true);
+    expect(await actions.newDocumentWithPicker()).toBe(true);
+    expect(openNewDocumentWindow).toHaveBeenNthCalledWith(1, "markdown");
+    expect(openNewDocumentWindow).toHaveBeenNthCalledWith(2, "markdown");
+    expect(openNewDocumentWindow).toHaveBeenNthCalledWith(3, "plain");
+    expect(documentState.text).toBe("unsaved text");
+  });
+
+  it("uses the keymap toggle commands for formatting menu actions", async () => {
+    const boldView = viewFor("**word**");
+    boldView.dispatch({ selection: { anchor: 0, head: 8 } });
+    const actions = createActions({ getEditorView: () => boldView });
+    expect(await actions.run("format.bold")).toBe(true);
+    expect(boldView.state.doc.toString()).toBe("word");
+
+    const blockView = viewFor("word");
+    blockView.dispatch({ selection: { anchor: 0, head: 4 } });
+    const blockActions = createActions({ getEditorView: () => blockView });
+    expect(await blockActions.run("format.codeBlock")).toBe(true);
+    expect(blockView.state.doc.toString()).toBe("```\nword\n```");
+  });
+
   it("picks a path and opens it, or opens an explicit path directly", async () => {
     invoke.mockResolvedValueOnce("C:/notes/picked.md").mockResolvedValueOnce(opened);
     const actions = makeActions(viewFor());

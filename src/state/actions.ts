@@ -2,7 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { redo, deleteLine, moveLineDown, moveLineUp, selectAll, undo } from "@codemirror/commands";
 import type { Command, EditorView } from "@codemirror/view";
 import { searchCommands } from "../editor/search";
-import { toggleWrapper } from "../editor/keymap";
+import { toggleCodeBlock, toggleWrapper } from "../editor/keymap";
 import { safeLinkHref } from "../editor/livePreview/inline";
 import {
   documentState,
@@ -52,6 +52,8 @@ export type ActionsDependencies = {
   zoomIn?: () => void | Promise<void>;
   zoomOut?: () => void | Promise<void>;
   resetZoom?: () => void | Promise<void>;
+  /** Opens a fresh untitled window without mutating the current document. */
+  openNewDocumentWindow?: (formatId: string) => void | Promise<void>;
 };
 
 export type AppActions = {
@@ -233,17 +235,6 @@ function formatLink(view: EditorView): ActionResult {
   return true;
 }
 
-function formatCodeBlock(view: EditorView): ActionResult {
-  const { from, to } = selectedText(view);
-  const first = view.state.doc.lineAt(from);
-  const last = view.state.doc.lineAt(to);
-  const lineFrom = first.from;
-  const lineTo = last.to;
-  const text = view.state.sliceDoc(lineFrom, lineTo);
-  insertAtRange(view, lineFrom, lineTo, `\`\`\`\n${text}\n\`\`\``);
-  return true;
-}
-
 function insertAtRange(view: EditorView, from: number, to: number, text: string): void {
   view.dispatch({ changes: { from, to, insert: text } });
 }
@@ -283,6 +274,15 @@ export function createActions(dependencies: ActionsDependencies = {}): AppAction
   const hasTextOrPath = (): boolean => state.path !== null || state.text.length > 0;
 
   const newDocument = async (formatId = markdownFormat.id, view?: EditorView | null): Promise<ActionResult> => {
+    if (dependencies.openNewDocumentWindow) {
+      try {
+        await dependencies.openNewDocumentWindow(formatId);
+        return true;
+      } catch (error) {
+        notify(error instanceof Error ? error.message : String(error));
+        return false;
+      }
+    }
     try {
       const created = await invoke<NewDocument>("new_document", { formatId });
       resetDocument(created.format, created.text);
@@ -447,7 +447,7 @@ export function createActions(dependencies: ActionsDependencies = {}): AppAction
     insertAtSelection(view, "> [!NOTE]\n> ", { anchor: view.state.selection.main.from + 12 });
     return true;
   });
-  const codeBlock = editCommand(formatCodeBlock);
+  const codeBlock = editCommand(toggleCodeBlock);
   const mathBlock = editCommand((view) => {
     insertAtSelection(view, "$$\n\n$$", { anchor: view.state.selection.main.from + 3 });
     return true;
@@ -504,7 +504,7 @@ export function createActions(dependencies: ActionsDependencies = {}): AppAction
 
   const actionsById = new Map<string, () => Promise<ActionResult> | ActionResult>([
     ["file.new", () => newDocument(markdownFormat.id)],
-    ["file.newWindow", () => newWindow()],
+    ["file.newWindow", () => newDocument(markdownFormat.id)],
     ["file.open", () => openFile()],
     ["file.save", () => save()],
     ["file.saveAs", () => saveAs()],
@@ -582,7 +582,7 @@ export function createActions(dependencies: ActionsDependencies = {}): AppAction
       return getFormats().some((format) => format.id === formatId && format.creatable && format.editable);
     }
     if (id === "file.new" || id === "file.open") return true;
-    if (id === "file.newWindow") return state.path !== null;
+    if (id === "file.newWindow") return true;
     if (id === "file.save") return canEdit() && hasTextOrPath();
     if (id === "file.saveAs") return canSaveAs() && hasTextOrPath();
     if (id === "reveal-in-explorer" || id === "file.revealInExplorer") return state.path !== null;
@@ -604,7 +604,7 @@ export function createActions(dependencies: ActionsDependencies = {}): AppAction
   const run = async (id: string, payload?: string): Promise<ActionResult> => {
     if (id.startsWith("file.new.")) return newDocument(id.slice("file.new.".length));
     if (id === "file.open") return openFile(payload);
-    if (id === "file.newWindow") return newWindow(payload);
+    if (id === "file.newWindow") return newDocument(markdownFormat.id);
     if (id === "reveal-in-explorer" || id === "file.revealInExplorer") return revealInExplorer();
     if (id === "open-link") return openLink(payload ?? "");
     if (id === "copy-link") return copyLink(payload ?? "");

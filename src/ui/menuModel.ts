@@ -131,8 +131,8 @@ export function createMenuModel(
       id: "view",
       label: t("menu.view"),
       items: [
-        item("view.zoomIn", t("menu.zoomIn"), "Ctrl+±"),
-        item("view.zoomOut", t("menu.zoomOut"), "Ctrl+±"),
+        item("view.zoomIn", t("menu.zoomIn"), "Ctrl++"),
+        item("view.zoomOut", t("menu.zoomOut"), "Ctrl+-"),
         item("view.resetZoom", t("menu.resetZoom"), "Ctrl+0"),
       ],
     },

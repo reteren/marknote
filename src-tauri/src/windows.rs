@@ -14,7 +14,11 @@ use tauri::{
     Emitter, EventTarget, Manager, WebviewWindow, WindowEvent,
 };
 
-use crate::{messages::UserMessage, watcher::FileWatcher};
+use crate::{
+    messages::UserMessage,
+    settings::{Settings, SettingsState},
+    watcher::FileWatcher,
+};
 
 const MAIN_WINDOW_LABEL: &str = "main";
 const WINDOW_LABEL_PREFIX: &str = "win-";
@@ -25,6 +29,7 @@ pub struct AppState {
     pub(crate) open_files: Mutex<HashMap<PathBuf, String>>,
     pub(crate) empty_windows: Mutex<HashSet<String>>,
     pending_files: Mutex<HashMap<String, PathBuf>>,
+    pending_formats: Mutex<HashMap<String, String>>,
     file_snapshots: Mutex<HashMap<PathBuf, FileSnapshot>>,
     pending_closes: Mutex<HashMap<String, u64>>,
     approved_closes: Mutex<HashSet<String>>,
@@ -56,6 +61,7 @@ impl AppState {
             open_files: Mutex::new(HashMap::new()),
             empty_windows: Mutex::new(HashSet::new()),
             pending_files: Mutex::new(HashMap::new()),
+            pending_formats: Mutex::new(HashMap::new()),
             file_snapshots: Mutex::new(HashMap::new()),
             pending_closes: Mutex::new(HashMap::new()),
             approved_closes: Mutex::new(HashSet::new()),
@@ -105,6 +111,16 @@ impl AppState {
         if let Ok(mut pending) = self.pending_files.lock() {
             pending.remove(label);
         }
+    }
+
+    pub(crate) fn set_pending_format(&self, label: &str, format_id: String) {
+        if let Ok(mut pending) = self.pending_formats.lock() {
+            pending.insert(label.to_owned(), format_id);
+        }
+    }
+
+    pub(crate) fn take_pending_format(&self, label: &str) -> Option<String> {
+        self.pending_formats.lock().ok()?.remove(label)
     }
 
     /// Starts one close handshake for a window.  A second native close while
@@ -198,6 +214,9 @@ impl AppState {
         if let Ok(mut pending) = self.pending_files.lock() {
             pending.remove(label);
         }
+        if let Ok(mut pending) = self.pending_formats.lock() {
+            pending.remove(label);
+        }
         if let Ok(mut pending) = self.pending_closes.lock() {
             pending.remove(label);
         }
@@ -287,18 +306,15 @@ pub fn handle_single_instance(app: &tauri::AppHandle, argv: Vec<String>) {
 pub fn route_file(app: &tauri::AppHandle, path: impl AsRef<Path>) -> Result<(), String> {
     let canonical = canonical_path(path.as_ref())?;
     let key = registry_key(&canonical);
+    let settings = app.state::<SettingsState>().get();
 
     let target = {
         let state = app.state::<AppState>();
-        let existing = state
-            .open_files
-            .lock()
-            .map_err(|error| {
-                eprintln!("Could not lock the open-file registry: {error}");
-                UserMessage::WindowRouting.to_string()
-            })?
-            .get(&key)
-            .cloned();
+        let open_files = state.open_files.lock().map_err(|error| {
+            eprintln!("Could not lock the open-file registry: {error}");
+            UserMessage::WindowRouting.to_string()
+        })?;
+        let existing = existing_window_label(&settings, &open_files, &key);
 
         if let Some(label) = existing {
             state.set_pending_file(&label, canonical.clone());
@@ -354,9 +370,45 @@ pub fn route_file(app: &tauri::AppHandle, path: impl AsRef<Path>) -> Result<(), 
         })
 }
 
+/// Creates a fresh untitled window and hands its requested format to the
+/// frontend during startup. Unlike file routing, this never reuses an empty
+/// window, so the current document remains untouched.
+pub fn open_empty_window(app: &tauri::AppHandle, format_id: String) -> Result<(), String> {
+    let label = {
+        let state = app.state::<AppState>();
+        let label = state.allocate_window_label();
+        state.mark_empty(&label);
+        state.set_pending_format(&label, format_id);
+        label
+    };
+
+    match create_window(app, &label) {
+        Ok(window) => {
+            raise_window(&window);
+            Ok(())
+        }
+        Err(error) => {
+            app.state::<AppState>().forget_window(&label);
+            Err(error)
+        }
+    }
+}
+
 enum RouteTarget {
     Existing(String),
     New(String),
+}
+
+fn existing_window_label(
+    settings: &Settings,
+    open_files: &HashMap<PathBuf, String>,
+    key: &Path,
+) -> Option<String> {
+    settings
+        .windows
+        .raise_existing_window
+        .then(|| open_files.get(key).cloned())
+        .flatten()
 }
 
 fn create_window(app: &tauri::AppHandle, label: &str) -> Result<WebviewWindow, String> {
@@ -542,8 +594,9 @@ pub fn apply_dark_titlebar(_window: &WebviewWindow) {}
 
 #[cfg(test)]
 mod tests {
-    use super::{preserve_extended_path, INITIAL_WINDOW_TITLE};
-    use std::path::PathBuf;
+    use super::{existing_window_label, preserve_extended_path, INITIAL_WINDOW_TITLE};
+    use crate::settings::Settings;
+    use std::{collections::HashMap, path::PathBuf};
 
     #[test]
     fn extended_unc_path_keeps_unc_prefix() {
@@ -561,5 +614,22 @@ mod tests {
     #[test]
     fn initial_window_title_is_plain_app_name() {
         assert_eq!(INITIAL_WINDOW_TITLE, "MarkNote");
+    }
+
+    #[test]
+    fn raise_existing_window_setting_controls_registry_reuse() {
+        let key = PathBuf::from(r"c:\notes\one.md");
+        let mut open_files = HashMap::new();
+        open_files.insert(key.clone(), "win-1".to_owned());
+
+        let settings = Settings::default();
+        assert_eq!(
+            existing_window_label(&settings, &open_files, &key),
+            Some("win-1".to_owned())
+        );
+
+        let mut settings = settings;
+        settings.windows.raise_existing_window = false;
+        assert_eq!(existing_window_label(&settings, &open_files, &key), None);
     }
 }

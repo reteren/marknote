@@ -484,4 +484,4 @@ export function createMarknoteKeymap(options: MarknoteKeymapOptions = {}): Exten
 export const marknoteKeyBindings: readonly KeyBinding[] = createBindings({});
 export const getMarknoteKeyBindings = (options: MarknoteKeymapOptions = {}): readonly KeyBinding[] => createBindings(options);
 
-export { isListLine, toggleWrapper, indent, outdent, continueMarkdownList };
+export { isListLine, toggleWrapper, toggleCodeBlock, indent, outdent, continueMarkdownList };

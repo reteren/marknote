@@ -158,7 +158,7 @@ describe("native close confirmation", () => {
     await settle();
     expect(document.querySelector('[role="dialog"][aria-label="Settings"]')).toBeNull();
 
-    await fireEvent.keyDown(window, { key: ",", ctrlKey: true });
+    await fireEvent.keyDown(window, { code: "Comma", key: ",", ctrlKey: true });
     await settle();
     settingsDialog = document.querySelector<HTMLElement>('[role="dialog"][aria-label="Settings"]');
     expect(settingsDialog).not.toBeNull();

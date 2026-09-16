@@ -6,7 +6,6 @@
 import type { UnlistenFn } from "@tauri-apps/api/event";
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import { onMount } from "svelte";
-  import { toggleWrapper } from "./editor/keymap";
   import { installZoom, resetZoom, zoomIn, zoomOut } from "./editor/zoom";
   import { safeLinkHref } from "./editor/livePreview/inline";
   import { createActions } from "./state/actions";
@@ -57,6 +56,7 @@ import HelpDialog, { type HelpMode } from "./ui/HelpDialog.svelte";
   let lastDropAt = 0;
   let startScreenDismissed = $state(false);
   let formatPickerOpen = $state(false);
+  let formatChoiceResolve: ((formatId: string | null) => void) | null = null;
   let closePromptOpen = $state(false);
   let nativeCloseReady = $state(false);
   let closeRequestSource = $state<CloseRequestSource>(null);
@@ -144,6 +144,13 @@ import HelpDialog, { type HelpMode } from "./ui/HelpDialog.svelte";
         const href = safeLinkHref(src);
         if (href) window.open(href, "_blank", "noopener,noreferrer");
       },
+      chooseFormat: async () => {
+        formatPickerOpen = true;
+        return await new Promise<string | null>((resolve) => {
+          formatChoiceResolve?.(null);
+          formatChoiceResolve = resolve;
+        });
+      },
     },
     getFormats: () => formatsState.items,
     notify: reportError,
@@ -159,6 +166,9 @@ import HelpDialog, { type HelpMode } from "./ui/HelpDialog.svelte";
     },
     resetZoom: () => {
       if (editorView) resetZoom(editorView);
+    },
+    openNewDocumentWindow: async (formatId) => {
+      await invoke("open_new_window", { formatId });
     },
   });
 
@@ -236,6 +246,13 @@ import HelpDialog, { type HelpMode } from "./ui/HelpDialog.svelte";
   }
 
   function handleFormatSelect(format: FormatCapabilities): void {
+    if (formatChoiceResolve) {
+      const resolve = formatChoiceResolve;
+      formatChoiceResolve = null;
+      formatPickerOpen = false;
+      resolve(format.id);
+      return;
+    }
     setDocumentFormat(format);
     startScreenDismissed = true;
     formatPickerOpen = false;
@@ -407,10 +424,6 @@ import HelpDialog, { type HelpMode } from "./ui/HelpDialog.svelte";
     command(editorView);
   }
 
-  function wrapSelection(open: string, close = open): void {
-    runEditor((view) => toggleWrapper(view, open, close));
-  }
-
   function insertText(text: string): void {
     if (!editorView || isReadOnly) return;
     editorView.focus();
@@ -492,11 +505,11 @@ import HelpDialog, { type HelpMode } from "./ui/HelpDialog.svelte";
       case "paste": clipboard("paste"); break;
       case "delete": runEditor((view) => { if (!view.state.selection.main.empty) view.dispatch(view.state.replaceSelection("")); return true; }); break;
       case "select-all": runEditor(selectAll); break;
-      case "bold": wrapSelection("**"); break;
-      case "italic": wrapSelection("*"); break;
-      case "code": wrapSelection("`"); break;
-      case "strikethrough": wrapSelection("~~"); break;
-      case "highlight": wrapSelection("=="); break;
+      case "bold": void actions.run("format.bold"); break;
+      case "italic": void actions.run("format.italic"); break;
+      case "code": void actions.run("format.code"); break;
+      case "strikethrough": void actions.run("format.strikethrough"); break;
+      case "highlight": void actions.run("format.highlight"); break;
       case "link": insertLink(); break;
       case "open-link":
       case "open-image":
@@ -510,7 +523,7 @@ import HelpDialog, { type HelpMode } from "./ui/HelpDialog.svelte";
       case "edit-link": insertLink(); break;
       case "insert-table": insertText("| Column 1 | Column 2 |\n| --- | --- |\n|  |  |\n"); break;
       case "insert-callout": insertText("> [!NOTE] Note\n> \n"); break;
-      case "insert-code-block": insertText("```\n\n```\n"); break;
+      case "insert-code-block": void actions.run("format.codeBlock"); break;
       case "insert-math-block": insertText("$$\n\n$$\n"); break;
       case "insert-hr": insertText("\n---\n"); break;
     }
@@ -519,18 +532,11 @@ import HelpDialog, { type HelpMode } from "./ui/HelpDialog.svelte";
   function handleMenuAction(id: string): void {
     if (id.startsWith("file.new.")) {
       const format = formatsState.items.find((item) => item.id === id.slice("file.new.".length));
-      if (format) void createNewDocument(format);
+      if (format) void actions.newDocument(format.id);
       return;
     }
     switch (id) {
-      case "file.newWindow":
-        if (documentState.path) {
-          void invoke("open_in_new_window", { path: documentState.path }).catch(reportError);
-        } else {
-          const markdown = formatsState.items.find((format) => format.id === "markdown") ?? formatsState.items[0];
-          if (markdown) void createNewDocument(markdown);
-        }
-        break;
+      case "file.newWindow": void actions.newDocument("markdown"); break;
       case "file.open": void pickFile(); break;
       case "file.save": void saveNow(); break;
       case "file.saveAs": void saveDocumentAs(); break;
@@ -548,11 +554,14 @@ import HelpDialog, { type HelpMode } from "./ui/HelpDialog.svelte";
       case "edit.find": if (editorView) dispatchSearchOpen(editorView, false); break;
       case "edit.replace": if (editorView) dispatchSearchOpen(editorView, true); break;
       case "edit.pastePlainText": clipboard("paste"); break;
-      case "format.bold": wrapSelection("**"); break;
-      case "format.italic": wrapSelection("*"); break;
-      case "format.strikethrough": wrapSelection("~~"); break;
-      case "format.highlight": wrapSelection("=="); break;
-      case "format.code": wrapSelection("`"); break;
+      case "format.bold":
+      case "format.italic":
+      case "format.strikethrough":
+      case "format.highlight":
+      case "format.code":
+      case "format.codeBlock":
+        void actions.run(id);
+        break;
       case "format.link": insertLink(); break;
       case "format.heading1": applyHeading(1); break;
       case "format.heading2": applyHeading(2); break;
@@ -564,7 +573,6 @@ import HelpDialog, { type HelpMode } from "./ui/HelpDialog.svelte";
       case "format.list": applyList(); break;
       case "format.table": insertText("| Column 1 | Column 2 |\n| --- | --- |\n|  |  |\n"); break;
       case "format.callout": insertText("> [!NOTE] Note\n> \n"); break;
-      case "format.codeBlock": insertText("```\n\n```\n"); break;
       case "format.mathBlock": insertText("$$\n\n$$\n"); break;
       case "format.horizontalRule": insertText("\n---\n"); break;
       case "view.zoomIn": void actions.run("view.zoomIn"); break;
@@ -583,7 +591,7 @@ import HelpDialog, { type HelpMode } from "./ui/HelpDialog.svelte";
   }
 
   function handleWindowKeydown(event: KeyboardEvent): void {
-    if ((event.ctrlKey || event.metaKey) && event.key === ",") {
+    if ((event.ctrlKey || event.metaKey) && event.code === "Comma") {
       event.preventDefault();
       settingsOpen = true;
     }
@@ -700,6 +708,17 @@ import HelpDialog, { type HelpMode } from "./ui/HelpDialog.svelte";
         }
         const pendingPath = await invoke<string | null>("take_pending_file");
         if (pendingPath) void openFile(pendingPath);
+        const pendingFormat = await invoke<string | null>("take_pending_format");
+        if (pendingFormat) {
+          try {
+            const created = await invoke<NewDocument>("new_document", { formatId: pendingFormat });
+            resetDocument(created.format, created.text);
+            startScreenDismissed = true;
+            rebuildEditor(true);
+          } catch (error) {
+            reportError(error);
+          }
+        }
       } catch (error) {
         reportError(error);
       }
@@ -815,7 +834,11 @@ import HelpDialog, { type HelpMode } from "./ui/HelpDialog.svelte";
           formats={formatsState.items}
           selectedId={documentState.format.id}
           onSelect={handleFormatSelect}
-          onClose={() => (formatPickerOpen = false)}
+          onClose={() => {
+            formatPickerOpen = false;
+            formatChoiceResolve?.(null);
+            formatChoiceResolve = null;
+          }}
         />
       </div>
     {/if}
