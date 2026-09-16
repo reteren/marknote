@@ -53,42 +53,7 @@ export const SETTINGS_EXCEPTIONS: readonly SettingException[] = [
   },
 
 
-  {
-    path: "spellcheck.enabled",
-    reason:
-      "В процессе переноса (W87): проверка орфографии в src/editor/settings/spellcheck.ts",
-  },
-  {
-    path: "spellcheck.languages",
-    reason:
-      "В процессе переноса (W87): выбор словарей в src/editor/settings/spellcheck.ts",
-  },
-  {
-    path: "spellcheck.skipCodeFormulaLinks",
-    reason:
-      "В процессе переноса (W87): пропуск блоков кода, формул и ссылок в src/editor/settings/spellcheck.ts",
-  },
 
-  {
-    path: "autoCorrect.smartQuotes",
-    reason:
-      "В процессе переноса (W87): автозамена парных кавычек в src/editor/settings/spellcheck.ts",
-  },
-  {
-    path: "autoCorrect.doubleHyphenToEmDash",
-    reason:
-      "В процессе переноса (W87): автозамена двух дефисов на длинное тире в src/editor/settings/spellcheck.ts",
-  },
-  {
-    path: "autoCorrect.capitalizeAfterPeriod",
-    reason:
-      "В процессе переноса (W87): заглавная буква после точки в src/editor/settings/spellcheck.ts",
-  },
-  {
-    path: "autoCorrect.threeDotsToEllipsis",
-    reason:
-      "В процессе переноса (W87): замена трех точек на многоточие в src/editor/settings/spellcheck.ts",
-  },
 
   // --- Раздел файлов и сохранения (ожидает реализации подключения) ---
   {
@@ -199,7 +164,7 @@ function collectSourceFiles(dir: string): Array<{ path: string; content: string 
  * 4. Деструктуризацию: const { fontSize } = editor; const { fontSize } = settings.editor
  * 5. Контекстный доступ к фасетам/конфигурациям разделов (например, val.renderFormulas, config.revealMarkup)
  */
-export function isSettingReadInContent(path: string, content: string): boolean {
+export function isSettingReadInContent(path: string, content: string, filePath = ""): boolean {
   if (path.includes(".")) {
     const [section, prop] = path.split(".", 2);
     const escapedSection = escapeRegex(section);
@@ -223,13 +188,19 @@ export function isSettingReadInContent(path: string, content: string): boolean {
     );
     if (destructuring.test(content)) return true;
 
-    // Контекстный доступ к объектам конфигурации раздела в специализированных модулях
-    // (например, в livePreview: val.renderFormulas, config.revealMarkup, config?.renderImages)
-    if (section === "livePreview") {
-      const previewConfigAccess = new RegExp(
-        `\\b(?:livePreview|preview|previewConfig|config|val)\\??\\.${escapedProp}\\b`,
+    // Раздел, переданный целиком, разбирается в модуле, названном по этому
+    // разделу: settings.spellcheck уходит в src/editor/spellcheck.ts, и там
+    // поле читается уже как options.enabled или config.enabled.
+    //
+    // Правило намеренно узкое: свободное чтение вида options.enabled
+    // засчитывается только в файле, чей путь назван именем раздела. Иначе
+    // любое поле enabled в любом модуле закрывало бы любую настройку, и
+    // проверка перестала бы что-либо ловить.
+    if (filePath.toLowerCase().includes(section.toLowerCase())) {
+      const sectionConfigAccess = new RegExp(
+        `\\b(?:${escapedSection}|config|options|opts|val|preview|previewConfig)\\??\\.${escapedProp}\\b`,
       );
-      if (previewConfigAccess.test(content)) return true;
+      if (sectionConfigAccess.test(content)) return true;
     }
   } else {
     // Верхнеуровневое свойство (например, language)
@@ -258,7 +229,7 @@ export function findReadersForSetting(
   sourceFiles: Array<{ path: string; content: string }>,
 ): string[] {
   return sourceFiles
-    .filter(({ content }) => isSettingReadInContent(path, content))
+    .filter(({ content, path: filePath }) => isSettingReadInContent(path, content, filePath))
     .map(({ path }) => path);
 }
 

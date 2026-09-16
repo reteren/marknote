@@ -7,10 +7,16 @@
 
 import type { Extension } from "@codemirror/state";
 import type { Settings } from "../../state/settings.svelte";
+import { spellcheckExtension } from "../spellcheck";
+import { autoCorrectExtension } from "../autoCorrect";
 
 export function spellcheckSettingsExtensions(settings: Settings | null): Extension[] {
-  // Пока раздел не перенесён: правка ведётся без автозамены, а проверка
-  // орфографии остаётся такой, какой её делает webview по умолчанию.
-  void settings;
-  return [];
+  if (!settings) {
+    return [];
+  }
+
+  return [
+    ...spellcheckExtension(settings.spellcheck),
+    ...autoCorrectExtension(settings.autoCorrect),
+  ];
 }
