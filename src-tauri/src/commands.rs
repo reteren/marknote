@@ -313,12 +313,6 @@ pub fn new_document(formatId: String) -> Result<NewDocument, CommandError> {
     })
 }
 
-/// Устанавливает готовый заголовок окна, переданный фронтендом.
-#[tauri::command]
-pub fn set_document_title(window: WebviewWindow, title: String) -> Result<(), CommandError> {
-    windows::apply_document_title(&window, &title).map_err(CommandError::Window)
-}
-
 #[tauri::command]
 pub fn list_creatable_formats() -> Vec<FormatCapabilities> {
     formats::creatable()

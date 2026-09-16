@@ -220,7 +220,6 @@ const en = {
   "settings.editor.fontFamily": "Editor font",
   "settings.editor.fontFamilyDescription": "Changes the typeface used for document text, not the app interface.",
   "settings.editor.fontSize": "Font size",
-  "settings.editor.highlightCurrentLine": "Highlight current line",
   "settings.editor.insertSpaces": "Indent with spaces",
   "settings.editor.insertSpacesDescription": "When off, indentation uses tab characters.",
   "settings.editor.lineNumbers": "Line numbers",

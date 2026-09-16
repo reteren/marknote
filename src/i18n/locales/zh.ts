@@ -219,7 +219,6 @@ const zh = {
   "settings.editor.fontFamily": "编辑器字体",
   "settings.editor.fontFamilyDescription": "仅更改文档文本的字体，不影响应用程序界面。",
   "settings.editor.fontSize": "字体大小",
-  "settings.editor.highlightCurrentLine": "高亮当前行",
   "settings.editor.insertSpaces": "使用空格缩进",
   "settings.editor.insertSpacesDescription": "关闭时，使用制表符 (Tab) 进行缩进。",
   "settings.editor.lineNumbers": "行号",

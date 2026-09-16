@@ -219,7 +219,6 @@ const it = {
   "settings.editor.fontFamily": "Carattere dell'editor",
   "settings.editor.fontFamilyDescription": "Modifica il carattere del documento, non quello dell'interfaccia.",
   "settings.editor.fontSize": "Dimensione carattere",
-  "settings.editor.highlightCurrentLine": "Evidenzia riga corrente",
   "settings.editor.insertSpaces": "Rientro con spazi",
   "settings.editor.insertSpacesDescription": "Se disattivato, per il rientro vengono usati caratteri di tabulazione.",
   "settings.editor.lineNumbers": "Numeri di riga",

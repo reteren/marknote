@@ -219,7 +219,6 @@ const pt = {
   "settings.editor.fontFamily": "Tipo de letra do editor",
   "settings.editor.fontFamilyDescription": "Altera o tipo de letra do texto do documento, não da interface da aplicação.",
   "settings.editor.fontSize": "Tamanho do tipo de letra",
-  "settings.editor.highlightCurrentLine": "Realçar linha atual",
   "settings.editor.insertSpaces": "Avanço com espaços",
   "settings.editor.insertSpacesDescription": "Quando desativado, o avanço utiliza carateres de tabulação.",
   "settings.editor.lineNumbers": "Números de linha",

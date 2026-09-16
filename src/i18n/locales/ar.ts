@@ -247,7 +247,6 @@ const ar = {
   "settings.editor.fontFamily": "خط المحرر",
   "settings.editor.fontFamilyDescription": "يغير خط نص المستند دون التأثير على واجهة التطبيق.",
   "settings.editor.fontSize": "حجم الخط",
-  "settings.editor.highlightCurrentLine": "تمييز السطر الحالي",
   "settings.editor.insertSpaces": "المسافة البادئة باستخدام مسافات",
   "settings.editor.insertSpacesDescription": "عند التعطيل، تُستخدم علامات الجدولة للمسافة البادئة.",
   "settings.editor.lineNumbers": "أرقام السطور",

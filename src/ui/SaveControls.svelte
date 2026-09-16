@@ -181,6 +181,8 @@
     display: inline-flex;
     align-items: center;
     gap: 6px;
+    height: 100%;
+    max-height: 100%;
     font-family: var(--font-ui);
     font-size: var(--font-size-ui);
     white-space: nowrap;

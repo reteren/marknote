@@ -139,8 +139,6 @@ pub struct EditorSettings {
     pub soft_wrap: bool,
     #[serde(default)]
     pub show_invisibles: bool,
-    #[serde(default = "default_true")]
-    pub highlight_current_line: bool,
     #[serde(default)]
     pub line_numbers: bool,
 }
@@ -156,7 +154,6 @@ impl Default for EditorSettings {
             insert_spaces: true,
             soft_wrap: true,
             show_invisibles: false,
-            highlight_current_line: true,
             line_numbers: false,
         }
     }
@@ -648,7 +645,6 @@ mod tests {
                 insert_spaces: false,
                 soft_wrap: false,
                 show_invisibles: true,
-                highlight_current_line: false,
                 line_numbers: true,
             },
             live_preview: LivePreviewSettings {

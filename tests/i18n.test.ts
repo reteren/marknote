@@ -24,7 +24,7 @@ const defaultSettings = () => ({
   editor: {
     fontFamily: "system-serif", fontSize: 15, zoomPercent: 100, columnWidth: "normal",
     tabWidth: 4, insertSpaces: true, softWrap: true, showInvisibles: false,
-    highlightCurrentLine: true, lineNumbers: false,
+    lineNumbers: false,
   },
   livePreview: {
     enabled: true, revealMarkup: "cursor", renderFormulas: true, renderImages: true,

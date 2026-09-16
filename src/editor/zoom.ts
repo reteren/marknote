@@ -55,11 +55,14 @@ function zoomTheme(percent: number): Extension {
   const factor = percent / ZOOM_DEFAULT;
   return EditorView.theme({
     // Меню и строка состояния не меняются: селектор ограничен этим редактором.
-    "&": {
+    // `marknoteTheme` is installed after the settings compartment.  Include
+    // the editor class in the zoom selectors so these calculated values win
+    // over the base variable declaration without using !important.
+    "&.cm-editor": {
       fontSize: `calc(var(--font-size-text) * ${factor})`,
       maxWidth: "var(--line-width)",
     },
-    ".cm-content": {
+    "&.cm-editor .cm-content": {
       fontSize: `calc(var(--font-size-text) * ${factor})`,
     },
   });

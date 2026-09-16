@@ -26,7 +26,6 @@ export type Settings = {
     insertSpaces: boolean;
     softWrap: boolean;
     showInvisibles: boolean;
-    highlightCurrentLine: boolean;
     lineNumbers: boolean;
   };
   livePreview: {
@@ -93,7 +92,6 @@ export const defaultSettings: Settings = {
     insertSpaces: true,
     softWrap: true,
     showInvisibles: false,
-    highlightCurrentLine: true,
     lineNumbers: false,
   },
   livePreview: {

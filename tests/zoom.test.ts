@@ -139,6 +139,15 @@ describe("editor zoom", () => {
     expect(view.dom.classList.contains("cm-editor")).toBe(true);
   });
 
+  it("changes the effective editor font-size rule when zoom changes", () => {
+    const view = editor();
+    installZoom(view);
+    zoomIn(view);
+    const styleText = Array.from(document.head.querySelectorAll("style"), (style) => style.textContent ?? "").join("\n");
+    expect(styleText).toContain(".cm-editor .cm-content");
+    expect(styleText).toContain("calc(var(--font-size-text) * 1.1)");
+  });
+
   it("does not fail when localStorage is unavailable", () => {
     const getItem = vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
       throw new Error("storage disabled");

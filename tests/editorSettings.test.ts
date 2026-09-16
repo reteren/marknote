@@ -103,12 +103,9 @@ describe("editor appearance settings", () => {
     expect(view.dom.querySelector(".cm-highlightSpace")).not.toBeNull();
   });
 
-  it("applies highlightCurrentLine to active line", () => {
-    const view = createTestEditor({
-      ...defaultSettings,
-      editor: { ...defaultSettings.editor, highlightCurrentLine: true },
-    });
-    expect(view.dom.querySelector(".cm-activeLine")).not.toBeNull();
+  it("does not install current-line highlighting", () => {
+    const view = createTestEditor();
+    expect(view.dom.querySelector(".cm-activeLine")).toBeNull();
   });
 
   it("applies lineNumbers to gutters", () => {

@@ -219,7 +219,6 @@ const es = {
   "settings.editor.fontFamily": "Fuente del editor",
   "settings.editor.fontFamilyDescription": "Cambia la letra del documento, no la interfaz de la aplicación.",
   "settings.editor.fontSize": "Tamaño de fuente",
-  "settings.editor.highlightCurrentLine": "Resaltar línea actual",
   "settings.editor.insertSpaces": "Sangrar con espacios",
   "settings.editor.insertSpacesDescription": "Si se desactiva, se usan tabuladores para sangrar.",
   "settings.editor.lineNumbers": "Números de línea",

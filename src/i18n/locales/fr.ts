@@ -219,7 +219,6 @@ const fr = {
   "settings.editor.fontFamily": "Police de l'éditeur",
   "settings.editor.fontFamilyDescription": "Modifie la police du texte du document, pas celle de l'interface.",
   "settings.editor.fontSize": "Taille de police",
-  "settings.editor.highlightCurrentLine": "Surligner la ligne active",
   "settings.editor.insertSpaces": "Indenter avec des espaces",
   "settings.editor.insertSpacesDescription": "Si désactivé, l'indentation utilise des tabulations.",
   "settings.editor.lineNumbers": "Numéros de ligne",

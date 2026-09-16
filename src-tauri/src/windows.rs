@@ -547,11 +547,6 @@ fn raise_window(window: &WebviewWindow) {
 /// Начальный заголовок окна до передачи заголовка документа фронтендом.
 pub const INITIAL_WINDOW_TITLE: &str = "MarkNote";
 
-/// Применяет готовый заголовок к окну.
-pub(crate) fn apply_document_title(window: &WebviewWindow, title: &str) -> Result<(), String> {
-    window.set_title(title).map_err(|error| error.to_string())
-}
-
 pub(crate) fn canonical_path(path: &Path) -> Result<PathBuf, String> {
     std::fs::canonicalize(path)
         .map(preserve_extended_path)

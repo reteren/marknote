@@ -219,7 +219,6 @@ const ja = {
   "settings.editor.fontFamily": "エディタのフォント",
   "settings.editor.fontFamilyDescription": "ドキュメント本文のフォントを変更します。アプリの UI には影響しません。",
   "settings.editor.fontSize": "フォントサイズ",
-  "settings.editor.highlightCurrentLine": "現在の行を強調表示",
   "settings.editor.insertSpaces": "スペースでインデント",
   "settings.editor.insertSpacesDescription": "オフの場合、インデントにタブ文字を使用します。",
   "settings.editor.lineNumbers": "行番号",

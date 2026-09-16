@@ -360,16 +360,9 @@ import { EditorView, type EditorView as EditorViewType } from "@codemirror/view"
     actions.resetLossyWarning();
     startScreenDismissed = true;
     formatPickerOpen = false;
-    // У безымянного документа имя в заголовке зависит от типа: Untitled.md
-    // против Untitled.json. Заголовок ставится из Rust, потому что setTitle
-    // с фронтенда молча подавляется разрешениями Tauri.
-    void invoke("set_document_title", {
-      path: documentState.path,
-      defaultExtension: format.defaultExtension,
-    }).catch(() => {
-      // Заголовок — украшение, а не работа программы: его неудача не должна
-      // мешать пользователю сменить тип документа.
-    });
+    // Заголовок окна пересчитается сам: он выведен из documentState, а тот
+    // только что изменился. Отдельного вызова здесь быть не должно — две
+    // реализации одного заголовка мы уже разводили и в меню, и в правке.
     if (editorView) {
       void setEditorFormat(editorView, format);
       editorView.focus();
@@ -755,7 +748,12 @@ import { EditorView, type EditorView as EditorViewType } from "@codemirror/view"
     const currentTitle = title;
     if (typeof globalThis.document !== "undefined") globalThis.document.title = currentTitle;
     try {
-      void getCurrentWindow().setTitle(currentTitle).catch(() => undefined);
+      void getCurrentWindow()
+        .setTitle(currentTitle)
+        // Ошибку показываем, а не глотаем: именно молчаливый catch скрывал,
+        // что у окна не было разрешения на смену заголовка и в панели задач
+        // все окна назывались одинаково.
+        .catch((error) => console.error("Не удалось задать заголовок окна", error));
     } catch {
       // Запуск вне Tauri не должен ломать редактор.
     }
@@ -1031,7 +1029,7 @@ import { EditorView, type EditorView as EditorViewType } from "@codemirror/view"
     z-index: 25;
     display: flex;
     align-items: center;
-    height: var(--menubar-height);
+    height: calc(var(--menubar-height) - 1px);
     padding-inline-start: 8px;
     background: var(--bg-secondary);
   }

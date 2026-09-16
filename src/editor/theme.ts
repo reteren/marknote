@@ -43,9 +43,6 @@ export const marknoteTheme: Extension = [
     "&.cm-focused .cm-selectionBackground, &.cm-focused ::selection": {
       backgroundColor: "var(--text-selection)",
     },
-    ".cm-activeLine": {
-      backgroundColor: "var(--bg-primary-alt)",
-    },
     ".cm-gutters": {
       backgroundColor: "var(--bg-primary)",
       color: "var(--text-faint)",

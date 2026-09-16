@@ -66,7 +66,6 @@
     { path: "editor.insertSpaces", type: "toggle", titleKey: "settings.editor.insertSpaces", descriptionKey: "settings.editor.insertSpacesDescription" },
     { path: "editor.softWrap", type: "toggle", titleKey: "settings.editor.softWrap" },
     { path: "editor.showInvisibles", type: "toggle", titleKey: "settings.editor.showInvisibles", descriptionKey: "settings.editor.showInvisiblesDescription" },
-    { path: "editor.highlightCurrentLine", type: "toggle", titleKey: "settings.editor.highlightCurrentLine" },
     { path: "editor.lineNumbers", type: "toggle", titleKey: "settings.editor.lineNumbers" },
     { path: "livePreview.enabled", type: "toggle", titleKey: "settings.preview.enabled" },
     { path: "livePreview.revealMarkup", type: "select", titleKey: "settings.preview.revealMarkup", descriptionKey: "settings.preview.revealMarkupDescription", options: [
@@ -134,7 +133,6 @@
   let copiedVersion = $state(false);
   let settingsFileError = $state(false);
   let zoomView = $derived(editorView);
-  let zoomPercent = $derived(settingsState.settings.editor.zoomPercent);
   let matchingSections = $state<Section[]>(sections);
 
   function settingValue(path: string): unknown {
@@ -452,7 +450,6 @@
                     onchange={(event) => updateDescriptor(descriptor, event.currentTarget.value)}
                   />
                   {#if descriptor.unit}<span>{t(descriptor.unit)}</span>{/if}
-                  {#if descriptor.path === "editor.zoomPercent"}<output aria-label={t("settings.editor.zoom")}>{zoomPercent}%</output>{/if}
                 </label>
               {:else if descriptor.type === "select"}
                 <select
@@ -617,15 +614,13 @@
   .section-nav button.active { border-color: var(--bg-modifier-border); background: var(--bg-modifier-hover); color: var(--text-accent); }
 
   .settings-content { position: relative; min-width: 0; overflow: auto; padding: 8px 24px 24px; }
-  .toggle-input { width: 18px; height: 18px; accent-color: var(--accent); cursor: pointer; }
+  .toggle-input { cursor: pointer; }
   .numeric-control { display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
   .numeric-control input { width: 90px; }
-  .numeric-control span, .numeric-control output, .fixed-value { color: var(--text-muted); white-space: nowrap; }
-  .numeric-control output { min-width: 42px; text-align: end; }
+  .numeric-control span, .fixed-value { color: var(--text-muted); white-space: nowrap; }
   .settings-content select { width: 100%; max-width: 260px; }
   .language-list { display: grid; gap: 7px; max-height: 245px; overflow: auto; }
   .language-option { display: flex; align-items: center; gap: 8px; }
-  .language-option input { accent-color: var(--accent); }
   .language-option.unavailable { color: var(--text-faint); }
   .dictionary-note { color: var(--text-muted); font-size: 11px; }
 

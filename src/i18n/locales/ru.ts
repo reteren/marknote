@@ -219,7 +219,6 @@ const ru = {
   "settings.editor.fontFamily": "Шрифт редактора",
   "settings.editor.fontFamilyDescription": "Меняет шрифт текста документа, а не интерфейса.",
   "settings.editor.fontSize": "Размер шрифта",
-  "settings.editor.highlightCurrentLine": "Подсветка текущей строки",
   "settings.editor.insertSpaces": "Отступ пробелами",
   "settings.editor.insertSpacesDescription": "Если выключено, для отступа используются табуляции.",
   "settings.editor.lineNumbers": "Номера строк",

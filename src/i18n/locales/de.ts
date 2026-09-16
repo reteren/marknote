@@ -219,7 +219,6 @@ const de = {
   "settings.editor.fontFamily": "Editor-Schrift",
   "settings.editor.fontFamilyDescription": "Ändert die Dokumentschrift, nicht die App-Oberfläche.",
   "settings.editor.fontSize": "Schriftgröße",
-  "settings.editor.highlightCurrentLine": "Aktuelle Zeile hervorheben",
   "settings.editor.insertSpaces": "Mit Leerzeichen einrücken",
   "settings.editor.insertSpacesDescription": "Ist dies aus, werden Tabulatoren zum Einrücken verwendet.",
   "settings.editor.lineNumbers": "Zeilennummern",

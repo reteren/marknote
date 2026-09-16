@@ -1,5 +1,5 @@
 // Раздел settings.editor: шрифт, размер, ширина колонки, табуляция,
-// невидимые символы, подсветка строки, нумерация строк, мягкий перенос.
+// невидимые символы, нумерация строк, мягкий перенос.
 //
 // Поле zoomPercent сюда не входит: масштаб живёт в src/editor/zoom.ts и
 // работает по Ctrl +/- отдельно.
@@ -10,7 +10,6 @@ import { EditorState, type Extension } from "@codemirror/state";
 import { indentUnit } from "@codemirror/language";
 import {
   EditorView,
-  highlightActiveLine,
   highlightTrailingWhitespace,
   highlightWhitespace,
   lineNumbers,
@@ -26,7 +25,9 @@ function resolveFontFamily(fontFamily?: string): string {
     case "monospace":
       return "var(--font-mono)";
     default:
-      return fontFamily && fontFamily.trim().length > 0 ? fontFamily : "var(--font-text)";
+      return fontFamily && fontFamily.trim().length > 0
+        ? fontFamily
+        : '"Inter", "Segoe UI Variable", "Segoe UI", sans-serif';
   }
 }
 
@@ -41,7 +42,7 @@ function resolveColumnWidth(columnWidth?: ColumnWidth): string {
     case "fullWidth":
       return "none";
     default:
-      return "var(--line-width)";
+      return "81ch";
   }
 }
 
@@ -61,11 +62,6 @@ export function editorAppearanceExtensions(settings: Settings | null): Extension
     extensions.push(lineNumbers());
   }
 
-  // Подсветка текущей строки: в окне настроек включена по умолчанию.
-  if (editor?.highlightCurrentLine === true) {
-    extensions.push(highlightActiveLine());
-  }
-
   // Невидимые символы: пробелы и хвостовые пробелы при редактировании.
   if (editor?.showInvisibles === true) {
     extensions.push(highlightWhitespace(), highlightTrailingWhitespace());
@@ -82,28 +78,15 @@ export function editorAppearanceExtensions(settings: Settings | null): Extension
   const fontFamily = resolveFontFamily(editor?.fontFamily);
   const fontSize = typeof editor?.fontSize === "number" && editor.fontSize > 0
     ? `${editor.fontSize}px`
-    : "var(--font-size-text)";
-  const isFullWidth = editor?.columnWidth === "fullWidth";
+    : "16px";
   const maxWidth = resolveColumnWidth(editor?.columnWidth);
 
   extensions.push(
     EditorView.theme({
       "&": {
-        fontFamily,
-        fontSize,
-        maxWidth,
-        margin: isFullWidth ? "0" : "0 auto",
         "--font-text": fontFamily,
         "--font-size-text": fontSize,
         "--line-width": maxWidth,
-        "--editor-margin": isFullWidth ? "0" : "0 auto",
-      },
-      ".cm-scroller": {
-        fontFamily,
-      },
-      ".cm-content": {
-        fontFamily,
-        fontSize,
       },
     }),
   );
