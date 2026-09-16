@@ -9,7 +9,14 @@ import { onMount, tick } from "svelte";
   import { installZoom, resetZoom, zoomIn, zoomOut } from "./editor/zoom";
   import { safeLinkHref } from "./editor/livePreview/inline";
   import { createActions } from "./state/actions";
-  import { createEditor, setEditorDocumentPath, setEditorFormat, type EditorStats } from "./editor/createEditor";
+  import {
+    createEditor,
+    createEditorState,
+    setEditorDocumentPath,
+    setEditorFormat,
+    setEditorState,
+    type EditorStats,
+  } from "./editor/createEditor";
   import { applyEditorSettings } from "./editor/settings";
   import { settingsState } from "./state/settings.svelte";
   import { dispatchSearchOpen } from "./editor/search";
@@ -39,17 +46,30 @@ import FormatPicker from "./ui/FormatPicker.svelte";
 import Notice from "./ui/Notice.svelte";
 import HelpDialog, { type HelpMode } from "./ui/HelpDialog.svelte";
   import SettingsWindow from "./ui/SettingsWindow.svelte";
+  import TabBar from "./ui/TabBar.svelte";
+  import {
+    workspace,
+    openTab,
+    closeTab,
+    activateTab,
+    activeTab,
+    tabLabel,
+    type TabId,
+  } from "./state/workspace.svelte";
+  import type { EditorState } from "@codemirror/state";
   import TitleBar from "./ui/TitleBar.svelte";
   import { formatLabel, translate as t } from "./i18n";
 import { EditorView, type EditorView as EditorViewType } from "@codemirror/view";
 
   type OpenFileRequest = { path: string };
   type CloseChoice = "save" | "discard" | "cancel";
-  type CloseRequestSource = "menu" | "native" | null;
+  type CloseRequestSource = "menu" | "native" | "tab" | null;
   type SelectionSnapshot = Array<{ anchor: number; head: number }>;
 
   let editorHost: HTMLDivElement | undefined = $state();
   let editorView = $state<EditorViewType | null>(null);
+  const tabEditorStates = new Map<TabId, EditorState>();
+  let pendingCloseTabId = $state<TabId | null>(null);
   let autosaveController: ReturnType<typeof createAutosave> | null = null;
   let openingPathKey: string | null = null;
   let unlistenNativeDrop: UnlistenFn | undefined;
@@ -206,6 +226,7 @@ import { EditorView, type EditorView as EditorViewType } from "@codemirror/view"
       },
     });
     installZoom(editorView);
+    tabEditorStates.set(workspace.activeId, editorView.state);
     if (focus) editorView.focus();
   }
 
@@ -491,7 +512,89 @@ import { EditorView, type EditorView as EditorViewType } from "@codemirror/view"
     await closeWindowAfterDecision();
   }
 
+  function handleOpenNewTab(): void {
+    if (editorView) {
+      tabEditorStates.set(workspace.activeId, editorView.state);
+    }
+    const newId = openTab();
+    startScreenDismissed = false;
+    if (editorView) {
+      const tab = activeTab();
+      const newState = createEditorState(editorView, {
+        doc: tab.document.text,
+        format: tab.document.format,
+        path: tab.document.path,
+      });
+      tabEditorStates.set(newId, newState);
+      setEditorState(editorView, newState);
+      editorView.focus();
+    } else {
+      rebuildEditor(true);
+    }
+  }
+
+  function handleSelectTab(id: TabId): void {
+    if (id === workspace.activeId) return;
+    if (editorView) {
+      tabEditorStates.set(workspace.activeId, editorView.state);
+    }
+    activateTab(id);
+    const tab = activeTab();
+    startScreenDismissed = tab.document.path !== null || tab.document.text.length > 0;
+    if (editorView) {
+      let nextState = tabEditorStates.get(id);
+      if (!nextState) {
+        nextState = createEditorState(editorView, {
+          doc: tab.document.text,
+          format: tab.document.format,
+          path: tab.document.path,
+        });
+        tabEditorStates.set(id, nextState);
+      }
+      setEditorState(editorView, nextState);
+      editorView.focus();
+    }
+  }
+
+  async function handleCloseTab(id: TabId): Promise<void> {
+    const tab = workspace.tabs.find((t) => t.id === id);
+    if (!tab) return;
+
+    if (workspace.tabs.length <= 1) {
+      await requestClose();
+      return;
+    }
+
+    if (tab.document.dirty) {
+      handleSelectTab(id);
+      pendingCloseTabId = id;
+      closeRequestSource = "tab";
+      closePromptOpen = true;
+      return;
+    }
+
+    tabEditorStates.delete(id);
+    const wasActive = workspace.activeId === id;
+    closeTab(id);
+    if (wasActive && editorView) {
+      const nextTab = activeTab();
+      let nextState = tabEditorStates.get(nextTab.id);
+      if (!nextState) {
+        nextState = createEditorState(editorView, {
+          doc: nextTab.document.text,
+          format: nextTab.document.format,
+          path: nextTab.document.path,
+        });
+        tabEditorStates.set(nextTab.id, nextState);
+      }
+      setEditorState(editorView, nextState);
+      editorView.focus();
+    }
+  }
+
   async function handleCloseChoice(choice: CloseChoice): Promise<void> {
+    const tabToClose = pendingCloseTabId;
+    pendingCloseTabId = null;
     const source = closeRequestSource;
     closePromptOpen = false;
     closeRequestSource = null;
@@ -505,6 +608,26 @@ import { EditorView, type EditorView as EditorViewType } from "@codemirror/view"
         if (source === "native") await respondToNativeClose(false);
         return;
       }
+    }
+    if (tabToClose) {
+      tabEditorStates.delete(tabToClose);
+      const wasActive = workspace.activeId === tabToClose;
+      closeTab(tabToClose);
+      if (wasActive && editorView) {
+        const nextTab = activeTab();
+        let nextState = tabEditorStates.get(nextTab.id);
+        if (!nextState) {
+          nextState = createEditorState(editorView, {
+            doc: nextTab.document.text,
+            format: nextTab.document.format,
+            path: nextTab.document.path,
+          });
+          tabEditorStates.set(nextTab.id, nextState);
+        }
+        setEditorState(editorView, nextState);
+        editorView.focus();
+      }
+      return;
     }
     if (source === "native") {
       await respondToNativeClose(true);
@@ -632,10 +755,17 @@ import { EditorView, type EditorView as EditorViewType } from "@codemirror/view"
     }
     switch (id) {
       case "file.newWindow": void actions.newDocument(); break;
+      case "file.newTab": handleOpenNewTab(); break;
       case "file.open": void pickFile(); break;
       case "file.save": void saveNow(); break;
       case "file.saveAs": void saveDocumentAs(); break;
-      case "file.close": void requestClose(); break;
+      case "file.close":
+        if (workspace.tabs.length > 1) {
+          void handleCloseTab(workspace.activeId);
+        } else {
+          void requestClose();
+        }
+        break;
       case "file.settings": void actions.run(id); break;
       case "edit.undo": runEditor(undo); break;
       case "edit.redo": runEditor(redo); break;
@@ -691,6 +821,14 @@ import { EditorView, type EditorView as EditorViewType } from "@codemirror/view"
     if ((event.ctrlKey || event.metaKey) && event.code === "Comma") {
       event.preventDefault();
       settingsOpen = true;
+    } else if ((event.ctrlKey || event.metaKey) && event.code === "KeyT") {
+      event.preventDefault();
+      handleOpenNewTab();
+    } else if ((event.ctrlKey || event.metaKey) && event.code === "KeyW") {
+      if (workspace.tabs.length > 1) {
+        event.preventDefault();
+        void handleCloseTab(workspace.activeId);
+      }
     }
   }
 
@@ -862,6 +1000,17 @@ import { EditorView, type EditorView as EditorViewType } from "@codemirror/view"
       onFocusEditor={() => editorView?.focus()}
     />
     <div class="save-controls-overlay">
+      {#if workspace.tabs.length < 2}
+        <button
+          type="button"
+          class="single-tab-new-btn"
+          title={t("tabs.newTab") + " (Ctrl+T)"}
+          aria-label={t("tabs.newTab")}
+          onclick={handleOpenNewTab}
+        >
+          +
+        </button>
+      {/if}
       <SaveControls
         saveStatus={documentState.saveStatus}
         lastSavedAt={documentState.lastSavedAt}
@@ -879,6 +1028,12 @@ import { EditorView, type EditorView as EditorViewType } from "@codemirror/view"
       />
     </div>
   </div>
+
+  <TabBar
+    onNewTab={handleOpenNewTab}
+    onSelectTab={handleSelectTab}
+    onCloseTab={(id) => void handleCloseTab(id)}
+  />
 
   <div class="notice-row">
     {#if documentState.externalChange === "changed"}
@@ -1001,7 +1156,7 @@ import { EditorView, type EditorView as EditorViewType } from "@codemirror/view"
 <style>
   .app-shell {
     display: grid;
-    grid-template-rows: auto auto auto minmax(0, 1fr) auto;
+    grid-template-rows: auto auto auto auto minmax(0, 1fr) auto;
     height: 100vh;
     overflow: hidden;
     background: var(--bg-primary);
@@ -1034,11 +1189,46 @@ import { EditorView, type EditorView as EditorViewType } from "@codemirror/view"
     background: var(--bg-secondary);
   }
 
+  .single-tab-new-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    margin-inline-end: 8px;
+    border: 1px dashed var(--bg-modifier-border);
+    border-radius: var(--radius-s);
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-family: var(--font-ui);
+    font-size: 14px;
+    line-height: 1;
+    transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+  }
+
+  .single-tab-new-btn:hover {
+    background: var(--bg-modifier-hover);
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  .single-tab-new-btn:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+  }
+
   .editor-stage {
     position: relative;
     min-height: 0;
     overflow: hidden;
     background: var(--bg-primary);
+    outline: none;
+  }
+
+  .editor-stage:focus,
+  .editor-stage:focus-visible {
+    outline: none;
   }
 
   .notice-row {
@@ -1048,6 +1238,12 @@ import { EditorView, type EditorView as EditorViewType } from "@codemirror/view"
   .editor-host {
     height: 100%;
     overflow: hidden;
+    outline: none;
+  }
+
+  .editor-host:focus,
+  .editor-host:focus-visible {
+    outline: none;
   }
 
   .status-area {

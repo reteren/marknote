@@ -9,7 +9,10 @@ const ZOOM_MAX = 200;
 const ZOOM_STEP = 10;
 const ZOOM_STORAGE_KEY = "marknote.editor.zoom";
 
-type ZoomRuntime = {
+/** Runtime масштаба принадлежит одному EditorView и переиспользуется его
+ * состояниями вкладок. Сам отсек должен присутствовать в каждом состоянии,
+ * иначе view.setState не сможет перенастроить масштаб после переключения. */
+export type ZoomRuntime = {
   compartment: Compartment;
   percent: number;
 };
@@ -51,7 +54,7 @@ function getInitialZoom(): number {
   return readStoredZoom();
 }
 
-function zoomTheme(percent: number): Extension {
+export function zoomTheme(percent: number): Extension {
   const factor = percent / ZOOM_DEFAULT;
   return EditorView.theme({
     // Меню и строка состояния не меняются: селектор ограничен этим редактором.
@@ -68,14 +71,38 @@ function zoomTheme(percent: number): Extension {
   });
 }
 
+/** Создаёт отсек масштаба до создания первого EditorState. */
+export function createZoomRuntime(initialPercent?: number): ZoomRuntime {
+  return {
+    compartment: new Compartment(),
+    percent: initialPercent === undefined ? getInitialZoom() : clampZoom(initialPercent),
+  };
+}
+
+/** Добавляет отсек масштаба в список расширений состояния. */
+export function zoomRuntimeExtension(runtime: ZoomRuntime): Extension {
+  return runtime.compartment.of(zoomTheme(runtime.percent));
+}
+
+/** Регистрирует заранее созданный runtime за view. */
+export function registerZoomRuntime(view: EditorView, runtime: ZoomRuntime): void {
+  runtimes.set(view, runtime);
+}
+
+/** Синхронизирует отсек масштаба после setState. */
+export function reconfigureZoom(view: EditorView): void {
+  const runtime = ensureRuntime(view);
+  view.dispatch({
+    effects: runtime.compartment.reconfigure(zoomTheme(runtime.percent)),
+    selection: view.state.selection,
+  });
+}
+
 function ensureRuntime(view: EditorView): ZoomRuntime {
   const existing = runtimes.get(view);
   if (existing) return existing;
 
-  const runtime: ZoomRuntime = {
-    compartment: new Compartment(),
-    percent: getInitialZoom(),
-  };
+  const runtime = createZoomRuntime();
   runtimes.set(view, runtime);
   view.dispatch({
     effects: StateEffect.appendConfig.of(runtime.compartment.of(zoomTheme(runtime.percent))),

@@ -18,7 +18,19 @@ import { marknoteTheme } from "./theme";
 import { createImageResolver } from "./imageResolver";
 import type { FormatCapabilities } from "../state/formats.svelte";
 import type { Settings } from "../state/settings.svelte";
-import { editorSettingsExtensions, settingsCompartment } from "./settings";
+import {
+  editorSettingsExtensions,
+  editorSettingsStateField,
+  setEditorSettingsEffect,
+  settingsCompartment,
+} from "./settings";
+import {
+  createZoomRuntime,
+  reconfigureZoom,
+  registerZoomRuntime,
+  zoomRuntimeExtension,
+  type ZoomRuntime,
+} from "./zoom";
 
 export type EditorStats = {
   line: number;
@@ -193,10 +205,29 @@ export function loadSyntaxMode(mode: string): Promise<LanguageSupport | null> {
   return request;
 }
 
+export type EditorStateOptions = {
+  doc: string;
+  path?: string | null;
+  format: FormatCapabilities;
+  settings?: Settings | null;
+};
+
+export type EditorScrollPosition = {
+  top: number;
+  left: number;
+};
+
 type EditorRuntime = {
   formatCompartment: Compartment;
   formatField: StateField<FormatCapabilities>;
+  documentPathField: StateField<string | null>;
+  zoom: ZoomRuntime;
   imageResolver: ReturnType<typeof createImageResolver>;
+  createState: (opts: EditorStateOptions) => EditorState;
+  handlers?: MarknoteKeymapHandlers;
+  onChange: (doc: string) => void;
+  onStats: (stats: EditorStats) => void;
+  scrollPositions: WeakMap<EditorState, EditorScrollPosition>;
 };
 
 const editorRuntimes = new WeakMap<EditorView, EditorRuntime>();
@@ -285,6 +316,116 @@ export function setEditorFormat(view: EditorView, format: FormatCapabilities): P
 /** Алиас для обратной совместимости */
 export const setEditorDocumentFormat = setEditorFormat;
 
+function buildEditorState(runtime: EditorRuntime, opts: EditorStateOptions): EditorState {
+  const extensions: Extension[] = [
+    runtime.documentPathField,
+    runtime.formatField,
+    // Таблица обрабатывает Tab раньше общего keymap, иначе сработает
+    // отступ списка вместо перехода к следующей ячейке.
+    keymap.of(tableKeymap),
+    createMarknoteKeymap({ handlers: runtime.handlers }),
+    marknoteSearch(),
+    // Всё, что зависит от настроек, — в одном отсеке: смена настройки
+    // перенастраивает его, а не пересоздаёт редактор.
+    settingsCompartment.of(editorSettingsExtensions(opts.settings ?? null)),
+    editorSettingsStateField,
+    syntaxHighlighting(classHighlighter),
+    syntaxTokenTheme,
+    marknoteTheme,
+    // Один и тот же отсек присутствует в каждом состоянии вкладки. Сам
+    // процент масштаба хранится в runtime view и синхронизируется при
+    // переключении состояния.
+    zoomRuntimeExtension(runtime.zoom),
+    EditorView.updateListener.of((update) => {
+      if (update.docChanged) runtime.onChange(update.state.doc.toString());
+      if (update.docChanged || update.selectionSet) runtime.onStats(getEditorStats(update.state));
+    }),
+  ];
+  extensions.splice(
+    extensions.indexOf(marknoteTheme),
+    0,
+    runtime.formatCompartment.of(formatExtensions(opts.format, runtime.imageResolver)),
+  );
+
+  const state = EditorState.create({ doc: opts.doc, extensions });
+  // StateField хранит последний применённый снимок настроек, чтобы после
+  // setState восстановить тот же отсек и не откатить настройки вкладки.
+  return state.update({ effects: setEditorSettingsEffect.of(opts.settings ?? null) }).state;
+}
+
+/**
+ * Создаёт состояние вкладки с тем же набором расширений, что и у view.
+ * Состояние не подключается к DOM до вызова setEditorState; оболочка может
+ * хранить его рядом с WorkspaceTab и передавать обратно при активации.
+ */
+export function createEditorState(view: EditorView, opts: EditorStateOptions): EditorState {
+  const runtime = editorRuntimes.get(view);
+  if (!runtime) throw new Error("EditorView is not managed by createEditor");
+
+  // Настройки общие для окна. Если они не переданы, копируем снимок активного
+  // состояния, включая null до ответа Rust.
+  const activeSettings = view.state.field(editorSettingsStateField, false);
+  return runtime.createState({
+    ...opts,
+    settings: opts.settings === undefined ? activeSettings : opts.settings,
+  });
+}
+
+/** Возвращает текущий viewport редактора в пикселях. */
+export function getEditorScrollPosition(view: EditorView): EditorScrollPosition {
+  return { top: view.scrollDOM.scrollTop, left: view.scrollDOM.scrollLeft };
+}
+
+/** Восстанавливает viewport после переключения состояния вкладки. */
+export function setEditorScrollPosition(view: EditorView, position: EditorScrollPosition): void {
+  view.scrollDOM.scrollTop = Math.max(0, position.top);
+  view.scrollDOM.scrollLeft = Math.max(0, position.left);
+}
+
+/**
+ * Переключает один EditorView на состояние другой вкладки.
+ * Возвращает прежнее состояние, уже содержащее последнюю историю и курсор,
+ * чтобы оболочка заменила свой снимок активной вкладки. Положение прокрутки
+ * сохраняется отдельно: CodeMirror не включает его в EditorState.
+ */
+export function setEditorState(view: EditorView, nextState: EditorState): EditorState {
+  const runtime = editorRuntimes.get(view);
+  if (!runtime) throw new Error("EditorView is not managed by createEditor");
+
+  const previousState = view.state;
+  runtime.scrollPositions.set(previousState, getEditorScrollPosition(view));
+  const nextPath = nextState.field(runtime.documentPathField, false);
+  if (nextPath !== undefined) runtime.imageResolver.setDocumentPath(nextPath);
+  const nextFormat = nextState.field(runtime.formatField, false);
+  const settings = previousState.field(editorSettingsStateField, false) ?? null;
+  const nextScroll = runtime.scrollPositions.get(nextState) ?? { top: 0, left: 0 };
+  view.setState(nextState);
+  // Настройки и масштаб — свойства view, но их Compartment обязан быть в
+  // каждом состоянии. Перенастраиваем оба отсека после подключения нового.
+  view.dispatch({
+    effects: [
+      settingsCompartment.reconfigure(editorSettingsExtensions(settings)),
+      setEditorSettingsEffect.of(settings),
+    ],
+    selection: view.state.selection,
+  });
+  reconfigureZoom(view);
+  // setState оставляет DOM viewport как есть, а requestMeasure самого view
+  // выполняется позже. Применяем сохранённую позицию сейчас и после измерения;
+  // callback проверяет, что вкладка всё ещё активна.
+  setEditorScrollPosition(view, nextScroll);
+  const stateAfterReconfigure = view.state;
+  view.requestMeasure({
+    read: () => null,
+    write: (_measure, measuredView) => {
+      if (measuredView.state === stateAfterReconfigure) setEditorScrollPosition(measuredView, nextScroll);
+    },
+  });
+  if (nextFormat) void activateSyntaxMode(view, runtime, nextFormat);
+  runtime.onStats(getEditorStats(view.state));
+  return previousState;
+}
+
 export function createEditor(opts: {
   parent: HTMLElement;
   doc: string;
@@ -310,7 +451,6 @@ export function createEditor(opts: {
       return format;
     },
   });
-  const runtime: EditorRuntime = { formatCompartment, formatField, imageResolver };
   const documentPathField = StateField.define<string | null>({
     create: () => opts.path ?? null,
     update(path, transaction) {
@@ -324,34 +464,27 @@ export function createEditor(opts: {
       return nextPath;
     },
   });
-
-  const extensions: Extension[] = [
-    documentPathField,
+  const runtime: EditorRuntime = {
+    formatCompartment,
     formatField,
-    // Таблица обрабатывает Tab раньше общего keymap, иначе сработает
-    // отступ списка вместо перехода к следующей ячейке.
-    keymap.of(tableKeymap),
-    createMarknoteKeymap({ handlers: opts.handlers }),
-    marknoteSearch(),
-    // Всё, что зависит от настроек, — в одном отсеке: смена настройки
-    // перенастраивает его, а не пересоздаёт редактор, и история отмены,
-    // курсор и прокрутка остаются на месте.
-    settingsCompartment.of(editorSettingsExtensions(opts.settings ?? null)),
-    syntaxHighlighting(classHighlighter),
-    syntaxTokenTheme,
-    marknoteTheme,
-    EditorView.updateListener.of((update) => {
-      if (update.docChanged) opts.onChange(update.state.doc.toString());
-      if (update.docChanged || update.selectionSet) opts.onStats(getEditorStats(update.state));
-    }),
-  ];
-  extensions.splice(extensions.indexOf(marknoteTheme), 0, formatCompartment.of(formatExtensions(opts.format, imageResolver)));
-
+    documentPathField,
+    zoom: createZoomRuntime(opts.settings?.editor.zoomPercent),
+    imageResolver,
+    createState: () => {
+      throw new Error("Editor state factory is not initialized");
+    },
+    handlers: opts.handlers,
+    onChange: opts.onChange,
+    onStats: opts.onStats,
+    scrollPositions: new WeakMap<EditorState, EditorScrollPosition>(),
+  };
+  runtime.createState = (stateOpts) => buildEditorState(runtime, stateOpts);
   const view = new EditorView({
-    state: EditorState.create({ doc: opts.doc, extensions }),
+    state: runtime.createState(opts),
     parent: opts.parent,
   });
   editorRuntimes.set(view, runtime);
+  registerZoomRuntime(view, runtime.zoom);
   activateSyntaxMode(view, runtime, opts.format);
   opts.onStats(getEditorStats(view.state));
   return view;

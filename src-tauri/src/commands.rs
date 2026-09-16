@@ -395,19 +395,25 @@ pub fn read_image(docPath: Option<String>, src: String) -> Result<String, Comman
 }
 
 #[tauri::command]
-pub fn open_in_new_window(app: AppHandle, path: String) -> Result<(), CommandError> {
-    windows::route_file(&app, path).map_err(CommandError::WindowRouting)
+pub async fn open_in_new_window(app: AppHandle, path: String) -> Result<(), CommandError> {
+    tauri::async_runtime::spawn_blocking(move || windows::route_file(&app, path))
+        .await
+        .map_err(|error| CommandError::WindowRouting(error.to_string()))?
+        .map_err(CommandError::WindowRouting)
 }
 
 #[allow(non_snake_case)]
 #[tauri::command]
-pub fn open_new_window(app: AppHandle, formatId: String) -> Result<(), CommandError> {
+pub async fn open_new_window(app: AppHandle, formatId: String) -> Result<(), CommandError> {
     let format =
         formats::by_id(&formatId).ok_or_else(|| CommandError::UnknownFormat(formatId.clone()))?;
     if !format.creatable || !format.editable {
         return Err(CommandError::Message(UserMessage::FormatCannotCreate));
     }
-    windows::open_empty_window(&app, formatId).map_err(CommandError::WindowRouting)
+    tauri::async_runtime::spawn_blocking(move || windows::open_empty_window(&app, formatId))
+        .await
+        .map_err(|error| CommandError::WindowRouting(error.to_string()))?
+        .map_err(CommandError::WindowRouting)
 }
 
 #[tauri::command]

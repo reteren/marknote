@@ -14,21 +14,31 @@ import {
   type SaveResult,
 } from "./document.svelte";
 import { settingsState, type Settings } from "./settings.svelte";
+import {
+  subscribeWorkspace,
+  tabById,
+  workspace,
+  type TabId,
+} from "./workspace.svelte";
 
 export const AUTOSAVE_DELAY_MS = 2_000;
 
 export type AutosaveController = {
   start: () => Promise<void>;
-  schedule: () => void;
-  flush: (force?: boolean) => Promise<SaveResult | null>;
+  /** Schedule the active tab, or an explicit tab when supplied. */
+  schedule: (tabId?: TabId) => void;
+  /** Flush the active tab, or an explicit tab when supplied. */
+  flush: (force?: boolean, tabId?: TabId) => Promise<SaveResult | null>;
+  /** Flush every dirty tab in this window (used by close-all flows). */
+  flushAll: (force?: boolean) => Promise<SaveResult | null>;
   dispose: () => void;
 };
 
 export type AutosaveOptions = {
   getState?: () => DocumentState;
   getSettings?: () => Settings;
-  onSaved?: (result: SaveResult) => void;
-  onError?: (error: unknown) => void;
+  onSaved?: (result: SaveResult, tabId?: TabId) => void;
+  onError?: (error: unknown, tabId?: TabId) => void;
 };
 
 function snapshot(state: DocumentState): DocumentState {
@@ -76,18 +86,52 @@ export function applySaveTextTransforms(
 export function createAutosave(options: AutosaveOptions = {}): AutosaveController {
   const getState = options.getState ?? (() => documentState);
   const getSettings = options.getSettings ?? (() => settingsState.settings);
-  let timer: ReturnType<typeof setTimeout> | undefined;
+  const workspaceMode = options.getState === undefined;
+  const legacyKey = "__document__";
+  type Runtime = {
+    timer?: ReturnType<typeof setTimeout>;
+    saving: boolean;
+    activeSave: Promise<SaveResult | null> | null;
+    queued: boolean;
+  };
+  const runtimes = new Map<string, Runtime>();
   let focusUnlisten: UnlistenFn | undefined;
   let externalChangeUnlisten: UnlistenFn | undefined;
   let fileDeletedUnlisten: UnlistenFn | undefined;
-  let saving = false;
-  let activeSave: Promise<SaveResult | null> | null = null;
-  let queued = false;
+  let workspaceUnsubscribe: (() => void) | undefined;
   let disposed = false;
 
-  const save = (force = false, source?: "blur" | "timer" | "flush"): Promise<SaveResult | null> => {
-    const current = getState();
+  const runtimeFor = (tabId: string): Runtime => {
+    const existing = runtimes.get(tabId);
+    if (existing) return existing;
+    const runtime: Runtime = { saving: false, activeSave: null, queued: false };
+    runtimes.set(tabId, runtime);
+    return runtime;
+  };
+
+  const tabIds = (): string[] => workspaceMode ? workspace.tabs.map((tab) => tab.id) : [legacyKey];
+
+  const stateFor = (tabId: string): DocumentState | null => {
+    if (!workspaceMode) return getState();
+    return tabById(tabId)?.document ?? null;
+  };
+
+  const clearTimer = (tabId: string): void => {
+    const runtime = runtimes.get(tabId);
+    if (!runtime) return;
+    if (runtime.timer) clearTimeout(runtime.timer);
+    runtime.timer = undefined;
+  };
+
+  const save = (
+    force = false,
+    source?: "blur" | "timer" | "flush",
+    tabId = workspaceMode ? workspace.activeId : legacyKey,
+  ): Promise<SaveResult | null> => {
+    const current = stateFor(tabId);
+    if (!current) return Promise.resolve(null);
     const settings = getSettings();
+    const runtime = runtimeFor(tabId);
 
     const autosaveAllowed =
       force ||
@@ -107,14 +151,14 @@ export function createAutosave(options: AutosaveOptions = {}): AutosaveControlle
       return Promise.resolve(null);
     }
 
-    if (saving) {
-      queued = true;
-      return activeSave ?? Promise.resolve(null);
+    if (runtime.saving) {
+      runtime.queued = true;
+      return runtime.activeSave ?? Promise.resolve(null);
     }
 
-    saving = true;
+    runtime.saving = true;
     const beforeSave = snapshot(current);
-    markPending();
+    markPending(current);
 
     const operation = (async (): Promise<SaveResult | null> => {
       try {
@@ -130,51 +174,68 @@ export function createAutosave(options: AutosaveOptions = {}): AutosaveControlle
           bom: beforeSave.bom,
           lineEnding: beforeSave.lineEnding,
         });
-        markSaved(result, beforeSave.text);
-        options.onSaved?.(result);
+        markSaved(result, beforeSave.text, current);
+        // The legacy App callback updates the live editor path.  Restrict it
+        // to the active tab so an inactive save cannot retarget that editor;
+        // the tab document itself is already updated above.
+        if (!workspaceMode || tabId === workspace.activeId) {
+          options.onSaved?.(result, workspaceMode ? tabId : undefined);
+        }
         return result;
       } catch (error) {
-        markSaveFailed();
-        options.onError?.(error);
+        markSaveFailed(current);
+        options.onError?.(error, workspaceMode ? tabId : undefined);
         return null;
       } finally {
-        saving = false;
-        activeSave = null;
-        if (queued) {
-          queued = false;
-          schedule();
+        runtime.saving = false;
+        runtime.activeSave = null;
+        if (runtime.queued) {
+          runtime.queued = false;
+          schedule(tabId);
         }
       }
     })();
-    activeSave = operation;
+    runtime.activeSave = operation;
     return operation;
   };
 
-  const schedule = (): void => {
-    clearTimeout(timer);
-    timer = undefined;
+  const schedule = (tabId = workspaceMode ? workspace.activeId : legacyKey): void => {
+    clearTimer(tabId);
     const settings = getSettings();
     if (settings?.files?.autosave === false) return;
-    const current = getState();
+    const current = stateFor(tabId);
+    if (!current) return;
     if (current.path === null || current.readonly || !current.dirty) return;
     const delay = settings?.files?.autosaveDelayMs ?? AUTOSAVE_DELAY_MS;
-    timer = setTimeout(() => {
-      timer = undefined;
-      void save(false, "timer");
+    const runtime = runtimeFor(tabId);
+    runtime.timer = setTimeout(() => {
+      runtime.timer = undefined;
+      void save(false, "timer", tabId);
     }, delay);
+  };
+
+  const scheduleAll = (): void => {
+    for (const tabId of tabIds()) schedule(tabId);
+  };
+
+  const scheduleUnscheduled = (): void => {
+    for (const tabId of tabIds()) {
+      const runtime = runtimeFor(tabId);
+      if (!runtime.timer && !runtime.saving) schedule(tabId);
+    }
   };
 
   const handleBlur = (): void => {
     const settings = getSettings();
     if (settings?.files?.saveOnWindowBlur === false) return;
-    void save(false, "blur");
+    for (const tabId of tabIds()) void save(false, "blur", tabId);
   };
 
   const handleFocus = (focused: boolean): void => {
     if (!focused) {
       const settings = getSettings();
       if (settings?.files?.saveOnWindowBlur === false) return;
-      void save(false, "blur");
+      for (const tabId of tabIds()) void save(false, "blur", tabId);
     }
   };
 
@@ -183,36 +244,58 @@ export function createAutosave(options: AutosaveOptions = {}): AutosaveControlle
 
   const handleExternalChange = async (event: { payload?: { path?: string } }): Promise<void> => {
     const path = event.payload?.path;
-    const current = getState();
-    if (!path || current.path === null || !samePath(current.path, path)) return;
+    if (!path) return;
 
-    if (current.dirty) {
-      markExternalChange(path);
-      return;
-    }
+    for (const tabId of tabIds()) {
+      const current = stateFor(tabId);
+      if (!current || current.path === null || !samePath(current.path, path)) continue;
 
-    try {
-      const opened = await invoke<OpenedFile>("open_file", { path });
-      const latest = getState();
-      // A local edit may have happened while open_file was in flight. Never
-      // overwrite that newer buffer with an external reload.
-      if (latest.path !== null && samePath(latest.path, path) && !latest.dirty) replaceDocument(opened);
-    } catch (error) {
-      markExternalChange(path);
-      options.onError?.(error);
+      if (current.dirty) {
+        markExternalChange(path, current);
+        continue;
+      }
+
+      try {
+        const opened = await invoke<OpenedFile>("open_file", { path });
+        const latest = stateFor(tabId);
+        // A local edit may have happened while open_file was in flight. Never
+        // overwrite that newer buffer with the newer disk copy.
+        if (latest && latest.path !== null && samePath(latest.path, path) && !latest.dirty) {
+          replaceDocument(opened, latest);
+        }
+      } catch (error) {
+        markExternalChange(path, current);
+        options.onError?.(error, workspaceMode ? tabId : undefined);
+      }
     }
   };
 
   const handleFileDeleted = (event: { payload?: { path?: string } }): void => {
     const path = event.payload?.path;
-    const current = getState();
-    if (path && current.path !== null && samePath(current.path, path)) markFileDeleted(path);
+    if (!path) return;
+    for (const tabId of tabIds()) {
+      const current = stateFor(tabId);
+      if (current && current.path !== null && samePath(current.path, path)) markFileDeleted(path, current);
+    }
   };
 
   const start = async (): Promise<void> => {
     if (disposed) return;
 
     globalThis.addEventListener("blur", handleBlur);
+    if (workspaceMode) {
+      workspaceUnsubscribe = subscribeWorkspace((event) => {
+        if (event.type === "closed") {
+          clearTimer(event.id);
+          runtimes.delete(event.id);
+        } else if (event.type === "changed") {
+          schedule(event.id);
+        } else {
+          scheduleUnscheduled();
+        }
+      });
+      scheduleAll();
+    }
     try {
       const currentWindow = getCurrentWindow();
       focusUnlisten = await currentWindow.onFocusChanged(({ payload }) => handleFocus(payload));
@@ -233,8 +316,9 @@ export function createAutosave(options: AutosaveOptions = {}): AutosaveControlle
 
   const dispose = (): void => {
     disposed = true;
-    clearTimeout(timer);
-    timer = undefined;
+    for (const tabId of runtimes.keys()) clearTimer(tabId);
+    workspaceUnsubscribe?.();
+    workspaceUnsubscribe = undefined;
     globalThis.removeEventListener("blur", handleBlur);
     focusUnlisten?.();
     externalChangeUnlisten?.();
@@ -247,15 +331,16 @@ export function createAutosave(options: AutosaveOptions = {}): AutosaveControlle
   return {
     start,
     schedule,
-    flush: async (force = false) => {
+    flush: async (force = false, tabId = workspaceMode ? workspace.activeId : legacyKey) => {
       let result: SaveResult | null = null;
       for (;;) {
-        clearTimeout(timer);
-        timer = undefined;
-        const beforeSave = getState();
+        clearTimer(tabId);
+        const beforeSave = stateFor(tabId);
+        if (!beforeSave) return result;
         if (!beforeSave.dirty || beforeSave.path === null) return result;
-        result = await save(force, "flush");
-        const afterSave = getState();
+        result = await save(force, "flush", tabId);
+        const afterSave = stateFor(tabId);
+        if (!afterSave) return result;
         if (!afterSave.dirty) return result;
         if (
           result === null ||
@@ -266,6 +351,22 @@ export function createAutosave(options: AutosaveOptions = {}): AutosaveControlle
           (getSettings()?.files?.autosave === false && !force)
         ) return null;
       }
+    },
+    flushAll: async (force = false) => {
+      let result: SaveResult | null = null;
+      for (const tabId of tabIds()) {
+        const saved = await (async () => {
+          for (;;) {
+            const state = stateFor(tabId);
+            if (!state || !state.dirty || state.path === null) return null;
+            const current = await save(force, "flush", tabId);
+            const after = stateFor(tabId);
+            if (!after || !after.dirty || current === null) return current;
+          }
+        })();
+        if (saved) result = saved;
+      }
+      return result;
     },
     dispose,
   };

@@ -12,7 +12,7 @@
 // Разделы настроек живут в отдельных файлах рядом, по одному владельцу на
 // файл. Здесь только сборка: этот файл никто, кроме координатора, не правит.
 
-import { Compartment, type Extension } from "@codemirror/state";
+import { Compartment, StateEffect, StateField, type Extension } from "@codemirror/state";
 import type { EditorView } from "@codemirror/view";
 import type { Settings } from "../state/settings.svelte";
 import { editorAppearanceExtensions } from "./settings/appearance";
@@ -21,6 +21,21 @@ import { spellcheckSettingsExtensions } from "./settings/spellcheck";
 
 /** Отсек, в котором живут все зависящие от настроек расширения. */
 export const settingsCompartment = new Compartment();
+
+/** Последние настройки, применённые к состоянию. Нужны вкладкам: после
+ * view.setState отсек перенастраивается теми же значениями, что были у
+ * активного состояния, а не возвращается к устаревшему снимку вкладки. */
+export const setEditorSettingsEffect = StateEffect.define<Settings | null>();
+
+export const editorSettingsStateField = StateField.define<Settings | null>({
+  create: () => null,
+  update(value, transaction) {
+    for (const effect of transaction.effects) {
+      if (effect.is(setEditorSettingsEffect)) return effect.value;
+    }
+    return value;
+  },
+});
 
 /** Расширения, соответствующие текущим настройкам.
  *
@@ -39,6 +54,10 @@ export function editorSettingsExtensions(settings: Settings | null): Extension[]
 /** Применить настройки к живому редактору, не пересоздавая его. */
 export function applyEditorSettings(view: EditorView, settings: Settings | null): void {
   view.dispatch({
-    effects: settingsCompartment.reconfigure(editorSettingsExtensions(settings)),
+    effects: [
+      settingsCompartment.reconfigure(editorSettingsExtensions(settings)),
+      setEditorSettingsEffect.of(settings),
+    ],
+    selection: view.state.selection,
   });
 }

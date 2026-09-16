@@ -1,29 +1,19 @@
-import type { FormatCapabilities } from "./formats.svelte";
-import { markdownFormat } from "./formats.svelte";
+import { markdownFormat, type FormatCapabilities } from "./formats.svelte";
+import { settingsState } from "./settings.svelte";
 import {
-  settingsState,
-  type NewDocumentEncoding,
-  type NewDocumentLineEnding,
-} from "./settings.svelte";
+  activeTab,
+  notifyDocumentChanged,
+  resolveNewDocumentEncoding,
+  resolveNewDocumentLineEnding,
+  tabIdForDocument,
+  type DocumentState,
+  type ExternalChangeStatus,
+  type LineEnding,
+  type SaveStatus,
+} from "./workspace.svelte";
 
-export type LineEnding = "lf" | "crlf";
-export type SaveStatus = "unsaved" | "pending" | "saved" | "readonly";
-export type ExternalChangeStatus = "none" | "changed" | "deleted";
-
-export function resolveNewDocumentLineEnding(preference?: NewDocumentLineEnding): LineEnding {
-  if (preference === "crlf") return "crlf";
-  if (preference === "lf") return "lf";
-  // "system": on Windows platforms default to CRLF, elsewhere to LF.
-  const isWindows =
-    typeof navigator !== "undefined" &&
-    /windows|win32|win64/i.test(navigator.userAgent || navigator.platform || "");
-  return isWindows ? "crlf" : "lf";
-}
-
-export function resolveNewDocumentEncoding(preference?: NewDocumentEncoding): string {
-  if (preference === "utf8") return "utf-8";
-  return "utf-8";
-}
+export type { DocumentState, ExternalChangeStatus, LineEnding, SaveStatus } from "./workspace.svelte";
+export { resolveNewDocumentEncoding, resolveNewDocumentLineEnding } from "./workspace.svelte";
 
 export type OpenedFile = {
   path: string;
@@ -46,35 +36,35 @@ export type NewDocument = {
   format: FormatCapabilities;
 };
 
-export type DocumentState = {
-  path: string | null;
-  format: FormatCapabilities;
-  saveStatus: SaveStatus;
-  lastSavedAt: Date | null;
-  encoding: string;
-  bom: boolean;
-  lineEnding: LineEnding;
-  text: string;
-  dirty: boolean;
-  readonly: boolean;
-  /** Состояние watcher-событий, которое App отображает полосой уведомления. */
-  externalChange: ExternalChangeStatus;
-  externalChangePath: string | null;
-};
-
-export const documentState = $state<DocumentState>({
-  path: null,
-  format: markdownFormat,
-  saveStatus: "unsaved",
-  lastSavedAt: null,
-  encoding: resolveNewDocumentEncoding(settingsState?.settings?.files?.newDocumentEncoding),
-  bom: false,
-  lineEnding: resolveNewDocumentLineEnding(settingsState?.settings?.files?.newDocumentLineEnding),
-  text: "",
-  dirty: false,
-  readonly: false,
-  externalChange: "none",
-  externalChangePath: null,
+/**
+ * Stable compatibility view over the active workspace tab.  Existing callers
+ * keep importing and mutating `documentState`; Proxy traps forward every field
+ * read and write to the active tab without creating a second text store.
+ */
+const documentProxyTarget = Object.create(null) as DocumentState;
+export const documentState: DocumentState = new Proxy(documentProxyTarget, {
+  get(_target, property: string | symbol) {
+    if (property === Symbol.toStringTag) return "DocumentState";
+    return activeTab().document[property as keyof DocumentState];
+  },
+  set(_target, property: string | symbol, value: unknown) {
+    if (typeof property !== "string") return false;
+    const tab = activeTab();
+    const previous = tab.document[property as keyof DocumentState];
+    tab.document[property as keyof DocumentState] = value as never;
+    if (property === "text" && previous !== value) notifyDocumentChanged(tab.id);
+    return true;
+  },
+  has(_target, property: string | symbol) {
+    return typeof property === "string" && property in activeTab().document;
+  },
+  ownKeys() {
+    return Reflect.ownKeys(activeTab().document);
+  },
+  getOwnPropertyDescriptor(_target, property: string | symbol) {
+    if (typeof property !== "string" || !(property in activeTab().document)) return undefined;
+    return { enumerable: true, configurable: true };
+  },
 });
 
 /** UI labels derived from the same document identity stored in DocumentState. */
@@ -91,113 +81,120 @@ export function getClosePromptMessage(state: Pick<DocumentState, "path">): strin
     : "This untitled document has unsaved changes.";
 }
 
-export function replaceDocument(opened: OpenedFile): void {
+export function replaceDocument(opened: OpenedFile, target: DocumentState = documentState): void {
   const readonly = opened.readonly || !opened.format.editable;
-  documentState.path = opened.path;
-  documentState.format = opened.format;
-  documentState.saveStatus = readonly ? "readonly" : "saved";
-  documentState.lastSavedAt = null;
-  documentState.encoding = opened.encoding;
-  documentState.bom = opened.bom;
-  documentState.lineEnding = opened.lineEnding;
-  documentState.text = opened.text;
-  documentState.dirty = false;
-  documentState.readonly = readonly;
-  documentState.externalChange = "none";
-  documentState.externalChangePath = null;
+  target.path = opened.path;
+  target.format = opened.format;
+  target.saveStatus = readonly ? "readonly" : "saved";
+  target.lastSavedAt = null;
+  target.encoding = opened.encoding;
+  target.bom = opened.bom;
+  target.lineEnding = opened.lineEnding;
+  target.text = opened.text;
+  target.dirty = false;
+  target.readonly = readonly;
+  target.externalChange = "none";
+  target.externalChangePath = null;
 }
 
 export function resetDocument(
   format: FormatCapabilities = markdownFormat,
   text = "",
   options?: { encoding?: string; lineEnding?: LineEnding },
+  target: DocumentState = documentState,
 ): void {
+  target.path = null;
+  target.format = format;
+  target.saveStatus = "unsaved";
+  target.lastSavedAt = null;
   const files = settingsState?.settings?.files;
-  documentState.path = null;
-  documentState.format = format;
-  documentState.saveStatus = "unsaved";
-  documentState.lastSavedAt = null;
-  documentState.encoding = options?.encoding ?? resolveNewDocumentEncoding(files?.newDocumentEncoding);
-  documentState.bom = false;
-  documentState.lineEnding = options?.lineEnding ?? resolveNewDocumentLineEnding(files?.newDocumentLineEnding);
-  documentState.text = text;
-  documentState.dirty = text.length > 0;
-  documentState.readonly = !format.editable;
-  documentState.saveStatus = documentState.readonly ? "readonly" : "unsaved";
-  documentState.externalChange = "none";
-  documentState.externalChangePath = null;
+  target.encoding = options?.encoding ?? resolveNewDocumentEncoding(files?.newDocumentEncoding);
+  target.bom = false;
+  target.lineEnding = options?.lineEnding ?? resolveNewDocumentLineEnding(files?.newDocumentLineEnding);
+  target.text = text;
+  target.dirty = text.length > 0;
+  target.readonly = !format.editable;
+  target.saveStatus = target.readonly ? "readonly" : "unsaved";
+  target.externalChange = "none";
+  target.externalChangePath = null;
 }
 
 /**
  * Меняет только возможности формата, не трогая текст документа. Сохранённый
  * документ становится грязным: новый тип требует отдельного Save as.
  */
-export function setDocumentFormat(format: FormatCapabilities): void {
-  const changed = documentState.format.id !== format.id;
-  documentState.format = format;
-  documentState.readonly = !format.editable;
+export function setDocumentFormat(format: FormatCapabilities, target: DocumentState = documentState): void {
+  const changed = target.format.id !== format.id;
+  target.format = format;
+  target.readonly = !format.editable;
 
-  if (documentState.readonly) {
-    documentState.saveStatus = "readonly";
+  if (target.readonly) {
+    target.saveStatus = "readonly";
     return;
   }
 
-  if (changed && documentState.path !== null) documentState.dirty = true;
-  documentState.saveStatus = documentState.dirty || documentState.path === null ? "unsaved" : "saved";
+  if (changed && target.path !== null) target.dirty = true;
+  target.saveStatus = target.dirty || target.path === null ? "unsaved" : "saved";
 }
 
-export function setDocumentText(text: string): void {
-  if (text === documentState.text) return;
+export function setDocumentText(text: string, target: DocumentState = documentState): void {
+  if (text === target.text) return;
 
-  documentState.text = text;
-  documentState.dirty = true;
-  if (!documentState.readonly) {
-    documentState.saveStatus = "unsaved";
+  target.text = text;
+  target.dirty = true;
+  if (!target.readonly) {
+    target.saveStatus = "unsaved";
   }
+  const tabId = target === documentState ? activeTab().id : tabIdForDocument(target);
+  if (tabId) notifyDocumentChanged(tabId);
 }
 
-export function markPending(): void {
-  if (!documentState.readonly) documentState.saveStatus = "pending";
+export function markPending(target: DocumentState = documentState): void {
+  if (!target.readonly) target.saveStatus = "pending";
 }
 
-export function markSaved(result: SaveResult, snapshotText = documentState.text): void {
-  documentState.path = result.path;
-  documentState.format = result.format;
-  documentState.lastSavedAt = new Date(result.savedAt);
-  documentState.saveStatus = !result.format.editable
+export function markSaved(
+  result: SaveResult,
+  snapshotText = documentState.text,
+  target: DocumentState = documentState,
+): void {
+  target.path = result.path;
+  target.format = result.format;
+  target.lastSavedAt = new Date(result.savedAt);
+  target.saveStatus = !result.format.editable
     ? "readonly"
-    : documentState.text === snapshotText
+    : target.text === snapshotText
       ? "saved"
       : "unsaved";
-  documentState.dirty = documentState.text !== snapshotText;
-  documentState.readonly = !result.format.editable;
-  documentState.externalChange = "none";
-  documentState.externalChangePath = null;
+  target.dirty = target.text !== snapshotText;
+  target.readonly = !result.format.editable;
+  target.externalChange = "none";
+  target.externalChangePath = null;
 }
 
-export function markSaveFailed(): void {
-  if (!documentState.readonly) documentState.saveStatus = "unsaved";
+export function markSaveFailed(target: DocumentState = documentState): void {
+  if (!target.readonly) target.saveStatus = "unsaved";
 }
 
 /** Устанавливает конфликт с внешним изменением для текущего файла. */
-export function markExternalChange(path: string): boolean {
-  if (documentState.path === null || !samePath(documentState.path, path)) return false;
-  documentState.externalChange = "changed";
-  documentState.externalChangePath = path;
+export function markExternalChange(path: string, target: DocumentState = documentState): boolean {
+  if (target.path === null || !samePath(target.path, path)) return false;
+  target.externalChange = "changed";
+  target.externalChangePath = path;
   return true;
 }
 
 /** Помечает удалённый файл, сохраняя текст и путь для последующего Save. */
-export function markFileDeleted(path: string): boolean {
-  if (documentState.path === null || !samePath(documentState.path, path)) return false;
-  documentState.externalChange = "deleted";
-  documentState.externalChangePath = path;
+export function markFileDeleted(path: string, target: DocumentState = documentState): boolean {
+  if (target.path === null || !samePath(target.path, path)) return false;
+  target.externalChange = "deleted";
+  target.externalChangePath = path;
   return true;
 }
 
-export function clearExternalChange(): void {
-  documentState.externalChange = "none";
-  documentState.externalChangePath = null;
+export function clearExternalChange(target: DocumentState = documentState): void {
+  target.externalChange = "none";
+  target.externalChangePath = null;
 }
 
 function samePath(left: string, right: string): boolean {

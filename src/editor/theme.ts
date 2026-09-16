@@ -18,6 +18,10 @@ export const marknoteTheme: Extension = [
       overflow: "auto",
       padding: "var(--editor-padding) 0",
       fontFamily: "var(--font-text)",
+      outline: "none",
+    },
+    ".cm-scroller:focus, .cm-scroller:focus-visible": {
+      outline: "none",
     },
     ".cm-content": {
       padding: "0",
@@ -26,6 +30,10 @@ export const marknoteTheme: Extension = [
       fontSize: "var(--font-size-text)",
       lineHeight: "var(--line-height-text)",
       unicodeBidi: "plaintext",
+      outline: "none",
+    },
+    ".cm-content:focus, .cm-content:focus-visible": {
+      outline: "none",
     },
     ".cm-line": {
       padding: "0",
@@ -34,7 +42,7 @@ export const marknoteTheme: Extension = [
       borderInlineStartColor: "var(--caret-color)",
       borderInlineStartWidth: "2px",
     },
-    "&.cm-focused": {
+    "&.cm-focused, &:focus, &:focus-visible": {
       outline: "none",
     },
     ".cm-selectionBackground, ::selection": {

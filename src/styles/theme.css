@@ -226,6 +226,21 @@ input[type="checkbox"]:disabled {
   outline-offset: 1px;
 }
 
+/* Область редактора показывает фокус собственным кареткой/курсором;
+   обводка контейнера поверх текста выглядит как рамка-артефакт при кликах */
+.editor-stage:focus,
+.editor-stage:focus-visible,
+.editor-host:focus,
+.editor-host:focus-visible,
+.cm-editor:focus,
+.cm-editor:focus-visible,
+.cm-scroller:focus,
+.cm-scroller:focus-visible,
+.cm-content:focus,
+.cm-content:focus-visible {
+  outline: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
