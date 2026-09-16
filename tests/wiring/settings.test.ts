@@ -55,22 +55,7 @@ export const SETTINGS_EXCEPTIONS: readonly SettingException[] = [
 
 
 
-  // --- Раздел файлов и сохранения (ожидает реализации подключения) ---
-  {
-    path: "files.autosave",
-    reason:
-      "Ожидает реализации подключения: глобальный переключатель автосохранения в src/state/autosave.ts",
-  },
-  {
-    path: "files.autosaveDelayMs",
-    reason:
-      "Ожидает реализации подключения: задержка таймера автосохранения в src/state/autosave.ts",
-  },
-  {
-    path: "files.saveOnWindowBlur",
-    reason:
-      "Ожидает реализации подключения: автосохранение при blur окна в src/state/autosave.ts",
-  },
+  // --- Раздел файлов и сохранения (создание новых документов — в процессе подключения) ---
   {
     path: "files.newDocumentFormat",
     reason:
@@ -85,16 +70,6 @@ export const SETTINGS_EXCEPTIONS: readonly SettingException[] = [
     path: "files.newDocumentLineEnding",
     reason:
       "Ожидает реализации подключения: системные/lf/crlf переводы строк новых документов",
-  },
-  {
-    path: "files.trimTrailingSpaces",
-    reason:
-      "Ожидает реализации подключения: удаление хвостовых пробелов при сохранении файла",
-  },
-  {
-    path: "files.finalNewline",
-    reason:
-      "Ожидает реализации подключения: добавление завершающего перевода строки при сохранении",
   },
 
   // --- Язык интерфейса ---

@@ -13,8 +13,9 @@ import {
   type OpenedFile,
   type SaveResult,
 } from "./document.svelte";
+import { settingsState, type Settings } from "./settings.svelte";
 
-const AUTOSAVE_DELAY_MS = 2_000;
+export const AUTOSAVE_DELAY_MS = 2_000;
 
 export type AutosaveController = {
   start: () => Promise<void>;
@@ -23,8 +24,9 @@ export type AutosaveController = {
   dispose: () => void;
 };
 
-type AutosaveOptions = {
+export type AutosaveOptions = {
   getState?: () => DocumentState;
+  getSettings?: () => Settings;
   onSaved?: (result: SaveResult) => void;
   onError?: (error: unknown) => void;
 };
@@ -37,9 +39,43 @@ function snapshot(state: DocumentState): DocumentState {
   };
 }
 
+/**
+ * Применяет модификаторы текста перед сохранением:
+ * - trimTrailingSpaces: удаляет хвостовые пробелы и табуляции в конце строк
+ * - finalNewline: добавляет завершающий перевод строки в непустом файле, если его нет
+ *
+ * Модификация выполняется над сохраняемой строкой и не затрагивает живой буфер
+ * CodeMirror, чтобы не смещать курсор и не засорять историю отмены (undo).
+ */
+export function applySaveTextTransforms(
+  text: string,
+  settingsOrFiles?: Settings | Settings["files"] | null,
+  preferredLineEnding?: string,
+): string {
+  const files =
+    settingsOrFiles && "files" in settingsOrFiles
+      ? settingsOrFiles.files
+      : settingsOrFiles;
+  let result = text;
+  if (files?.trimTrailingSpaces) {
+    result = result.replace(/[ \t]+(?=\r?$)/gm, "");
+  }
+  if (files?.finalNewline) {
+    if (result.length > 0 && !result.endsWith("\n") && !result.endsWith("\r")) {
+      const newline =
+        preferredLineEnding === "crlf" || (!preferredLineEnding && result.includes("\r\n"))
+          ? "\r\n"
+          : "\n";
+      result += newline;
+    }
+  }
+  return result;
+}
+
 /** Автосохранение — единственная точка, где проверяется path перед таймером. */
 export function createAutosave(options: AutosaveOptions = {}): AutosaveController {
   const getState = options.getState ?? (() => documentState);
+  const getSettings = options.getSettings ?? (() => settingsState.settings);
   let timer: ReturnType<typeof setTimeout> | undefined;
   let focusUnlisten: UnlistenFn | undefined;
   let externalChangeUnlisten: UnlistenFn | undefined;
@@ -48,10 +84,16 @@ export function createAutosave(options: AutosaveOptions = {}): AutosaveControlle
   let activeSave: Promise<SaveResult | null> | null = null;
   let queued = false;
   let disposed = false;
-  const handleBlur = (): void => void save();
 
-  const save = (force = false): Promise<SaveResult | null> => {
+  const save = (force = false, source?: "blur" | "timer" | "flush"): Promise<SaveResult | null> => {
     const current = getState();
+    const settings = getSettings();
+
+    const autosaveAllowed =
+      force ||
+      (source === "blur"
+        ? settings?.files?.saveOnWindowBlur !== false
+        : settings?.files?.autosave !== false);
 
     // path === null — единственное безусловное отключение автосохранения.
     if (
@@ -59,6 +101,7 @@ export function createAutosave(options: AutosaveOptions = {}): AutosaveControlle
       current.readonly ||
       current.externalChange === "changed" ||
       (!current.format.autosave && !force) ||
+      !autosaveAllowed ||
       !current.dirty
     ) {
       return Promise.resolve(null);
@@ -75,9 +118,14 @@ export function createAutosave(options: AutosaveOptions = {}): AutosaveControlle
 
     const operation = (async (): Promise<SaveResult | null> => {
       try {
+        const textToSave = applySaveTextTransforms(
+          beforeSave.text,
+          settings,
+          beforeSave.lineEnding,
+        );
         const result = await invoke<SaveResult>("save_file", {
           path: beforeSave.path,
-          text: beforeSave.text,
+          text: textToSave,
           encoding: beforeSave.encoding,
           bom: beforeSave.bom,
           lineEnding: beforeSave.lineEnding,
@@ -105,16 +153,29 @@ export function createAutosave(options: AutosaveOptions = {}): AutosaveControlle
   const schedule = (): void => {
     clearTimeout(timer);
     timer = undefined;
+    const settings = getSettings();
+    if (settings?.files?.autosave === false) return;
     const current = getState();
     if (current.path === null || current.readonly || !current.dirty) return;
+    const delay = settings?.files?.autosaveDelayMs ?? AUTOSAVE_DELAY_MS;
     timer = setTimeout(() => {
       timer = undefined;
-      void save();
-    }, AUTOSAVE_DELAY_MS);
+      void save(false, "timer");
+    }, delay);
+  };
+
+  const handleBlur = (): void => {
+    const settings = getSettings();
+    if (settings?.files?.saveOnWindowBlur === false) return;
+    void save(false, "blur");
   };
 
   const handleFocus = (focused: boolean): void => {
-    if (!focused) void save();
+    if (!focused) {
+      const settings = getSettings();
+      if (settings?.files?.saveOnWindowBlur === false) return;
+      void save(false, "blur");
+    }
   };
 
   const samePath = (left: string, right: string): boolean =>
@@ -193,7 +254,7 @@ export function createAutosave(options: AutosaveOptions = {}): AutosaveControlle
         timer = undefined;
         const beforeSave = getState();
         if (!beforeSave.dirty || beforeSave.path === null) return result;
-        result = await save(force);
+        result = await save(force, "flush");
         const afterSave = getState();
         if (!afterSave.dirty) return result;
         if (
@@ -201,7 +262,8 @@ export function createAutosave(options: AutosaveOptions = {}): AutosaveControlle
           afterSave.path === null ||
           afterSave.readonly ||
           afterSave.externalChange === "changed" ||
-          (!afterSave.format.autosave && !force)
+          (!afterSave.format.autosave && !force) ||
+          (getSettings()?.files?.autosave === false && !force)
         ) return null;
       }
     },
@@ -212,9 +274,12 @@ export function createAutosave(options: AutosaveOptions = {}): AutosaveControlle
 export async function saveAs(
   state: Pick<DocumentState, "text" | "format">,
   suggestedName: string,
+  settingsOrFiles?: Settings | Settings["files"] | null,
 ): Promise<SaveResult | null> {
+  const settings = settingsOrFiles ?? settingsState.settings;
+  const textToSave = applySaveTextTransforms(state.text, settings);
   return invoke<SaveResult | null>("save_as", {
-    text: state.text,
+    text: textToSave,
     formatId: state.format.id,
     suggestedName,
   });
