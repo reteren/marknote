@@ -7,7 +7,7 @@ import {
 } from "@codemirror/language";
 import { languages } from "@codemirror/language-data";
 import { classHighlighter } from "@lezer/highlight";
-import { EditorView, highlightActiveLine } from "@codemirror/view";
+import { EditorView } from "@codemirror/view";
 import { marknoteMarkdown } from "./markdownExtensions";
 import { livePreview } from "./livePreview";
 import { createMarknoteKeymap, type MarknoteKeymapHandlers } from "./keymap";
@@ -329,7 +329,6 @@ export function createEditor(opts: {
     createMarknoteKeymap({ handlers: opts.handlers }),
     marknoteSearch(),
     EditorView.lineWrapping,
-    highlightActiveLine(),
     syntaxHighlighting(classHighlighter),
     syntaxTokenTheme,
     marknoteTheme,

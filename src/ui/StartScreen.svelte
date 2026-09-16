@@ -30,9 +30,7 @@
   ondrop={handleDrop}
 >
   <div class="start-content">
-    <div class="mark" aria-hidden="true">MN</div>
     <h1>{t("app.name")}</h1>
-    <p class="lead">{t("start.newFile")}</p>
 
     <div class="format-picker-wrap">
       <FormatPicker mode="grid" {formats} onSelect={onSelect} />
@@ -42,7 +40,6 @@
       <button type="button" class="open-button" onclick={() => onOpenFile?.()}>{t("start.openFile")}</button>
       <span>{t("start.dropFile")}</span>
     </div>
-    <p class="hint">{t("start.hint")}</p>
   </div>
 </section>
 
@@ -67,24 +64,8 @@
   }
   .format-picker-wrap, .open-button { pointer-events: auto; }
 
-  .mark {
-    display: grid;
-    place-items: center;
-    width: 40px;
-    height: 40px;
-    margin-bottom: 4px;
-    border: 1px solid var(--bg-modifier-border-hover);
-    border-radius: var(--radius-m);
-    color: var(--text-accent);
-    font-family: var(--font-mono);
-    font-size: var(--font-size-mono);
-    letter-spacing: 0.08em;
-  }
   h1 { margin: 0; color: var(--text-normal); font-size: 24px; font-weight: 600; letter-spacing: -0.02em; }
-  p { margin: 0; }
-  .lead { color: var(--text-normal); font-size: var(--font-size-text); }
-  .hint { color: var(--text-faint); }
-  .open-row { display: flex; align-items: center; gap: 9px; margin-top: 4px; }
+  .open-row { display: grid; justify-items: center; gap: 2px; margin-top: 4px; }
   .open-row > span { color: var(--text-faint); }
   .open-button {
     border: 1px solid var(--bg-modifier-border);
@@ -101,6 +82,5 @@
 
   @media (max-width: 560px) {
     .start-screen { padding: 24px 12px; }
-    .open-row { flex-direction: column; gap: 4px; }
   }
 </style>

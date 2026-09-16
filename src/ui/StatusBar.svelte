@@ -3,16 +3,18 @@
   import type { FormatCapabilities } from "../state/formats.svelte";
   import { formatLabel, translate as t } from "../i18n";
 
-  type Props = { format: FormatCapabilities; stats: EditorStats };
-  let { format, stats }: Props = $props();
+  type Props = { format: FormatCapabilities; stats: EditorStats; showFormat?: boolean };
+  let { format, stats, showFormat = true }: Props = $props();
 </script>
 
 <footer class="status-bar" aria-label={t("status.bar")}>
-  <div class="format-info">
-    <button type="button" title={t("status.changeFormat")}>{formatLabel(format.id, format.label)}</button>
-    {#if !format.editable}<span class="restriction">{t("save.readOnly")}</span>{/if}
-    {#if format.lossy}<span class="restriction">{t("status.lossy")}</span>{/if}
-  </div>
+  {#if showFormat}
+    <div class="format-info">
+      <button type="button" title={t("status.changeFormat")}>{formatLabel(format.id, format.label)}</button>
+      {#if !format.editable}<span class="restriction">{t("save.readOnly")}</span>{/if}
+      {#if format.lossy}<span class="restriction">{t("status.lossy")}</span>{/if}
+    </div>
+  {/if}
 
   <div class="stats" aria-live="polite">
     {#if stats.selection}

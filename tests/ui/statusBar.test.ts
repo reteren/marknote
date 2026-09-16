@@ -44,4 +44,16 @@ describe("StatusBar statistics", () => {
     expect(document.body.textContent).toContain(t("status.characters", { count: 12 }));
     expect(document.body.textContent).not.toContain(t("status.words", { count: 3 }));
   });
+
+  it("can hide the document format while the start screen is active", () => {
+    render(StatusBar, {
+      props: {
+        format: format("markdown", { label: "Markdown" }),
+        stats: { line: 1, col: 1, lines: 1, words: 0, chars: 0, selection: null },
+        showFormat: false,
+      },
+    });
+    expect(document.querySelector(".format-info")).toBeNull();
+    expect(document.querySelector(".stats")?.textContent).toContain(t("status.position", { line: 1, column: 1 }));
+  });
 });

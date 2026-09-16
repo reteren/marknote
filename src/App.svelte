@@ -772,10 +772,12 @@ import SettingsWindow from "./ui/SettingsWindow.svelte";
   <div
     class="status-area"
     role="region"
-    aria-label={t("document.formatChars", {
-      format: formatLabel(documentState.format.id, documentState.format.label),
-      count: stats.chars,
-    })}
+    aria-label={showStartScreen
+      ? t("status.bar")
+      : t("document.formatChars", {
+          format: formatLabel(documentState.format.id, documentState.format.label),
+          count: stats.chars,
+        })}
     onclick={(event) => {
       if ((event.target as Element | null)?.closest(".format-info")) formatPickerOpen = true;
     }}
@@ -786,7 +788,7 @@ import SettingsWindow from "./ui/SettingsWindow.svelte";
       }
     }}
   >
-    <StatusBar format={documentState.format} {stats} />
+    <StatusBar format={documentState.format} {stats} showFormat={!showStartScreen} />
     {#if formatPickerOpen}
       <div class="format-picker-popover">
         <FormatPicker

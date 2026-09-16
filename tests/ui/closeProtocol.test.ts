@@ -119,6 +119,23 @@ describe("native close confirmation", () => {
     expect(tauri.handlers.has("save-before-close")).toBe(true);
   });
 
+  it("hides the format in the status bar until a document format is selected", async () => {
+    render(App);
+    await settle();
+
+    expect(document.querySelector(".start-screen")).not.toBeNull();
+    expect(document.querySelector(".status-bar .format-info")).toBeNull();
+    expect(document.querySelector(".status-area")?.getAttribute("aria-label")).toBe(t("status.bar"));
+
+    const markdownTile = document.querySelector<HTMLButtonElement>(".start-screen [role='grid'] .tile");
+    expect(markdownTile?.textContent).toContain(formatLabel("markdown", "Markdown"));
+    await fireEvent.click(markdownTile!);
+    await settle();
+
+    expect(document.querySelector(".start-screen")).toBeNull();
+    expect(document.querySelector(".status-bar .format-info")?.textContent).toContain(formatLabel("markdown", "Markdown"));
+  });
+
   it("opens Settings from File and Ctrl+, and closes it with Escape", async () => {
     render(App);
     await settle();

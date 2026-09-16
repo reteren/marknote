@@ -65,6 +65,12 @@ describe("Shell-Editor Integration (W50)", () => {
     expect(getComputedStyle(view.contentDOM).unicodeBidi).toBe("plaintext");
   });
 
+  it("does not highlight the active line in the editor", () => {
+    const view = createTestEditor("first line\nsecond line", markdownFormat);
+    view.focus();
+    expect(view.dom.querySelector(".cm-activeLine")).toBeNull();
+  });
+
   describe("Gap 2: Format switching preserves text, cursor, and undo history", () => {
     it("preserves text, cursor position, and undo/redo stack when switching format via setEditorFormat", async () => {
       const initialText = "fn calculate_total() -> i32 {\n  return 42;\n}\n";

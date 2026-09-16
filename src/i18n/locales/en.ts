@@ -4,10 +4,8 @@ import type { Dictionary } from "../types";
 const en = {
   "app.name": "MarkNote",
   "start.newDocument": "New document",
-  "start.newFile": "New file",
-  "start.openFile": "Open file…",
+  "start.openFile": "Open file",
   "start.dropFile": "or drop a file here",
-  "start.hint": "Start typing to create a Markdown note.",
   "formatPicker.choose": "Choose document format",
   "formatPicker.grid": "Format grid",
   "formatPicker.list": "Format list",
