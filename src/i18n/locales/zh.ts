@@ -154,6 +154,7 @@ const zh = {
   "help.action.closeWindow": "关闭窗口",
   "help.action.findReplace": "查找 / 替换",
   "help.action.goToLine": "跳转至行",
+  "goToLine.lineNumber": "行号",
   "help.action.zoom": "更改编辑器文字大小",
   "help.meaning.bold": "粗体强调",
   "help.meaning.italic": "斜体强调",

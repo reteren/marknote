@@ -9,6 +9,7 @@ import {
   markSaved,
   replaceDocument,
   resetDocument,
+  setDocumentText,
   type DocumentState,
   type NewDocument,
   type OpenedFile,
@@ -17,9 +18,12 @@ import {
 import { saveAs as saveAsFile, type AutosaveController } from "./autosave";
 import type { FormatCapabilities } from "./formats.svelte";
 import { markdownFormat } from "./formats.svelte";
+import { settingsState, type Settings } from "./settings.svelte";
 import type { MarknoteKeymapHandlers } from "../editor/keymap";
 
 export type ActionResult = boolean;
+
+export type LossySaveDecision = "save-lossy" | "save-markdown" | "cancel";
 
 export type ClipboardAdapter = {
   readText: () => Promise<string>;
@@ -44,7 +48,12 @@ export type ActionsDependencies = {
   dialogs?: ActionDialog;
   clipboard?: ClipboardAdapter;
   getFormats?: () => readonly FormatCapabilities[];
+  getSettings?: () => Settings;
   notify?: (message: string) => void;
+  /** Ask once before writing a lossy format. */
+  confirmLossySave?: () => Promise<LossySaveDecision>;
+  /** Used by the lossy warning's Markdown escape hatch. */
+  saveAsMarkdown?: () => Promise<ActionResult>;
   onDocumentReplaced?: () => void;
   closeWindow?: () => void | Promise<void>;
   openSettings?: () => void | Promise<void>;
@@ -100,6 +109,7 @@ export type AppActions = {
   editLink: (url: string, view?: EditorView | null) => ActionResult;
   openImage: (src: string) => Promise<ActionResult>;
   copyImage: (src: string) => Promise<ActionResult>;
+  resetLossyWarning: () => void;
 };
 
 const menuActionIds = new Set([
@@ -141,6 +151,8 @@ const menuActionIds = new Set([
   "format.codeBlock",
   "format.mathBlock",
   "format.horizontalRule",
+  "format.jsonValidate",
+  "format.jsonFormat",
   "view.zoomIn",
   "view.zoomOut",
   "view.resetZoom",
@@ -262,21 +274,66 @@ export function createActions(dependencies: ActionsDependencies = {}): AppAction
   const getView = (): EditorView | null => dependencies.getEditorView?.() ?? null;
   const notify = dependencies.notify ?? (() => undefined);
   const getFormats = dependencies.getFormats ?? (() => []);
+  const getSettings = dependencies.getSettings ?? (() => settingsState.settings);
   const dialogs = dependencies.dialogs ?? {};
+  let lossyWarningAcknowledged = false;
 
   const unavailable = (message: string): false => {
     notify(message);
     return false;
   };
 
+  const resolveFormatId = (formatId?: string): string => {
+    if (formatId && formatId.trim().length > 0) return formatId;
+    const configured = getSettings()?.files?.newDocumentFormat;
+    if (configured && typeof configured === "string" && configured.trim().length > 0) {
+      const formats = getFormats();
+      const known = formats.find((f) => f.id === configured);
+      if (known) {
+        return known.creatable ? known.id : markdownFormat.id;
+      }
+      if (formats.length === 0) {
+        return configured;
+      }
+    }
+    return markdownFormat.id;
+  };
+
   const canEdit = (): boolean => !state.readonly && state.format.editable;
   const canSaveAs = (): boolean => !state.readonly || state.path !== null;
   const hasTextOrPath = (): boolean => state.path !== null || state.text.length > 0;
 
-  const newDocument = async (formatId = markdownFormat.id, view?: EditorView | null): Promise<ActionResult> => {
+  const shouldWarnLossySave = (format: FormatCapabilities): boolean =>
+    format.lossy && !lossyWarningAcknowledged;
+
+  const promptLossySave = async (): Promise<boolean> => {
+    if (!dependencies.confirmLossySave) return true;
+    const decision = await dependencies.confirmLossySave();
+    if (decision === "save-lossy") {
+      lossyWarningAcknowledged = true;
+      return true;
+    }
+    if (decision === "save-markdown") {
+      lossyWarningAcknowledged = true;
+      return dependencies.saveAsMarkdown ? await dependencies.saveAsMarkdown() : false;
+    }
+    return false;
+  };
+
+  const prepareLossySave = async (): Promise<ActionResult> => {
+    if (!shouldWarnLossySave(state.format)) return true;
+    return await promptLossySave();
+  };
+
+  const resetLossyWarning = (): void => {
+    lossyWarningAcknowledged = false;
+  };
+
+  const newDocument = async (formatId?: string, view?: EditorView | null): Promise<ActionResult> => {
+    const targetFormatId = resolveFormatId(formatId);
     if (dependencies.openNewDocumentWindow) {
       try {
-        await dependencies.openNewDocumentWindow(formatId);
+        await dependencies.openNewDocumentWindow(targetFormatId);
         return true;
       } catch (error) {
         notify(error instanceof Error ? error.message : String(error));
@@ -284,8 +341,18 @@ export function createActions(dependencies: ActionsDependencies = {}): AppAction
       }
     }
     try {
-      const created = await invoke<NewDocument>("new_document", { formatId });
+      let created: NewDocument;
+      try {
+        created = await invoke<NewDocument>("new_document", { formatId: targetFormatId });
+      } catch (error) {
+        if (targetFormatId !== markdownFormat.id) {
+          created = await invoke<NewDocument>("new_document", { formatId: markdownFormat.id });
+        } else {
+          throw error;
+        }
+      }
       resetDocument(created.format, created.text);
+      resetLossyWarning();
       replaceEditorText(view ?? getView(), created.text);
       dependencies.onDocumentReplaced?.();
       return true;
@@ -321,6 +388,7 @@ export function createActions(dependencies: ActionsDependencies = {}): AppAction
       if (!picked) return false;
       const opened = await invoke<OpenedFile>("open_file", { path: picked });
       replaceDocument(opened);
+      resetLossyWarning();
       replaceEditorText(view ?? getView(), opened.text);
       dependencies.onDocumentReplaced?.();
       return true;
@@ -332,6 +400,7 @@ export function createActions(dependencies: ActionsDependencies = {}): AppAction
 
   const saveAs = async (_view?: EditorView | null): Promise<ActionResult> => {
     if (!canSaveAs() || !hasTextOrPath()) return unavailable("There is nothing to save");
+    if (shouldWarnLossySave(state.format) && !(await prepareLossySave())) return false;
     const suggestedName = state.path?.split(/[\\/]/u).pop() ?? `Untitled.${state.format.defaultExtension}`;
     const beforeText = state.text;
     try {
@@ -347,6 +416,7 @@ export function createActions(dependencies: ActionsDependencies = {}): AppAction
 
   const save = async (view?: EditorView | null): Promise<ActionResult> => {
     if (!canEdit() || !hasTextOrPath()) return unavailable("This document cannot be saved");
+    if (shouldWarnLossySave(state.format) && !(await prepareLossySave())) return false;
     if (state.path === null) return saveAs(view);
     const beforeText = state.text;
     try {
@@ -457,6 +527,37 @@ export function createActions(dependencies: ActionsDependencies = {}): AppAction
     return true;
   });
 
+  const validateJson = async (): Promise<ActionResult> => {
+    if (state.format.id !== "json") return false;
+    try {
+      const error = await invoke<{ line: number; column: number; message: string } | null>("validate_json", {
+        text: state.text,
+      });
+      notify(
+        error
+          ? `JSON syntax error at line ${error.line}, column ${error.column}: ${error.message}`
+          : "JSON is valid",
+      );
+      return true;
+    } catch (error) {
+      notify(error instanceof Error ? error.message : String(error));
+      return false;
+    }
+  };
+
+  const formatJson = async (view = getView()): Promise<ActionResult> => {
+    if (state.format.id !== "json" || !canEdit()) return false;
+    try {
+      const formatted = await invoke<string>("format_json", { text: state.text });
+      setDocumentText(formatted);
+      replaceEditorText(view, formatted);
+      return true;
+    } catch (error) {
+      notify(error instanceof Error ? error.message : String(error));
+      return false;
+    }
+  };
+
   const openSearch = (view = getView()): ActionResult => command(view, searchCommands.openSearch);
   const openReplace = (view = getView()): ActionResult => command(view, searchCommands.openReplace);
   const openLink = async (url: string): Promise<ActionResult> => {
@@ -503,8 +604,8 @@ export function createActions(dependencies: ActionsDependencies = {}): AppAction
   const copyImage = copyLink;
 
   const actionsById = new Map<string, () => Promise<ActionResult> | ActionResult>([
-    ["file.new", () => newDocument(markdownFormat.id)],
-    ["file.newWindow", () => newDocument(markdownFormat.id)],
+    ["file.new", () => newDocument()],
+    ["file.newWindow", () => newDocument()],
     ["file.open", () => openFile()],
     ["file.save", () => save()],
     ["file.saveAs", () => saveAs()],
@@ -535,6 +636,8 @@ export function createActions(dependencies: ActionsDependencies = {}): AppAction
     ["format.codeBlock", () => codeBlock()],
     ["format.mathBlock", () => mathBlock()],
     ["format.horizontalRule", () => horizontalRule()],
+    ["format.jsonValidate", () => validateJson()],
+    ["format.jsonFormat", () => formatJson()],
     ["view.zoomIn", () => invokeUi(dependencies.zoomIn, notify)],
     ["view.zoomOut", () => invokeUi(dependencies.zoomOut, notify)],
     ["view.resetZoom", () => invokeUi(dependencies.resetZoom, notify)],
@@ -545,7 +648,7 @@ export function createActions(dependencies: ActionsDependencies = {}): AppAction
 
   const handlers: MarknoteKeymapHandlers = {
     newDocument: (view) => {
-      void newDocument(markdownFormat.id, view);
+      void newDocument(undefined, view);
       return true;
     },
     newDocumentWithPicker: (view) => {
@@ -590,6 +693,8 @@ export function createActions(dependencies: ActionsDependencies = {}): AppAction
     if (id === "open-image" || id === "copy-image") return Boolean(payload);
     if (id === "file.close") return Boolean(dependencies.closeWindow);
     if (id === "file.settings") return Boolean(dependencies.openSettings);
+    if (id === "format.jsonValidate") return state.format.id === "json";
+    if (id === "format.jsonFormat") return state.format.id === "json" && canEdit();
     if (id === "help.shortcuts" || id === "help.markdownReference" || id === "help.about") return Boolean(dialogs.showHelp);
     if (id === "view.zoomIn") return Boolean(dependencies.zoomIn);
     if (id === "view.zoomOut") return Boolean(dependencies.zoomOut);
@@ -604,7 +709,7 @@ export function createActions(dependencies: ActionsDependencies = {}): AppAction
   const run = async (id: string, payload?: string): Promise<ActionResult> => {
     if (id.startsWith("file.new.")) return newDocument(id.slice("file.new.".length));
     if (id === "file.open") return openFile(payload);
-    if (id === "file.newWindow") return newDocument(markdownFormat.id);
+    if (id === "file.newWindow") return newDocument();
     if (id === "reveal-in-explorer" || id === "file.revealInExplorer") return revealInExplorer();
     if (id === "open-link") return openLink(payload ?? "");
     if (id === "copy-link") return copyLink(payload ?? "");
@@ -624,6 +729,8 @@ export function createActions(dependencies: ActionsDependencies = {}): AppAction
     if (id === "insert-code-block") return codeBlock();
     if (id === "insert-math-block") return mathBlock();
     if (id === "insert-hr") return horizontalRule();
+    if (id === "format.jsonValidate") return validateJson();
+    if (id === "format.jsonFormat") return formatJson();
     if (id.startsWith("format.heading")) {
       const level = Number(id.slice("format.heading".length));
       return heading(level);
@@ -677,5 +784,6 @@ export function createActions(dependencies: ActionsDependencies = {}): AppAction
     editLink,
     openImage,
     copyImage,
+    resetLossyWarning,
   };
 }

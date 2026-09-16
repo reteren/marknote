@@ -13,6 +13,7 @@
     | "format.code" | "format.link"
     | "format.heading1" | "format.heading2" | "format.heading3" | "format.heading4" | "format.heading5" | "format.heading6"
     | "format.clearHeading" | "format.list" | "format.table" | "format.callout" | "format.codeBlock" | "format.mathBlock" | "format.horizontalRule"
+    | "format.jsonValidate" | "format.jsonFormat"
     | "open-link" | "copy-link" | "edit-link" | "open-image" | "copy-image"
     | "insert-table" | "insert-callout" | "insert-code-block" | "insert-math-block" | "insert-hr";
 
@@ -40,6 +41,7 @@
     hasSelection?: boolean;
     canPaste?: boolean;
     editable?: boolean;
+    formatId?: string;
     targetElement?: HTMLElement | null;
     autoAttach?: boolean;
     onSelect?: (action: ContextMenuAction, payload?: string) => void;
@@ -56,6 +58,7 @@
     hasSelection = false,
     canPaste = true,
     editable = true,
+    formatId = undefined,
     targetElement = null,
     autoAttach = true,
     onSelect,
@@ -86,7 +89,7 @@
   }
 
   const formatSubmenus = $derived.by<SubmenuEntry[]>(() =>
-    createContextFormatGroups({ editable }).map((group) => ({
+    createContextFormatGroups({ editable, formatId }).map((group) => ({
       kind: "submenu",
       label: group.label,
       items: group.items.map(toOption),

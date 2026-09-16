@@ -1,9 +1,29 @@
 import type { FormatCapabilities } from "./formats.svelte";
 import { markdownFormat } from "./formats.svelte";
+import {
+  settingsState,
+  type NewDocumentEncoding,
+  type NewDocumentLineEnding,
+} from "./settings.svelte";
 
 export type LineEnding = "lf" | "crlf";
 export type SaveStatus = "unsaved" | "pending" | "saved" | "readonly";
 export type ExternalChangeStatus = "none" | "changed" | "deleted";
+
+export function resolveNewDocumentLineEnding(preference?: NewDocumentLineEnding): LineEnding {
+  if (preference === "crlf") return "crlf";
+  if (preference === "lf") return "lf";
+  // "system": on Windows platforms default to CRLF, elsewhere to LF.
+  const isWindows =
+    typeof navigator !== "undefined" &&
+    /windows|win32|win64/i.test(navigator.userAgent || navigator.platform || "");
+  return isWindows ? "crlf" : "lf";
+}
+
+export function resolveNewDocumentEncoding(preference?: NewDocumentEncoding): string {
+  if (preference === "utf8") return "utf-8";
+  return "utf-8";
+}
 
 export type OpenedFile = {
   path: string;
@@ -47,9 +67,9 @@ export const documentState = $state<DocumentState>({
   format: markdownFormat,
   saveStatus: "unsaved",
   lastSavedAt: null,
-  encoding: "utf-8",
+  encoding: resolveNewDocumentEncoding(settingsState?.settings?.files?.newDocumentEncoding),
   bom: false,
-  lineEnding: "lf",
+  lineEnding: resolveNewDocumentLineEnding(settingsState?.settings?.files?.newDocumentLineEnding),
   text: "",
   dirty: false,
   readonly: false,
@@ -87,14 +107,19 @@ export function replaceDocument(opened: OpenedFile): void {
   documentState.externalChangePath = null;
 }
 
-export function resetDocument(format: FormatCapabilities = markdownFormat, text = ""): void {
+export function resetDocument(
+  format: FormatCapabilities = markdownFormat,
+  text = "",
+  options?: { encoding?: string; lineEnding?: LineEnding },
+): void {
+  const files = settingsState?.settings?.files;
   documentState.path = null;
   documentState.format = format;
   documentState.saveStatus = "unsaved";
   documentState.lastSavedAt = null;
-  documentState.encoding = "utf-8";
+  documentState.encoding = options?.encoding ?? resolveNewDocumentEncoding(files?.newDocumentEncoding);
   documentState.bom = false;
-  documentState.lineEnding = "lf";
+  documentState.lineEnding = options?.lineEnding ?? resolveNewDocumentLineEnding(files?.newDocumentLineEnding);
   documentState.text = text;
   documentState.dirty = text.length > 0;
   documentState.readonly = !format.editable;

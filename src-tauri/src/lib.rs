@@ -40,6 +40,8 @@ pub fn run() {
             commands::set_document_title,
             commands::list_creatable_formats,
             commands::format_for_extension,
+            commands::validate_json,
+            commands::format_json,
             commands::read_image,
             commands::open_in_new_window,
             commands::open_new_window,

@@ -154,6 +154,7 @@ const de = {
   "help.action.closeWindow": "Fenster schließen",
   "help.action.findReplace": "Suchen / ersetzen",
   "help.action.goToLine": "Zu Zeile springen",
+  "goToLine.lineNumber": "Zeilennummer",
   "help.action.zoom": "Textgröße ändern",
   "help.meaning.bold": "Fettdruck",
   "help.meaning.italic": "Kursivdruck",

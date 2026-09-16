@@ -157,6 +157,7 @@ const en = {
   "help.action.closeWindow": "Close window",
   "help.action.findReplace": "Find / replace",
   "help.action.goToLine": "Go to line",
+  "goToLine.lineNumber": "Line number",
   "help.action.zoom": "Change editor text size",
   "help.meaning.bold": "Bold emphasis",
   "help.meaning.italic": "Italic emphasis",

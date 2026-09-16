@@ -45,33 +45,6 @@ export const SETTINGS_EXCEPTIONS: readonly SettingException[] = [
       "Обрабатывается в Rust: src-tauri/src/windows.rs (existing_window_label поднимает уже открытое окно вместо создания дубликата)",
   },
 
-  // --- Разделы в процессе переноса в параллельных задачах (W85 / W86 / W87) ---
-  {
-    path: "editor.zoomPercent",
-    reason:
-      "В процессе переноса (W85): масштаб редактора настраивается через src/editor/zoom.ts и действия zoom",
-  },
-
-
-
-
-  // --- Раздел файлов и сохранения (создание новых документов — в процессе подключения) ---
-  {
-    path: "files.newDocumentFormat",
-    reason:
-      "Ожидает реализации подключения: формат нового документа по умолчанию в src/state/actions.ts",
-  },
-  {
-    path: "files.newDocumentEncoding",
-    reason:
-      "Ожидает реализации подключения: кодировка новых документов (фиксированная utf8)",
-  },
-  {
-    path: "files.newDocumentLineEnding",
-    reason:
-      "Ожидает реализации подключения: системные/lf/crlf переводы строк новых документов",
-  },
-
   // --- Язык интерфейса ---
   {
     path: "language",

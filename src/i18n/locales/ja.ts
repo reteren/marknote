@@ -154,6 +154,7 @@ const ja = {
   "help.action.closeWindow": "ウィンドウを閉じる",
   "help.action.findReplace": "検索 / 置換",
   "help.action.goToLine": "指定行へ移動",
+  "goToLine.lineNumber": "行番号",
   "help.action.zoom": "エディターの文字サイズを変更",
   "help.meaning.bold": "太字による強調",
   "help.meaning.italic": "斜体による強調",

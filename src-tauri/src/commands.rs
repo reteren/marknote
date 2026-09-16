@@ -329,6 +329,18 @@ pub fn format_for_extension(ext: String) -> FormatCapabilities {
     formats::for_extension(&ext)
 }
 
+/// Validates JSON and returns the exact line/column of a syntax error.
+#[tauri::command]
+pub fn validate_json(text: String) -> Option<formats::json::JsonError> {
+    formats::json::validate(&text)
+}
+
+/// Formats JSON with two-space indentation while preserving object key order.
+#[tauri::command]
+pub fn format_json(text: String) -> Result<String, CommandError> {
+    formats::json::format(&text).map_err(CommandError::Format)
+}
+
 #[allow(non_snake_case)]
 #[tauri::command]
 pub fn read_image(docPath: Option<String>, src: String) -> Result<String, CommandError> {

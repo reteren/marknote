@@ -154,6 +154,7 @@ const ru = {
   "help.action.closeWindow": "Закрыть окно",
   "help.action.findReplace": "Найти / заменить",
   "help.action.goToLine": "Перейти к строке",
+  "goToLine.lineNumber": "Номер строки",
   "help.action.zoom": "Изменить размер текста",
   "help.meaning.bold": "Полужирное начертание",
   "help.meaning.italic": "Курсивное начертание",

@@ -156,6 +156,7 @@ const pt = {
   "help.action.closeWindow": "Fechar janela",
   "help.action.findReplace": "Localizar / substituir",
   "help.action.goToLine": "Ir para a linha",
+  "goToLine.lineNumber": "Número da linha",
   "help.action.zoom": "Alterar tamanho do texto",
   "help.meaning.bold": "Ênfase em negrito",
   "help.meaning.italic": "Ênfase em itálico",

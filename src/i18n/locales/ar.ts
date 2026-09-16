@@ -182,6 +182,7 @@ const ar = {
   "help.action.closeWindow": "إغلاق النافذة",
   "help.action.findReplace": "بحث / استبدال",
   "help.action.goToLine": "الانتقال إلى السطر",
+  "goToLine.lineNumber": "رقم السطر",
   "help.action.zoom": "تغيير حجم نص المحرر",
   "help.meaning.bold": "تأكيد غامق",
   "help.meaning.italic": "تأكيد مائل",

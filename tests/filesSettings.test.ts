@@ -23,8 +23,9 @@ import {
   type SaveResult,
 } from "../src/state/document.svelte";
 import { createAutosave, saveAs } from "../src/state/autosave";
-import { markdownFormat } from "../src/state/formats.svelte";
-import { defaultSettings, type Settings } from "../src/state/settings.svelte";
+import { createActions } from "../src/state/actions";
+import { markdownFormat, plainFormat } from "../src/state/formats.svelte";
+import { defaultSettings, settingsState, type Settings } from "../src/state/settings.svelte";
 
 function createSettings(filesOverrides: Partial<Settings["files"]> = {}): Settings {
   return {
@@ -187,5 +188,72 @@ describe("files settings wiring", () => {
     expect(documentState.text).toBe(originalText);
     expect(documentState.dirty).toBe(false);
     controller.dispose();
+  });
+
+  it("files.newDocumentFormat: respects configured format when creating new document", async () => {
+    tauri.invoke.mockImplementation(async (command: string, args?: { formatId?: string }) => {
+      if (command === "new_document") {
+        const format = args?.formatId === "plain" ? plainFormat : markdownFormat;
+        return { text: "", format };
+      }
+      return undefined;
+    });
+
+    const settings = createSettings({ newDocumentFormat: "plain" });
+    const actions = createActions({
+      getSettings: () => settings,
+      getFormats: () => [markdownFormat, plainFormat],
+    });
+
+    await actions.newDocument();
+    expect(tauri.invoke).toHaveBeenCalledWith("new_document", { formatId: "plain" });
+    expect(documentState.format.id).toBe("plain");
+  });
+
+  it("files.newDocumentFormat: silently falls back to markdown when format is unknown or invalid", async () => {
+    tauri.invoke.mockImplementation(async (command: string, args?: { formatId?: string }) => {
+      if (command === "new_document") {
+        return { text: "", format: markdownFormat };
+      }
+      return undefined;
+    });
+
+    const settings = createSettings({ newDocumentFormat: "nonexistent-format" });
+    const actions = createActions({
+      getSettings: () => settings,
+      getFormats: () => [markdownFormat, plainFormat],
+    });
+
+    await actions.newDocument();
+    expect(tauri.invoke).toHaveBeenCalledWith("new_document", { formatId: "markdown" });
+    expect(documentState.format.id).toBe("markdown");
+  });
+
+  it("files.newDocumentEncoding: initializes new document encoding from settings", () => {
+    const previous = settingsState.settings.files.newDocumentEncoding;
+    try {
+      settingsState.settings.files.newDocumentEncoding = "utf8";
+      resetDocument();
+      expect(documentState.encoding).toBe("utf-8");
+    } finally {
+      settingsState.settings.files.newDocumentEncoding = previous;
+    }
+  });
+
+  it("files.newDocumentLineEnding: applies configured line ending to new document state and save", async () => {
+    const previous = settingsState.settings.files.newDocumentLineEnding;
+    try {
+      // When settings specifies crlf
+      settingsState.settings.files.newDocumentLineEnding = "crlf";
+      resetDocument();
+      expect(documentState.lineEnding).toBe("crlf");
+
+      // When settings specifies lf
+      settingsState.settings.files.newDocumentLineEnding = "lf";
+      resetDocument();
+      expect(documentState.lineEnding).toBe("lf");
+    } finally {
+      settingsState.settings.files.newDocumentLineEnding = previous;
+    }
   });
 });

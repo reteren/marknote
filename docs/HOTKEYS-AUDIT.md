@@ -36,7 +36,7 @@
 | **Shift+Tab** | Уровень вложенности списка (`SPEC.md:471`) | Вне таблицы: `outdent` списка (`keymap.ts:450`). В таблице: перехватывается `tableKeymap` (`tables.ts:137`, `createEditor.ts:328`) → переход к предыдущей ячейке | В меню отсутствует | **РАСХОЖДЕНИЕ СО SPEC**: Переход к предыдущей ячейке таблицы не задокументирован в разделе 8 SPEC. |
 | **Ctrl+F** | Поиск (`SPEC.md:476`) | `Mod-f` → `handlers.openSearch` (`keymap.ts:382`), `searchCommands.openSearch` (`search.ts:417`), глобально в `FindPanel.svelte:229` | `edit.find` («Find…»), подпись `Ctrl+F` (`menuModel.ts:122`, `App.svelte:545`) | **Совпадает** (`SPEC.md:476`, `keymap.ts:382`, `menuModel.ts:122`) |
 | **Ctrl+H** | Замена (`SPEC.md:477`) | `Mod-h` → `handlers.openReplace` (`keymap.ts:383`), `searchCommands.openReplace` (`search.ts:418`), глобально в `FindPanel.svelte:233` | `edit.replace` («Replace…»), подпись `Ctrl+H` (`menuModel.ts:123`, `App.svelte:546`) | **Совпадает** (`SPEC.md:477`, `keymap.ts:383`, `menuModel.ts:123`) |
-| **Ctrl+G** | Перейти к строке (`SPEC.md:478`) | `Mod-g` → `handlers.goToLine` (`keymap.ts:384`, `actions.ts:570`). Но в `App.svelte:128-161` `goToLine` не передан | Отсутствует в `menuModel.ts`. Упомянут в справке `HelpDialog.svelte:43` | **НЕ РЕАЛИЗОВАНО**: Обещано в SPEC и справке, но UI и обработчик отсутствуют. Клавиша не работает. |
+| **Ctrl+G** | Перейти к строке (`SPEC.md:478`) | `Mod-g` → `handlers.goToLine` (`keymap.ts:384`, `actions.ts:570`) | Диалог перехода к строке подключён в `App.svelte`, обработчик передан в `createActions` | **ИСПРАВЛЕНО** (`2026-09-16`): Ctrl+G открывает диалог, Enter переходит к началу строки и прокручивает её в центр. |
 | **Ctrl+Home / Ctrl+End** | В начало и конец документа (`SPEC.md:479`) | Встроено в CodeMirror `defaultKeymap` (`Mod-Home` / `Mod-End`) + физические коды (`keymap.ts:420-421, 478`) | Отсутствует в меню; есть в справке `HelpDialog.svelte:35` | **Совпадает** (`SPEC.md:479`, `keymap.ts:478`) |
 | **Ctrl+± (Ctrl++ / Ctrl+=)** | Масштаб (увеличение) (`SPEC.md:480`) | `Mod-+` и `Mod-=` → `handlers.zoomIn` (`keymap.ts:385-386`, `App.svelte:152`) | `view.zoomIn` («Zoom In»), подпись `Ctrl+±` (`menuModel.ts:134`, `App.svelte:567`) | **Совпадает** (`SPEC.md:480`, `keymap.ts:385`, `menuModel.ts:134`) |
 | **Ctrl+-** | Масштаб (уменьшение) (входит в `Ctrl+±`, `SPEC.md:480`) | `Mod--` → `handlers.zoomOut` (`keymap.ts:387`, `App.svelte:155`) | `view.zoomOut` («Zoom Out») подписан как `Ctrl+-` (`menuModel.ts:135`) | **ИСПРАВЛЕНО** (`2026-09-16`): подпись Zoom Out соответствует физической клавише уменьшения. |
@@ -78,16 +78,17 @@
 
 ---
 
-### 3. Высокая: `Ctrl+G` («Перейти к строке») не реализован нигде
+### 3. Высокая: `Ctrl+G` («Перейти к строке») не был подключён
+- **Статус:** ✅ Исправлено 2026-09-16: добавлен диалог номера строки и подключён обработчик `goToLine`.
 - **Вероятность столкновения:** Высокая (стандартное сочетание для перехода по коду/заметке, явно обещанное в SPEC и справочном окне).
 - **Файлы и строки:**
   - `docs/SPEC.md:478` — обещано в таблице: `Ctrl+G` — «Перейти к строке».
   - `src/ui/HelpDialog.svelte:43` — включено в список пользовательской справки: `{ keys: "Ctrl+G", actionKey: "help.action.goToLine" }`.
   - `src/editor/keymap.ts:384` — `["Mod-g", handlers.goToLine]` зарегистрировано в `externalBindings`.
   - `src/state/actions.ts:51, 570` — `goToLine: () => invokeUi(dependencies.goToLine, notify)`.
-  - `src/App.svelte:128-161` — в `createActions` аргумент `goToLine` **не передан**.
+  - `src/App.svelte` — `createActions` получает `goToLine`; диалог принимает номер строки, закрывается по Escape, а Enter ставит курсор в начало строки и прокручивает её.
   - `src/ui/menuModel.ts` — пункт в меню полностью отсутствует.
-- **Суть проблемы:** Команда ни к чему не подключена, UI диалога перехода к строке в приложении отсутствует. Нажатие `Ctrl+G` молча игнорируется.
+- **Суть исправления:** Команда подключена к диалогу перехода к строке; номера за пределами документа ограничиваются последней строкой.
 
 ---
 

@@ -156,6 +156,7 @@ const fr = {
   "help.action.closeWindow": "Fermer la fenêtre",
   "help.action.findReplace": "Rechercher / remplacer",
   "help.action.goToLine": "Aller à la ligne",
+  "goToLine.lineNumber": "Numéro de ligne",
   "help.action.zoom": "Modifier la taille du texte",
   "help.meaning.bold": "Emphase en gras",
   "help.meaning.italic": "Emphase en italique",

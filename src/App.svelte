@@ -5,7 +5,7 @@
   import { invoke } from "@tauri-apps/api/core";
 import type { UnlistenFn } from "@tauri-apps/api/event";
   import { getCurrentWindow } from "@tauri-apps/api/window";
-  import { onMount } from "svelte";
+import { onMount, tick } from "svelte";
   import { installZoom, resetZoom, zoomIn, zoomOut } from "./editor/zoom";
   import { safeLinkHref } from "./editor/livePreview/inline";
   import { createActions } from "./state/actions";
@@ -13,7 +13,7 @@ import type { UnlistenFn } from "@tauri-apps/api/event";
   import { applyEditorSettings } from "./editor/settings";
   import { settingsState } from "./state/settings.svelte";
   import { dispatchSearchOpen } from "./editor/search";
-  import { createAutosave, saveAs } from "./state/autosave";
+  import { createAutosave, saveAs as saveAsFile } from "./state/autosave";
   import {
     clearExternalChange,
     documentState,
@@ -26,8 +26,9 @@ import type { UnlistenFn } from "@tauri-apps/api/event";
     setDocumentText,
     type NewDocument,
     type OpenedFile,
+    type SaveResult,
   } from "./state/document.svelte";
-  import { formatsState, loadCreatableFormats, type FormatCapabilities } from "./state/formats.svelte";
+  import { formatsState, loadCreatableFormats, markdownFormat, type FormatCapabilities } from "./state/formats.svelte";
   import MenuBar from "./ui/MenuBar.svelte";
   import SaveControls from "./ui/SaveControls.svelte";
   import StartScreen from "./ui/StartScreen.svelte";
@@ -40,7 +41,7 @@ import HelpDialog, { type HelpMode } from "./ui/HelpDialog.svelte";
   import SettingsWindow from "./ui/SettingsWindow.svelte";
   import TitleBar from "./ui/TitleBar.svelte";
   import { formatLabel, translate as t } from "./i18n";
-  import type { EditorView } from "@codemirror/view";
+import { EditorView, type EditorView as EditorViewType } from "@codemirror/view";
 
   type OpenFileRequest = { path: string };
   type CloseChoice = "save" | "discard" | "cancel";
@@ -48,7 +49,7 @@ import HelpDialog, { type HelpMode } from "./ui/HelpDialog.svelte";
   type SelectionSnapshot = Array<{ anchor: number; head: number }>;
 
   let editorHost: HTMLDivElement | undefined = $state();
-  let editorView = $state<EditorView | null>(null);
+  let editorView = $state<EditorViewType | null>(null);
   let autosaveController: ReturnType<typeof createAutosave> | null = null;
   let openingPathKey: string | null = null;
   let unlistenNativeDrop: UnlistenFn | undefined;
@@ -64,6 +65,11 @@ import HelpDialog, { type HelpMode } from "./ui/HelpDialog.svelte";
   let closeAfterDecision = $state(false);
   let helpMode = $state<HelpMode | null>(null);
   let settingsOpen = $state(false);
+  let goToLineOpen = $state(false);
+  let goToLineValue = $state("1");
+  let goToLineInput: HTMLInputElement | undefined = $state();
+  let lossyNoticeOpen = $state(false);
+  let lossyChoiceResolve: ((decision: "save-lossy" | "save-markdown" | "cancel") => void) | null = null;
   let stats = $state<EditorStats>({
     line: 1,
     col: 1,
@@ -105,7 +111,7 @@ import HelpDialog, { type HelpMode } from "./ui/HelpDialog.svelte";
     return path.replaceAll("/", "\\").toLowerCase();
   }
 
-  function snapshotSelection(view: EditorView | null): SelectionSnapshot {
+  function snapshotSelection(view: EditorViewType | null): SelectionSnapshot {
     return view?.state.selection.ranges.map((range) => ({ anchor: range.anchor, head: range.head })) ?? [];
   }
 
@@ -153,7 +159,10 @@ import HelpDialog, { type HelpMode } from "./ui/HelpDialog.svelte";
       },
     },
     getFormats: () => formatsState.items,
+    getSettings: () => settingsState.settings,
     notify: reportError,
+    confirmLossySave: requestLossySave,
+    saveAsMarkdown: saveDocumentAsMarkdown,
     closeWindow: () => void requestClose(),
     openSettings: () => {
       settingsOpen = true;
@@ -170,6 +179,7 @@ import HelpDialog, { type HelpMode } from "./ui/HelpDialog.svelte";
     openNewDocumentWindow: async (formatId) => {
       await invoke("open_new_window", { formatId });
     },
+    goToLine: openGoToLine,
   });
 
   function rebuildEditor(focus = false): void {
@@ -198,6 +208,92 @@ import HelpDialog, { type HelpMode } from "./ui/HelpDialog.svelte";
     errorMessage = error instanceof Error ? error.message : String(error);
   }
 
+  function openGoToLine(): void {
+    const view = editorView;
+    goToLineValue = String(view ? view.state.doc.lineAt(view.state.selection.main.head).number : stats.line);
+    goToLineOpen = true;
+    void tick().then(() => {
+      goToLineInput?.focus();
+      goToLineInput?.select();
+    });
+  }
+
+  function applyGoToLine(): void {
+    const view = editorView;
+    const requested = Number.parseInt(goToLineValue, 10);
+    if (!view || !Number.isFinite(requested)) return;
+    const lineNumber = Math.min(Math.max(requested, 1), view.state.doc.lines);
+    const line = view.state.doc.line(lineNumber);
+    view.dispatch({
+      selection: EditorSelection.cursor(line.from),
+      effects: EditorView.scrollIntoView(line.from, { y: "center" }),
+    });
+    view.focus();
+    goToLineOpen = false;
+  }
+
+  function handleGoToLineKeydown(event: KeyboardEvent): void {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      goToLineOpen = false;
+    } else if (event.key === "Enter") {
+      event.preventDefault();
+      applyGoToLine();
+    }
+  }
+
+  function requestLossySave(): Promise<"save-lossy" | "save-markdown" | "cancel"> {
+    lossyNoticeOpen = true;
+    return new Promise((resolve) => {
+      lossyChoiceResolve?.("cancel");
+      lossyChoiceResolve = resolve;
+    });
+  }
+
+  async function saveDocumentAsMarkdown(): Promise<boolean> {
+    const currentName = documentState.path?.split(/[\\/]/u).pop() ?? "Untitled";
+    const stem = currentName.replace(/\.[^.]*$/u, "") || "Untitled";
+    const suggestedName = `${stem}.md`;
+    try {
+      // Через общий saveAs, а не напрямую по IPC: только он применяет правку
+      // текста при записи — удаление пробелов в конце строк и завершающий
+      // перевод строки. Прямой вызов сохранял бы иначе, чем Ctrl+S.
+      const result = await saveAsFile(
+        { text: documentState.text, format: markdownFormat },
+        suggestedName,
+      );
+      if (!result) return false;
+      const formatChanged = result.format.id !== documentState.format.id;
+      markSaved(result, documentState.text);
+      if (editorView) {
+        setEditorDocumentPath(editorView, result.path);
+        if (formatChanged) void setEditorFormat(editorView, result.format);
+      }
+      errorMessage = null;
+      return true;
+    } catch (error) {
+      reportError(error);
+      return false;
+    }
+  }
+
+  function handleLossyAction(action: string): void {
+    const resolve = lossyChoiceResolve;
+    lossyChoiceResolve = null;
+    lossyNoticeOpen = false;
+    if (!resolve) return;
+    if (action === "save-lossy") resolve("save-lossy");
+    else if (action === "save-markdown") resolve("save-markdown");
+    else resolve("cancel");
+  }
+
+  function closeLossyNotice(): void {
+    const resolve = lossyChoiceResolve;
+    lossyChoiceResolve = null;
+    lossyNoticeOpen = false;
+    resolve?.("cancel");
+  }
+
   async function openFile(path: string): Promise<void> {
     if (!path) return;
     const requestedPathKey = pathKey(path);
@@ -212,6 +308,7 @@ import HelpDialog, { type HelpMode } from "./ui/HelpDialog.svelte";
     try {
       const opened = await invoke<OpenedFile>("open_file", { path });
       replaceDocument(opened);
+      actions.resetLossyWarning();
       startScreenDismissed = true;
       errorMessage = null;
       rebuildEditor(true);
@@ -240,6 +337,7 @@ import HelpDialog, { type HelpMode } from "./ui/HelpDialog.svelte";
       resetDocument(format, format.template);
     }
     startScreenDismissed = true;
+    actions.resetLossyWarning();
     formatPickerOpen = false;
     errorMessage = null;
     rebuildEditor(true);
@@ -254,6 +352,7 @@ import HelpDialog, { type HelpMode } from "./ui/HelpDialog.svelte";
       return;
     }
     setDocumentFormat(format);
+    actions.resetLossyWarning();
     startScreenDismissed = true;
     formatPickerOpen = false;
     // У безымянного документа имя в заголовке зависит от типа: Untitled.md
@@ -275,34 +374,32 @@ import HelpDialog, { type HelpMode } from "./ui/HelpDialog.svelte";
   }
 
   async function saveDocumentAs(): Promise<boolean> {
-    const extension = documentState.format.defaultExtension;
-    const suggestedName = documentState.path?.split(/[\\/]/u).pop() ?? `Untitled.${extension}`;
-    try {
-      const result = await saveAs(documentState, suggestedName);
-      if (!result) return false;
-      const formatChanged = result.format.id !== documentState.format.id;
-      markSaved(result, documentState.text);
-      if (editorView) {
-        setEditorDocumentPath(editorView, result.path);
-        if (formatChanged) {
-          void setEditorFormat(editorView, result.format);
-          editorView.focus();
-        }
-      } else if (formatChanged) {
-        rebuildEditor(true);
+    const previousFormat = documentState.format.id;
+    const saved = await actions.saveAs(editorView);
+    if (!saved) return false;
+    if (editorView && documentState.path) {
+      setEditorDocumentPath(editorView, documentState.path);
+      if (previousFormat !== documentState.format.id) {
+        void setEditorFormat(editorView, documentState.format).then(() => editorView?.focus());
       }
-      errorMessage = null;
-      return true;
-    } catch (error) {
-      reportError(error);
-      return false;
+    } else if (previousFormat !== documentState.format.id) {
+      rebuildEditor(true);
     }
+    errorMessage = null;
+    return true;
   }
 
   async function saveNow(): Promise<boolean> {
-    if (documentState.path === null) return saveDocumentAs();
-    const result = await autosaveController?.flush(true);
-    return result !== null || !documentState.dirty;
+    const previousPath = documentState.path;
+    const previousFormat = documentState.format.id;
+    const saved = await actions.save(editorView);
+    if (saved && editorView && previousPath === null && documentState.path) {
+      setEditorDocumentPath(editorView, documentState.path);
+      if (previousFormat !== documentState.format.id) {
+        void setEditorFormat(editorView, documentState.format).then(() => editorView?.focus());
+      }
+    }
+    return saved;
   }
 
   async function reloadExternalFile(): Promise<void> {
@@ -536,7 +633,7 @@ import HelpDialog, { type HelpMode } from "./ui/HelpDialog.svelte";
       return;
     }
     switch (id) {
-      case "file.newWindow": void actions.newDocument("markdown"); break;
+      case "file.newWindow": void actions.newDocument(); break;
       case "file.open": void pickFile(); break;
       case "file.save": void saveNow(); break;
       case "file.saveAs": void saveDocumentAs(); break;
@@ -560,6 +657,8 @@ import HelpDialog, { type HelpMode } from "./ui/HelpDialog.svelte";
       case "format.highlight":
       case "format.code":
       case "format.codeBlock":
+      case "format.jsonValidate":
+      case "format.jsonFormat":
         void actions.run(id);
         break;
       case "format.link": insertLink(); break;
@@ -786,6 +885,8 @@ import HelpDialog, { type HelpMode } from "./ui/HelpDialog.svelte";
       />
     {:else if documentState.externalChange === "deleted"}
       <Notice preset="file-deleted" onAction={(action) => action === "save" ? void saveNow() : undefined} />
+    {:else if lossyNoticeOpen}
+      <Notice preset="lossy-warning" onAction={handleLossyAction} onClose={closeLossyNotice} />
     {/if}
   </div>
 
@@ -844,7 +945,7 @@ import HelpDialog, { type HelpMode } from "./ui/HelpDialog.svelte";
     {/if}
   </div>
 
-  <ContextMenu editable={!isReadOnly} onSelect={handleContextMenuAction} />
+  <ContextMenu editable={!isReadOnly} formatId={documentState.format.id} onSelect={handleContextMenuAction} />
 
   {#if helpMode}
     <HelpDialog mode={helpMode} onClose={() => (helpMode = null)} />
@@ -868,6 +969,27 @@ import HelpDialog, { type HelpMode } from "./ui/HelpDialog.svelte";
           <button type="button" onclick={() => void handleCloseChoice("discard")}>{t("dialog.close.discard")}</button>
           <button type="button" onclick={() => void handleCloseChoice("cancel")}>{t("dialog.close.cancel")}</button>
         </div>
+      </div>
+    </div>
+  {/if}
+
+  {#if goToLineOpen}
+    <!-- svelte-ignore a11y_click_events_have_key_events -->
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <div class="modal-backdrop" onclick={(event) => event.currentTarget === event.target && (goToLineOpen = false)}>
+      <div class="close-dialog goto-line-dialog" role="dialog" aria-modal="true" aria-labelledby="goto-line-title">
+        <h2 id="goto-line-title">{t("help.action.goToLine")}</h2>
+        <label for="goto-line-input">{t("goToLine.lineNumber")}</label>
+        <input
+          id="goto-line-input"
+          bind:this={goToLineInput}
+          bind:value={goToLineValue}
+          type="number"
+          min="1"
+          step="1"
+          inputmode="numeric"
+          onkeydown={handleGoToLineKeydown}
+        />
       </div>
     </div>
   {/if}
@@ -984,6 +1106,18 @@ import HelpDialog, { type HelpMode } from "./ui/HelpDialog.svelte";
   }
   .close-dialog-actions button:hover { background: var(--bg-modifier-hover); }
   .close-dialog-actions button.primary { background: var(--accent); color: var(--text-on-accent); }
+  .goto-line-dialog { display: grid; gap: 8px; }
+  .goto-line-dialog label { color: var(--text-muted); font-size: var(--font-size-ui); }
+  .goto-line-dialog input {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 7px 8px;
+    border: 1px solid var(--bg-modifier-border);
+    border-radius: var(--radius-s);
+    background: var(--background-primary);
+    color: var(--text-normal);
+    font: inherit;
+  }
 
   @media (max-width: 760px) {
     .save-controls-overlay { inset-inline-end: 4px; padding-inline-start: 4px; }

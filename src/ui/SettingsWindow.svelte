@@ -2,7 +2,7 @@
   import { invoke } from "@tauri-apps/api/core";
   import { onMount, tick } from "svelte";
   import type { EditorView } from "@codemirror/view";
-  import { getZoom, installZoom, resetZoom, zoomIn, zoomOut } from "../editor/zoom";
+  import { getZoom, installZoom, resetZoom, setZoomPercent, zoomIn, zoomOut } from "../editor/zoom";
   import { formatLabel, translate as t } from "../i18n";
   import {
     defaultSettings,
@@ -134,7 +134,7 @@
   let copiedVersion = $state(false);
   let settingsFileError = $state(false);
   let zoomView = $derived(editorView);
-  let zoomPercent = $derived(zoomView ? getZoom(zoomView) : settingsState.settings.editor.zoomPercent);
+  let zoomPercent = $derived(settingsState.settings.editor.zoomPercent);
   let matchingSections = $state<Section[]>(sections);
 
   function settingValue(path: string): unknown {
@@ -188,23 +188,13 @@
     const value = settingValue(descriptor.path);
     if (descriptor.path === "files.autosaveDelayMs") return Number(value) / 1000;
     if (descriptor.path === "livePreview.disableAboveBytes") return Number(value) / (1024 * 1024);
-    if (descriptor.path === "editor.zoomPercent" && editorView) return getZoom(editorView);
+    if (descriptor.path === "editor.zoomPercent") return settingsState.settings.editor.zoomPercent;
     return value as string | number | boolean;
   }
 
   function applyZoomValue(target: number): void {
     if (!editorView) return;
-    const normalized = Math.min(200, Math.max(50, Math.round(target / 10) * 10));
-    let current = getZoom(editorView);
-    while (current < normalized) {
-      zoomIn(editorView);
-      current = getZoom(editorView);
-    }
-    while (current > normalized) {
-      zoomOut(editorView);
-      current = getZoom(editorView);
-    }
-    updatePath("editor.zoomPercent", current);
+    setZoomPercent(editorView, target);
   }
 
   function toggleSpellLanguage(language: string, checked: boolean): void {
@@ -345,12 +335,6 @@
     void invoke<FormatCapabilities[]>("list_creatable_formats")
       .then((formats) => { creatableFormats = Array.isArray(formats) ? formats.filter((item) => item.creatable) : []; })
       .catch(() => { creatableFormats = []; });
-    if (editorView) {
-      const current = installZoom(editorView);
-      if (settingsState.settings.editor.zoomPercent !== current) {
-        updateSettings({ editor: { zoomPercent: current } }, { persist: false, applyLanguage: false });
-      }
-    }
     void tick().then(() => dialogElement?.focus());
   });
 </script>

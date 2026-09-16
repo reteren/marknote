@@ -30,6 +30,7 @@ export type MenuState = {
   canUndo?: boolean;
   canRedo?: boolean;
   canSave?: boolean;
+  formatId?: string;
 };
 
 function item(
@@ -185,6 +186,13 @@ export function createContextFormatGroups(state: MenuState = {}): MenuGroup[] {
         item("format.codeBlock", t("format.codeBlock"), "Ctrl+Shift+K", notEditable),
         item("format.mathBlock", t("format.mathBlock"), "", notEditable),
         item("format.horizontalRule", t("format.horizontalRule"), "", notEditable),
+        ...(state.formatId === "json"
+          ? [
+              separator("format.separator.json"),
+              item("format.jsonValidate", "Validate JSON"),
+              item("format.jsonFormat", "Format JSON", "", notEditable),
+            ]
+          : []),
       ],
     },
   ];

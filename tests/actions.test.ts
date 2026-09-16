@@ -8,7 +8,7 @@ const { invoke } = vi.hoisted(() => ({ invoke: vi.fn() }));
 vi.mock("@tauri-apps/api/core", () => ({ invoke }));
 
 import { createActions } from "../src/state/actions";
-import { createMenuModel, type MenuItem } from "../src/ui/menuModel";
+import { createContextFormatGroups, createMenuModel, type MenuItem } from "../src/ui/menuModel";
 import { documentState, replaceDocument, resetDocument, setDocumentText } from "../src/state/document.svelte";
 import { createAutosave } from "../src/state/autosave";
 
@@ -26,6 +26,22 @@ const readOnlyFormat: FormatCapabilities = {
   creatable: false,
   livePreview: false,
   autosave: false,
+};
+
+const jsonFormat: FormatCapabilities = {
+  ...editableFormat,
+  id: "json",
+  label: "JSON",
+  defaultExtension: "json",
+};
+
+const lossyFormat: FormatCapabilities = {
+  ...editableFormat,
+  id: "rtf",
+  label: "RTF",
+  defaultExtension: "rtf",
+  autosave: false,
+  lossy: true,
 };
 
 const opened = {
@@ -131,6 +147,33 @@ describe("application actions", () => {
     expect(blockView.state.doc.toString()).toBe("```\nword\n```");
   });
 
+  it("connects Ctrl+G to the shell go-to-line dialog and exposes JSON context actions", async () => {
+    const goToLine = vi.fn();
+    const actions = createActions({ goToLine, state: documentState });
+    expect(actions.handlers.goToLine?.()).toBe(true);
+    expect(goToLine).toHaveBeenCalledOnce();
+
+    const markdownGroups = createContextFormatGroups({ formatId: "markdown" });
+    expect(markdownGroups.flatMap((group) => group.items).some((item) => item.id === "format.jsonValidate")).toBe(false);
+    const jsonGroups = createContextFormatGroups({ formatId: "json" });
+    expect(jsonGroups.flatMap((group) => group.items).map((item) => item.id)).toContain("format.jsonValidate");
+    expect(jsonGroups.flatMap((group) => group.items).map((item) => item.id)).toContain("format.jsonFormat");
+  });
+
+  it("validates and formats JSON through the IPC actions", async () => {
+    resetDocument(jsonFormat, '{"b":1}');
+    const view = viewFor(documentState.text);
+    const notify = vi.fn();
+    invoke.mockResolvedValueOnce(null).mockResolvedValueOnce('{\n  "b": 1\n}\n');
+    const actions = createActions({ state: documentState, getEditorView: () => view, notify });
+
+    expect(await actions.run("format.jsonValidate")).toBe(true);
+    expect(invoke).toHaveBeenNthCalledWith(1, "validate_json", { text: '{"b":1}' });
+    expect(await actions.run("format.jsonFormat")).toBe(true);
+    expect(invoke).toHaveBeenNthCalledWith(2, "format_json", { text: '{"b":1}' });
+    expect(view.state.doc.toString()).toBe('{\n  "b": 1\n}\n');
+  });
+
   it("picks a path and opens it, or opens an explicit path directly", async () => {
     invoke.mockResolvedValueOnce("C:/notes/picked.md").mockResolvedValueOnce(opened);
     const actions = makeActions(viewFor());
@@ -162,6 +205,19 @@ describe("application actions", () => {
       lineEnding: "lf",
     });
     expect(documentState.saveStatus).toBe("saved");
+  });
+
+  it("shows the lossy-save decision once per document", async () => {
+    replaceDocument({ ...opened, format: lossyFormat });
+    setDocumentText("changed");
+    const confirmLossySave = vi.fn().mockResolvedValue("save-lossy" as const);
+    invoke.mockResolvedValue(saved);
+    const actions = createActions({ state: documentState, confirmLossySave });
+
+    expect(await actions.save()).toBe(true);
+    setDocumentText("changed again");
+    expect(await actions.save()).toBe(true);
+    expect(confirmLossySave).toHaveBeenCalledOnce();
   });
 
   it("routes Save for an untitled document to save_as with the suggested extension", async () => {

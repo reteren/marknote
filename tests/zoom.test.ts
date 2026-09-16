@@ -2,16 +2,27 @@
 
 import { undo } from "@codemirror/commands";
 import type { EditorView } from "@codemirror/view";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+const tauri = vi.hoisted(() => ({
+  invoke: vi.fn(),
+}));
+
+vi.mock("@tauri-apps/api/core", () => ({
+  invoke: tauri.invoke,
+}));
+
 import { createEditor } from "../src/editor/createEditor";
 import {
   getZoom,
   installZoom,
   resetZoom,
+  setZoomPercent,
   zoomIn,
   zoomOut,
 } from "../src/editor/zoom";
 import type { FormatCapabilities } from "../src/state/formats.svelte";
+import { defaultSettings, settingsState } from "../src/state/settings.svelte";
 
 const views: EditorView[] = [];
 const ZOOM_DEFAULT = 100;
@@ -48,10 +59,22 @@ function editor(doc = "hello"): EditorView {
   return view;
 }
 
+beforeEach(() => {
+  tauri.invoke.mockReset();
+  tauri.invoke.mockImplementation(async (command: string, args?: unknown) => {
+    if (command === "get_settings") return defaultSettings;
+    if (command === "save_settings") return (args as { settings: unknown })?.settings;
+    return undefined;
+  });
+  settingsState.settings.editor.zoomPercent = ZOOM_DEFAULT;
+  settingsState.ready = true;
+});
+
 afterEach(() => {
   while (views.length > 0) views.pop()?.destroy();
   document.body.replaceChildren();
   localStorage.clear();
+  settingsState.settings.editor.zoomPercent = ZOOM_DEFAULT;
 });
 
 describe("editor zoom", () => {
@@ -131,5 +154,43 @@ describe("editor zoom", () => {
 
     getItem.mockRestore();
     setItem.mockRestore();
+  });
+
+  it("rapid zoom series coalesces into a single debounced save", async () => {
+    vi.useFakeTimers();
+    const view = editor();
+    installZoom(view);
+    tauri.invoke.mockClear();
+
+    // Fire 20 rapid zoomIn operations
+    for (let index = 0; index < 20; index += 1) {
+      zoomIn(view);
+    }
+
+    expect(getZoom(view)).toBe(ZOOM_MAX);
+    expect(settingsState.settings.editor.zoomPercent).toBe(ZOOM_MAX);
+
+    // Save must not fire immediately (preventing disk thrashing)
+    expect(tauri.invoke).not.toHaveBeenCalled();
+
+    // 399ms elapsed - still debouncing
+    vi.advanceTimersByTime(399);
+    expect(tauri.invoke).not.toHaveBeenCalled();
+
+    // Debounce timer (400ms) fires
+    vi.advanceTimersByTime(1);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(tauri.invoke).toHaveBeenCalledTimes(1);
+    expect(tauri.invoke).toHaveBeenCalledWith("save_settings", expect.objectContaining({
+      settings: expect.objectContaining({
+        editor: expect.objectContaining({
+          zoomPercent: ZOOM_MAX,
+        }),
+      }),
+    }));
+
+    vi.useRealTimers();
   });
 });

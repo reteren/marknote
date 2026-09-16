@@ -156,6 +156,7 @@ const it = {
   "help.action.closeWindow": "Chiudi finestra",
   "help.action.findReplace": "Trova / sostituisci",
   "help.action.goToLine": "Vai alla riga",
+  "goToLine.lineNumber": "Numero di riga",
   "help.action.zoom": "Modifica dimensione testo",
   "help.meaning.bold": "Enfasi in grassetto",
   "help.meaning.italic": "Enfasi in corsivo",

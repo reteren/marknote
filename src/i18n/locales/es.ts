@@ -154,6 +154,7 @@ const es = {
   "help.action.closeWindow": "Cerrar ventana",
   "help.action.findReplace": "Buscar / reemplazar",
   "help.action.goToLine": "Ir a la línea",
+  "goToLine.lineNumber": "Número de línea",
   "help.action.zoom": "Cambiar tamaño del texto",
   "help.meaning.bold": "Texto en negrita",
   "help.meaning.italic": "Texto en cursiva",

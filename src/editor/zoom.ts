@@ -1,5 +1,6 @@
 import { Compartment, StateEffect, type Extension } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
+import { settingsState, updateSettings } from "../state/settings.svelte";
 
 /** Размеры выбраны так, чтобы не ломать рабочую колонку и оставаться читаемыми. */
 const ZOOM_DEFAULT = 100;
@@ -39,6 +40,17 @@ function storeZoom(percent: number): void {
   }
 }
 
+function getInitialZoom(): number {
+  // Единственное хранилище масштаба — settings.json. Раньше значение жило в
+  // localStorage, а в настройках лежала копия, которая ни на что не влияла:
+  // после перезапуска побеждал localStorage, и масштаб не переносился вместе
+  // с файлом настроек на другую машину.
+  if (settingsState.ready) return clampZoom(settingsState.settings.editor.zoomPercent);
+  // Запасной путь для запуска вне Tauri — в тестах и в обычном браузере, где
+  // настроек нет вовсе. Не мёртвый код: без него редактор там теряет масштаб.
+  return readStoredZoom();
+}
+
 function zoomTheme(percent: number): Extension {
   const factor = percent / ZOOM_DEFAULT;
   return EditorView.theme({
@@ -59,7 +71,7 @@ function ensureRuntime(view: EditorView): ZoomRuntime {
 
   const runtime: ZoomRuntime = {
     compartment: new Compartment(),
-    percent: readStoredZoom(),
+    percent: getInitialZoom(),
   };
   runtimes.set(view, runtime);
   view.dispatch({
@@ -69,21 +81,32 @@ function ensureRuntime(view: EditorView): ZoomRuntime {
   return runtime;
 }
 
-function applyZoom(view: EditorView, percent: number): void {
+function applyZoom(view: EditorView, percent: number, syncSettings = true): void {
   const runtime = ensureRuntime(view);
   const next = clampZoom(percent);
   runtime.percent = next;
+  // Запасной путь для запуска вне Tauri, см. getInitialZoom.
   storeZoom(next);
+  // Запись в настройки уже с задержкой (scheduleSave), поэтому серия нажатий
+  // Ctrl+= не превращается в серию записей на диск.
+  if (syncSettings && settingsState.settings.editor.zoomPercent !== next) {
+    updateSettings({ editor: { zoomPercent: next } });
+  }
   view.dispatch({
     effects: runtime.compartment.reconfigure(zoomTheme(next)),
     selection: view.state.selection,
   });
 }
 
-/** Подключает масштаб и восстанавливает последнее значение из localStorage. */
+/** Подключает масштаб и восстанавливает значение из настроек (с fallback на localStorage). */
 export function installZoom(view: EditorView): number {
   ensureRuntime(view);
   return getZoom(view);
+}
+
+/** Устанавливает точное значение масштаба редактора. */
+export function setZoomPercent(view: EditorView, percent: number, syncSettings = true): void {
+  applyZoom(view, percent, syncSettings);
 }
 
 /** Увеличивает кегль текста редактора на один шаг. */
@@ -96,7 +119,7 @@ export function zoomOut(view: EditorView): void {
   applyZoom(view, ensureRuntime(view).percent - ZOOM_STEP);
 }
 
-/** Возвращает масштаб к исходному значению и сохраняет это решение. */
+/** Возвращает масштаб к исходному значению и сохраняет это решение в настройках. */
 export function resetZoom(view: EditorView): void {
   applyZoom(view, ZOOM_DEFAULT);
 }
