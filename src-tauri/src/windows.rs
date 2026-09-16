@@ -85,6 +85,14 @@ impl AppState {
     }
 
     fn reserve_file(&self, key: PathBuf, label: &str) {
+        // Обычный Mutex в Rust не входит повторно: если вызвать этот метод,
+        // держа замок реестра, поток встанет навсегда. Так и случилось —
+        // программа намертво зависала при открытии файла двойным щелчком.
+        // В отладочной сборке падаем с внятным сообщением вместо зависания.
+        debug_assert!(
+            self.open_files.try_lock().is_ok(),
+            "reserve_file вызван при уже захваченном реестре открытых файлов"
+        );
         if let Ok(mut open_files) = self.open_files.lock() {
             open_files.insert(key, label.to_owned());
         }
@@ -310,11 +318,18 @@ pub fn route_file(app: &tauri::AppHandle, path: impl AsRef<Path>) -> Result<(), 
 
     let target = {
         let state = app.state::<AppState>();
-        let open_files = state.open_files.lock().map_err(|error| {
-            eprintln!("Could not lock the open-file registry: {error}");
-            UserMessage::WindowRouting.to_string()
-        })?;
-        let existing = existing_window_label(&settings, &open_files, &key);
+
+        // Реестр открытых файлов читаем и сразу отпускаем. Держать его до
+        // конца блока нельзя: reserve_file берёт тот же замок, а обычный
+        // Mutex в Rust не входит повторно — поток встаёт навсегда. Именно
+        // так и вставала программа при открытии файла двойным щелчком.
+        let existing = {
+            let open_files = state.open_files.lock().map_err(|error| {
+                eprintln!("Could not lock the open-file registry: {error}");
+                UserMessage::WindowRouting.to_string()
+            })?;
+            existing_window_label(&settings, &open_files, &key)
+        };
 
         if let Some(label) = existing {
             state.set_pending_file(&label, canonical.clone());
