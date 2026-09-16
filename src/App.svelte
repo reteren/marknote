@@ -36,7 +36,8 @@ import ContextMenu, { type ContextMenuAction } from "./ui/ContextMenu.svelte";
 import FormatPicker from "./ui/FormatPicker.svelte";
 import Notice from "./ui/Notice.svelte";
 import HelpDialog, { type HelpMode } from "./ui/HelpDialog.svelte";
-import SettingsWindow from "./ui/SettingsWindow.svelte";
+  import SettingsWindow from "./ui/SettingsWindow.svelte";
+  import TitleBar from "./ui/TitleBar.svelte";
   import { formatLabel, translate as t } from "./i18n";
   import type { EditorView } from "@codemirror/view";
 
@@ -709,6 +710,8 @@ import SettingsWindow from "./ui/SettingsWindow.svelte";
 </svelte:head>
 
 <div class="app-shell" inert={!nativeCloseReady} aria-busy={!nativeCloseReady}>
+  <TitleBar title={title} onClose={() => void requestClose()} onError={reportError} />
+
   <div class="menu-row">
     <MenuBar
       formats={formatsState.items}

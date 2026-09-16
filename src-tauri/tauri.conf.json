@@ -19,7 +19,7 @@
         "minWidth": 500,
         "minHeight": 400,
         "resizable": true,
-        "decorations": true,
+        "decorations": false,
         "theme": "Dark",
         "dragDropEnabled": true,
         "visible": false

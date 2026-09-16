@@ -78,7 +78,9 @@
     let disposed = false;
     let unlistenResize: UnlistenFn | undefined;
     void refreshMaximizedState();
-    void getCurrentWindow().onResized(() => void refreshMaximizedState())
+    const window = getCurrentWindow();
+    if (typeof window.onResized !== "function") return;
+    void window.onResized(() => void refreshMaximizedState())
       .then((unlisten) => {
         if (disposed) unlisten();
         else unlistenResize = unlisten;
@@ -92,7 +94,8 @@
 </script>
 
 <header class="titlebar" aria-label={t("window.titleBar")}>
-  <div class="titlebar-drag-region" data-tauri-drag-region ondblclick={handleDragRegionDoubleClick}>
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <div class="titlebar-drag-region" data-tauri-drag-region role="presentation" ondblclick={handleDragRegionDoubleClick}>
     <svg class="app-mark" viewBox="0 0 24 24" aria-hidden="true" data-tauri-drag-region>
       <rect x="5" y="3.75" width="14" height="16.5" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.5" />
       <path d="M8 8h8M8 11h5" fill="none" stroke="currentColor" stroke-width="1.35" stroke-linecap="round" />
@@ -222,7 +225,7 @@
 
   .resize-hotspots {
     position: fixed;
-    z-index: 940;
+    z-index: 955;
     inset: 0;
     pointer-events: none;
   }
