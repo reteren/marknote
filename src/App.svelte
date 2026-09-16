@@ -83,7 +83,6 @@ import { EditorView, type EditorView as EditorViewType } from "@codemirror/view"
   let closeRequestSource = $state<CloseRequestSource>(null);
   let nativeClosePending = $state(false);
   let closeAfterDecision = $state(false);
-  let pendingCloseTabId = $state<TabId | null>(null);
   let closePromptTabs = $state<WorkspaceTab[]>([]);
   let helpMode = $state<HelpMode | null>(null);
   let settingsOpen = $state(false);
@@ -460,8 +459,21 @@ import { EditorView, type EditorView as EditorViewType } from "@codemirror/view"
     autosaveController?.schedule();
   }
 
+  function isTabDirty(tab: WorkspaceTab): boolean {
+    const doc = tab.document;
+    if (doc.readonly || !doc.format.editable) return false;
+    if (doc.path === null) {
+      return doc.dirty && doc.text.length > 0;
+    }
+    return doc.dirty;
+  }
+
+  function getTabsRequiringPrompt(): WorkspaceTab[] {
+    return workspace.tabs.filter((tab) => isTabDirty(tab));
+  }
+
   function needsClosePrompt(): boolean {
-    return !isReadOnly && documentState.dirty && documentState.text.length > 0;
+    return getTabsRequiringPrompt().length > 0;
   }
 
   async function respondToNativeClose(allow: boolean): Promise<void> {
@@ -485,22 +497,28 @@ import { EditorView, type EditorView as EditorViewType } from "@codemirror/view"
       closeRequestSource = "native";
       return;
     }
-    if (
-      documentState.path !== null &&
-      documentState.dirty &&
-      documentState.format.autosave &&
-      !isReadOnly
-    ) {
-      const result = await autosaveController?.flush();
-      await respondToNativeClose(result !== null && result !== undefined || !documentState.dirty);
+    if (autosaveController) {
+      for (const tab of workspace.tabs) {
+        if (
+          tab.document.path !== null &&
+          tab.document.dirty &&
+          tab.document.format.autosave &&
+          !tab.document.readonly &&
+          settingsState.settings?.files?.autosave !== false
+        ) {
+          await autosaveController.flush(true, tab.id);
+        }
+      }
+    }
+    const dirtyTabs = getTabsRequiringPrompt();
+    if (dirtyTabs.length === 0) {
+      await respondToNativeClose(true);
       return;
     }
-    if (needsClosePrompt()) {
-      closeRequestSource = "native";
-      closePromptOpen = true;
-      return;
-    }
-    await respondToNativeClose(true);
+    closeRequestSource = "native";
+    pendingCloseTabId = null;
+    closePromptTabs = dirtyTabs;
+    closePromptOpen = true;
   }
 
   async function closeWindowAfterDecision(): Promise<void> {
@@ -514,12 +532,28 @@ import { EditorView, type EditorView as EditorViewType } from "@codemirror/view"
   }
 
   async function requestClose(): Promise<void> {
-    if (needsClosePrompt()) {
-      closeRequestSource = "menu";
-      closePromptOpen = true;
+    if (autosaveController) {
+      for (const tab of workspace.tabs) {
+        if (
+          tab.document.path !== null &&
+          tab.document.dirty &&
+          tab.document.format.autosave &&
+          !tab.document.readonly &&
+          settingsState.settings?.files?.autosave !== false
+        ) {
+          await autosaveController.flush(true, tab.id);
+        }
+      }
+    }
+    const dirtyTabs = getTabsRequiringPrompt();
+    if (dirtyTabs.length === 0) {
+      await closeWindowAfterDecision();
       return;
     }
-    await closeWindowAfterDecision();
+    closeRequestSource = "menu";
+    pendingCloseTabId = null;
+    closePromptTabs = dirtyTabs;
+    closePromptOpen = true;
   }
 
   function handleOpenNewTab(): void {
@@ -575,9 +609,20 @@ import { EditorView, type EditorView as EditorViewType } from "@codemirror/view"
       return;
     }
 
-    if (tab.document.dirty) {
+    if (
+      tab.document.path !== null &&
+      tab.document.dirty &&
+      tab.document.format.autosave &&
+      !tab.document.readonly &&
+      settingsState.settings?.files?.autosave !== false
+    ) {
+      await autosaveController?.flush(true, id);
+    }
+
+    if (isTabDirty(tab)) {
       handleSelectTab(id);
       pendingCloseTabId = id;
+      closePromptTabs = [tab];
       closeRequestSource = "tab";
       closePromptOpen = true;
       return;
@@ -604,22 +649,42 @@ import { EditorView, type EditorView as EditorViewType } from "@codemirror/view"
 
   async function handleCloseChoice(choice: CloseChoice): Promise<void> {
     const tabToClose = pendingCloseTabId;
-    pendingCloseTabId = null;
+    const tabsToProcess = closePromptTabs.length > 0
+      ? [...closePromptTabs]
+      : (tabToClose ? [workspace.tabs.find((t) => t.id === tabToClose)].filter(Boolean) as WorkspaceTab[] : []);
     const source = closeRequestSource;
-    closePromptOpen = false;
-    closeRequestSource = null;
+
     if (choice === "cancel") {
+      closePromptOpen = false;
+      closeRequestSource = null;
+      pendingCloseTabId = null;
+      closePromptTabs = [];
       if (source === "native") await respondToNativeClose(false);
       return;
     }
+
     if (choice === "save") {
-      const saved = documentState.path === null ? await saveDocumentAs() : await saveNow();
-      if (!saved) {
-        if (source === "native") await respondToNativeClose(false);
-        return;
+      closePromptOpen = false;
+      for (const tab of tabsToProcess) {
+        handleSelectTab(tab.id);
+        await tick();
+        const saved = tab.document.path === null ? await saveDocumentAs() : await saveNow();
+        if (!saved) {
+          closeRequestSource = null;
+          pendingCloseTabId = null;
+          closePromptTabs = [];
+          if (source === "native") await respondToNativeClose(false);
+          return;
+        }
       }
     }
-    if (tabToClose) {
+
+    closePromptOpen = false;
+    closeRequestSource = null;
+    pendingCloseTabId = null;
+    closePromptTabs = [];
+
+    if (source === "tab" && tabToClose) {
       tabEditorStates.delete(tabToClose);
       const wasActive = workspace.activeId === tabToClose;
       closeTab(tabToClose);
@@ -639,6 +704,7 @@ import { EditorView, type EditorView as EditorViewType } from "@codemirror/view"
       }
       return;
     }
+
     if (source === "native") {
       await respondToNativeClose(true);
     } else {
@@ -828,6 +894,13 @@ import { EditorView, type EditorView as EditorViewType } from "@codemirror/view"
   }
 
   function handleWindowKeydown(event: KeyboardEvent): void {
+    if (closePromptOpen) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        void handleCloseChoice("cancel");
+      }
+      return;
+    }
     if ((event.ctrlKey || event.metaKey) && event.code === "Comma") {
       event.preventDefault();
       settingsOpen = true;
@@ -835,9 +908,11 @@ import { EditorView, type EditorView as EditorViewType } from "@codemirror/view"
       event.preventDefault();
       handleOpenNewTab();
     } else if ((event.ctrlKey || event.metaKey) && event.code === "KeyW") {
+      event.preventDefault();
       if (workspace.tabs.length > 1) {
-        event.preventDefault();
         void handleCloseTab(workspace.activeId);
+      } else {
+        void requestClose();
       }
     }
   }
@@ -1121,6 +1196,13 @@ import { EditorView, type EditorView as EditorViewType } from "@codemirror/view"
       <div class="close-dialog" role="dialog" aria-modal="true" aria-labelledby="close-dialog-title">
         <h2 id="close-dialog-title">{t("dialog.close.title")}</h2>
         <p>{closePromptMessage}</p>
+        {#if closePromptTabs.length > 1}
+          <ul class="close-dialog-tabs">
+            {#each closePromptTabs as tab (tab.id)}
+              <li>{getTabDisplayName(tab)}</li>
+            {/each}
+          </ul>
+        {/if}
         <div class="close-dialog-actions">
           <button type="button" class="primary" onclick={() => void handleCloseChoice("save")}>{t("dialog.close.save")}</button>
           <button type="button" onclick={() => void handleCloseChoice("discard")}>{t("dialog.close.discard")}</button>
@@ -1188,34 +1270,6 @@ import { EditorView, type EditorView as EditorViewType } from "@codemirror/view"
     background: var(--bg-secondary);
   }
 
-  .single-tab-new-btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 20px;
-    height: 20px;
-    margin-inline-end: 8px;
-    border: 1px dashed var(--bg-modifier-border);
-    border-radius: var(--radius-s);
-    background: transparent;
-    color: var(--text-muted);
-    cursor: pointer;
-    font-family: var(--font-ui);
-    font-size: 14px;
-    line-height: 1;
-    transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
-  }
-
-  .single-tab-new-btn:hover {
-    background: var(--bg-modifier-hover);
-    border-color: var(--accent);
-    color: var(--accent);
-  }
-
-  .single-tab-new-btn:focus-visible {
-    outline: 2px solid var(--accent);
-    outline-offset: 1px;
-  }
 
   .editor-stage {
     position: relative;
@@ -1292,6 +1346,18 @@ import { EditorView, type EditorView as EditorViewType } from "@codemirror/view"
 
   .close-dialog h2 { margin: 0 0 8px; font-size: var(--font-size-text); }
   .close-dialog p { margin: 0 0 18px; color: var(--text-muted); }
+  .close-dialog-tabs {
+    margin: 0 0 18px;
+    padding-inline-start: 20px;
+    max-height: 160px;
+    overflow-y: auto;
+    color: var(--text-normal);
+    font-size: var(--font-size-ui);
+  }
+  .close-dialog-tabs li {
+    margin-bottom: 4px;
+    word-break: break-all;
+  }
   .close-dialog-actions { display: flex; justify-content: flex-end; gap: 8px; }
   .close-dialog-actions button {
     padding: 6px 10px;

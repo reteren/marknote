@@ -7,7 +7,7 @@
 рабочие детали контракта; новые хранилища для текста не заводятся.
 
 `src/state/workspace.svelte.ts` owns one reactive workspace with a stable
-one-tab invariant, lifecycle operations, and display labels.  `documentState`
+one-or-more-tab invariant, lifecycle operations, and display labels.  `documentState`
 in `document.svelte.ts` remains the same exported object and is a Proxy view;
 reads and writes are forwarded to the active tab document, so existing callers
 do not need to know about tabs.
@@ -43,7 +43,10 @@ an App/UI responsibility so no policy is silently changed in state.
 закрытым.
 
 `src-tauri/src/watcher.rs` keeps one native watch per directory root and emits
-the changed path; the frontend still has to finish matching that path to an
-inactive tab. `src-tauri/src/windows.rs` keeps tab/window ownership in the
-open-file registry, while explorer opens continue to resolve a file to a new
-window as required by the contract.
+the changed path; the autosave layer matches it against tab documents, while
+final integration and acceptance remain in work. `src-tauri/src/windows.rs`
+keeps tab/window ownership in the open-file registry. Explorer opens are routed
+outside the current tab set: a free startup window is reused when available,
+otherwise a new window is created. This differs from the contract's
+unconditional «new window» wording
+and remains to be reconciled.

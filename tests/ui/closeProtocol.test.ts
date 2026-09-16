@@ -25,6 +25,7 @@ vi.mock("@tauri-apps/api/window", () => ({
 
 import App from "../../src/App.svelte";
 import { documentState, resetDocument } from "../../src/state/document.svelte";
+import { workspace, createDocumentState } from "../../src/state/workspace.svelte";
 import { markdownFormat } from "../../src/state/formats.svelte";
 import { translate as t } from "../../src/i18n";
 import { formatLabel } from "../../src/i18n";
@@ -54,6 +55,11 @@ describe("native close confirmation", () => {
   beforeEach(() => {
     tauri.handlers.clear();
     tauri.invoke.mockReset();
+    workspace.tabs.splice(0, workspace.tabs.length, {
+      id: "tab-1",
+      document: createDocumentState(),
+    });
+    workspace.activeId = "tab-1";
     resetDocument(markdownFormat, "");
     tauri.focusChanged.mockImplementation(async () => () => undefined);
     tauri.listen.mockImplementation(async (name: string, handler: (event: { payload?: unknown }) => void) => {
@@ -70,7 +76,14 @@ describe("native close confirmation", () => {
     });
   });
 
-  afterEach(() => cleanup());
+  afterEach(() => {
+    cleanup();
+    workspace.tabs.splice(0, workspace.tabs.length, {
+      id: "tab-1",
+      document: createDocumentState(),
+    });
+    workspace.activeId = "tab-1";
+  });
 
   it("keeps an edited untitled document open on save-before-close until a choice is made", async () => {
     render(App);
@@ -254,5 +267,201 @@ describe("native close confirmation", () => {
       expect(documentState.dirty).toBe(true);
       expect(documentState.text).toBe("qa-unsaved");
     }
+  });
+
+  it("asks before closing a dirty tab, and cancel leaves the tab in place", async () => {
+    tauri.invoke.mockImplementation(async (command: string) => {
+      if (command === "list_creatable_formats") return [markdownFormat];
+      if (command === "new_document") return { text: "", format: markdownFormat };
+      if (command === "take_pending_file") return null;
+      return undefined;
+    });
+    render(App);
+    await settle();
+    await createEditedUntitled();
+
+    await fireEvent.keyDown(window, { code: "KeyT", key: "t", ctrlKey: true });
+    await settle();
+    expect(workspace.tabs).toHaveLength(2);
+
+    const secondTabId = workspace.activeId;
+    const editorContent = document.querySelector<HTMLElement>(".cm-content");
+    expect(editorContent).not.toBeNull();
+    editorContent!.textContent = "second-tab-unsaved";
+    await fireEvent.input(editorContent!);
+    await settle();
+    expect(workspace.tabs.find((t) => t.id === secondTabId)?.document.dirty).toBe(true);
+
+    const closeButtons = document.querySelectorAll<HTMLButtonElement>(".tab-close-btn");
+    expect(closeButtons.length).toBe(2);
+    await fireEvent.click(closeButtons[1]!);
+    await settle();
+
+    expect(document.querySelector('[role="dialog"]')).not.toBeNull();
+    expect(document.querySelector('[role="dialog"]')?.textContent).toContain(t("dialog.close.title"));
+
+    const cancelButton = Array.from(document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button'))
+      .find((button) => button.textContent?.trim() === t("dialog.close.cancel"));
+    expect(cancelButton).toBeDefined();
+    await fireEvent.click(cancelButton!);
+    await settle();
+
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    expect(workspace.tabs).toHaveLength(2);
+    expect(workspace.tabs.find((t) => t.id === secondTabId)?.document.text).toBe("second-tab-unsaved");
+    expect(workspace.tabs.find((t) => t.id === secondTabId)?.document.dirty).toBe(true);
+  });
+
+  it("closes only the target tab when discard is chosen for that tab", async () => {
+    tauri.invoke.mockImplementation(async (command: string) => {
+      if (command === "list_creatable_formats") return [markdownFormat];
+      if (command === "new_document") return { text: "", format: markdownFormat };
+      if (command === "take_pending_file") return null;
+      return undefined;
+    });
+    render(App);
+    await settle();
+    await createEditedUntitled();
+
+    await fireEvent.keyDown(window, { code: "KeyT", key: "t", ctrlKey: true });
+    await settle();
+    expect(workspace.tabs).toHaveLength(2);
+
+    const firstTabId = workspace.tabs[0]!.id;
+    const secondTabId = workspace.tabs[1]!.id;
+    const editorContent = document.querySelector<HTMLElement>(".cm-content");
+    editorContent!.textContent = "second-tab-unsaved";
+    await fireEvent.input(editorContent!);
+    await settle();
+
+    const closeButtons = document.querySelectorAll<HTMLButtonElement>(".tab-close-btn");
+    await fireEvent.click(closeButtons[1]!);
+    await settle();
+
+    expect(document.querySelector('[role="dialog"]')).not.toBeNull();
+    const discardButton = Array.from(document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button'))
+      .find((button) => button.textContent?.trim() === t("dialog.close.discard"));
+    expect(discardButton).toBeDefined();
+    await fireEvent.click(discardButton!);
+    await settle();
+
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    expect(workspace.tabs).toHaveLength(1);
+    expect(workspace.tabs[0]!.id).toBe(firstTabId);
+    expect(workspace.tabs[0]!.document.text).toBe("qa-unsaved");
+  });
+
+  it("closing a window with multiple dirty tabs shows aggregated dialog listing all dirty tabs, and cancel keeps all tabs", async () => {
+    tauri.invoke.mockImplementation(async (command: string) => {
+      if (command === "list_creatable_formats") return [markdownFormat];
+      if (command === "new_document") return { text: "", format: markdownFormat };
+      if (command === "take_pending_file") return null;
+      return undefined;
+    });
+    render(App);
+    await settle();
+    await createEditedUntitled();
+
+    await fireEvent.keyDown(window, { code: "KeyT", key: "t", ctrlKey: true });
+    await settle();
+    const editorContent = document.querySelector<HTMLElement>(".cm-content");
+    editorContent!.textContent = "second-tab-unsaved";
+    await fireEvent.input(editorContent!);
+    await settle();
+
+    for (const handler of tauri.handlers.get("save-before-close") ?? []) handler({ payload: {} });
+    await settle();
+
+    expect(document.querySelector('[role="dialog"]')).not.toBeNull();
+    expect(document.querySelector('[role="dialog"]')?.textContent).toContain(t("dialog.close.title"));
+    expect(document.querySelector('[role="dialog"]')?.textContent).toContain(t("dialog.close.unsavedMultiple"));
+    const tabListItems = document.querySelectorAll(".close-dialog-tabs li");
+    expect(tabListItems.length).toBe(2);
+    expect(tauri.invoke).not.toHaveBeenCalledWith("respond_to_close", expect.anything());
+
+    const cancelButton = Array.from(document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button'))
+      .find((button) => button.textContent?.trim() === t("dialog.close.cancel"));
+    expect(cancelButton).toBeDefined();
+    await fireEvent.click(cancelButton!);
+    await settle();
+
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    expect(tauri.invoke).toHaveBeenCalledWith("respond_to_close", { allow: false });
+    expect(workspace.tabs).toHaveLength(2);
+    expect(workspace.tabs[0]!.document.text).toBe("qa-unsaved");
+    expect(workspace.tabs[1]!.document.text).toBe("second-tab-unsaved");
+  });
+
+  it("closing the window with two dirty tabs and saving stops and preserves unsaved tab if save is cancelled", async () => {
+    let saveAsCount = 0;
+    tauri.invoke.mockImplementation(async (command: string) => {
+      if (command === "list_creatable_formats") return [markdownFormat];
+      if (command === "new_document") return { text: "", format: markdownFormat };
+      if (command === "take_pending_file") return null;
+      if (command === "save_as") {
+        saveAsCount += 1;
+        if (saveAsCount === 1) {
+          return { path: "C:/notes/first.md", savedAt: "2026-09-16T00:00:00.000Z", format: markdownFormat };
+        }
+        return null;
+      }
+      return undefined;
+    });
+    render(App);
+    await settle();
+    await createEditedUntitled();
+
+    await fireEvent.keyDown(window, { code: "KeyT", key: "t", ctrlKey: true });
+    await settle();
+    const editorContent = document.querySelector<HTMLElement>(".cm-content");
+    editorContent!.textContent = "second-tab-unsaved";
+    await fireEvent.input(editorContent!);
+    await settle();
+
+    for (const handler of tauri.handlers.get("save-before-close") ?? []) handler({ payload: {} });
+    await settle();
+
+    const saveButton = Array.from(document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button'))
+      .find((button) => button.textContent?.trim() === t("dialog.close.save"));
+    await fireEvent.click(saveButton!);
+    for (let index = 0; index < 50; index += 1) await Promise.resolve();
+
+    expect(tauri.invoke).toHaveBeenCalledWith("respond_to_close", { allow: false });
+    expect(workspace.tabs).toHaveLength(2);
+    expect(workspace.tabs[0]!.document.path).toBe("C:/notes/first.md");
+    expect(workspace.tabs[0]!.document.dirty).toBe(false);
+    expect(workspace.tabs[1]!.document.path).toBeNull();
+    expect(workspace.tabs[1]!.document.dirty).toBe(true);
+    expect(workspace.tabs[1]!.document.text).toBe("second-tab-unsaved");
+  });
+
+  it("closing the last remaining tab triggers window close confirmation", async () => {
+    tauri.invoke.mockImplementation(async (command: string) => {
+      if (command === "list_creatable_formats") return [markdownFormat];
+      if (command === "new_document") return { text: "", format: markdownFormat };
+      if (command === "take_pending_file") return null;
+      return undefined;
+    });
+    render(App);
+    await settle();
+    await createEditedUntitled();
+    expect(workspace.tabs).toHaveLength(1);
+
+    await fireEvent.keyDown(window, { code: "KeyW", key: "w", ctrlKey: true });
+    await settle();
+
+    expect(document.querySelector('[role="dialog"]')).not.toBeNull();
+    expect(document.querySelector('[role="dialog"]')?.textContent).toContain(t("dialog.close.title"));
+
+    const cancelButton = Array.from(document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button'))
+      .find((button) => button.textContent?.trim() === t("dialog.close.cancel"));
+    expect(cancelButton).toBeDefined();
+    await fireEvent.click(cancelButton!);
+    await settle();
+
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    expect(workspace.tabs).toHaveLength(1);
+    expect(workspace.tabs[0]!.document.dirty).toBe(true);
+    expect(workspace.tabs[0]!.document.text).toBe("qa-unsaved");
   });
 });
