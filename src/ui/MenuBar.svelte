@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { onMount, tick } from "svelte";
   import type { SaveStatus } from "../state/document.svelte";
   import type { FormatCapabilities } from "../state/formats.svelte";
   import { formatTime, interfaceLanguage, translate as t } from "../i18n";
@@ -36,7 +36,8 @@
   let activeItemIndex = $state(0);
   let activeSubmenuId = $state<string | null>(null);
   let activeSubmenuIndex = $state(0);
-  let popupInlineStart = $state(4);
+  let popupLeft = $state(4);
+  let popupTop = $state(4);
   let submenuOpensOpposite = $state(false);
 
   const displayTitle = $derived(title ?? t("menu.windowTitle"));
@@ -70,22 +71,43 @@
     });
   }
 
-  function positionPopup(button?: HTMLElement): void {
-    const width = 280;
+  function positionPopupForKeyboard(sectionId: string): void {
+    const sectionIndex = model.findIndex((section) => section.id === sectionId);
+    const button = menuRoot?.querySelectorAll<HTMLElement>('[role="menubar"] button')[sectionIndex];
     const rect = button?.getBoundingClientRect();
+    const width = Math.min(280, window.innerWidth - 8);
     const idealLeft = rect ? (rtl ? rect.right - width : rect.left) : 4;
-    const physicalLeft = Math.max(4, Math.min(idealLeft, window.innerWidth - width - 4));
-    popupInlineStart = rtl ? window.innerWidth - physicalLeft - width : physicalLeft;
+    popupLeft = Math.max(4, Math.min(idealLeft, window.innerWidth - width - 4));
+    popupTop = Math.max(4, Math.min((menuRoot?.getBoundingClientRect().bottom ?? 0) + 1, window.innerHeight - 8));
   }
 
-  function openSection(id: string, button?: HTMLElement): void {
+  function positionPopupFromPointer(x: number, y: number): void {
+    popupLeft = x - 2;
+    popupTop = y - 2;
+    void tick().then(() => {
+      const popup = menuRoot?.querySelector<HTMLElement>(".menu-popup");
+      if (!popup) return;
+
+      const bounds = popup.getBoundingClientRect();
+      const width = bounds.width || Math.min(280, window.innerWidth - 8);
+      const height = bounds.height || Math.min(520, window.innerHeight - 8);
+      const left = x - 2 + width <= window.innerWidth - 4 ? x - 2 : x + 2 - width;
+      const top = y - 2 + height <= window.innerHeight - 4 ? y - 2 : y + 2 - height;
+      popupLeft = Math.max(4, Math.min(left, window.innerWidth - width - 4));
+      popupTop = Math.max(4, Math.min(top, window.innerHeight - height - 4));
+    });
+  }
+
+  function openSection(id: string, pointer?: { x: number; y: number }): void {
     const section = sectionById(id);
     if (!section) return;
+    const wasOpen = openSectionId !== null;
     openSectionId = id;
     activeSubmenuId = null;
     activeSubmenuIndex = 0;
     activeItemIndex = 0;
-    positionPopup(button);
+    if (pointer) positionPopupFromPointer(pointer.x, pointer.y);
+    else if (!wasOpen) positionPopupForKeyboard(id);
     focusMenuItem(selectableItems(section.items)[0]);
   }
 
@@ -108,8 +130,8 @@
     const preferredSpace = rect
       ? rtl ? rect.left : window.innerWidth - rect.right
       : rtl
-        ? window.innerWidth - popupInlineStart - 280
-        : window.innerWidth - popupInlineStart - 280;
+        ? popupLeft
+        : window.innerWidth - popupLeft - 280;
     submenuOpensOpposite = preferredSpace < 276;
     focusMenuItem(item.submenu.find((child) => !child.disabled && !child.separator));
   }
@@ -219,15 +241,8 @@
   }
 
   function handleSectionClick(event: MouseEvent, id: string): void {
-    const button = event.currentTarget instanceof HTMLElement ? event.currentTarget : undefined;
     if (openSectionId === id) closeMenu(false);
-    else openSection(id, button);
-  }
-
-  function handleSectionHover(event: MouseEvent, id: string): void {
-    if (!openSectionId || openSectionId === id) return;
-    const button = event.currentTarget instanceof HTMLElement ? event.currentTarget : undefined;
-    openSection(id, button);
+    else openSection(id, event.detail === 0 ? undefined : { x: event.clientX, y: event.clientY });
   }
 
   function handleItemHover(event: MouseEvent, item: MenuItem): void {
@@ -270,7 +285,6 @@
           aria-expanded={openSectionId === section.id}
           class:menu-open={openSectionId === section.id}
           onclick={(event) => handleSectionClick(event, section.id)}
-          onmouseenter={(event) => handleSectionHover(event, section.id)}
         >{section.label}</button>
       {/each}
     </div>
@@ -284,7 +298,7 @@
 
   {#if openSectionId}
     {@const section = sectionById(openSectionId)}
-    <div class="menu-popup" role="menu" aria-label={section?.label} style={`inset-inline-start: ${popupInlineStart}px`}>
+    <div class="menu-popup" role="menu" aria-label={section?.label} style={`left: ${popupLeft}px; top: ${popupTop}px`}>
       {#each section?.items ?? [] as menuItem}
         {#if menuItem.separator}
           <div class="menu-separator" role="separator"></div>
@@ -378,8 +392,11 @@
   .save-controls .status-saved { color: var(--text-success); }
 
   .menu-popup {
+    /* Отступ в 4px не косметический: меню раскрывается так, что курсор
+       оказывается на 2px внутри рамки, и держится он именно на этом поле.
+       Если поле убрать, курсор попадёт сразу на первый пункт, тот получит
+       mouseenter — и подменю форматов снова начнёт выскакивать само. */
     position: fixed;
-    top: calc(var(--menubar-height) + 1px);
     z-index: 30;
     display: flex;
     flex-direction: column;
