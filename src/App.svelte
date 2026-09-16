@@ -81,9 +81,14 @@ import { EditorView, type EditorView as EditorViewType } from "@codemirror/view"
   let errorMessage = $state<string | null>(null);
 
   const rawDocumentTitle = $derived(getDocumentTitle(documentState));
-  const title = $derived(t("window.documentTitle", {
-    filename: rawDocumentTitle.replace(/\s+—\s+MarkNote$/u, ""),
-  }));
+  const documentFileName = $derived(rawDocumentTitle.replace(/\s+—\s+MarkNote$/u, ""));
+  /** Заголовок окна для системы: панель задач и переключение окон. */
+  const title = $derived(t("window.documentTitle", { filename: documentFileName }));
+  /** Подпись в строке меню: имя файла и его формат, без имени программы —
+   *  программа и так перед глазами, а формат человеку важнее. */
+  const documentLabel = $derived(
+    `${documentFileName} · ${formatLabel(documentState.format.id, documentState.format.label)}`,
+  );
   const closePromptMessage = $derived.by(() => {
     const message = getClosePromptMessage(documentState);
     const untitledMessage = getClosePromptMessage({ path: null });
@@ -850,7 +855,7 @@ import { EditorView, type EditorView as EditorViewType } from "@codemirror/view"
     <MenuBar
       formats={formatsState.items}
       {menuState}
-      {title}
+      title={documentLabel}
       saveStatus={documentState.saveStatus}
       lastSavedAt={documentState.lastSavedAt}
       onSave={() => void saveNow()}

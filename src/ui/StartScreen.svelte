@@ -47,6 +47,9 @@
   .start-screen {
     position: absolute;
     inset: 0;
+    /* Непрозрачный: экран лежит поверх пустого редактора, и без фона сквозь
+       него видно подсветку активной строки — полосу поперёк экрана. */
+    background: var(--bg-primary);
     display: grid;
     place-items: center;
     overflow: auto;

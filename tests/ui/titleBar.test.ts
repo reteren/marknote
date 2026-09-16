@@ -43,10 +43,12 @@ describe("TitleBar", () => {
     mocks.state.resizeHandler = undefined;
   });
 
-  it("renders the document title in a Tauri drag region", async () => {
+  it("даёт область перетаскивания и не повторяет имя документа", async () => {
     const { container } = render(TitleBar, { title: "notes.md — MarkNote", onClose: vi.fn() });
     await waitFor(() => expect(mocks.window.onResized).toHaveBeenCalledOnce());
-    expect(screen.getByText("notes.md — MarkNote")).toBeInTheDocument();
+    // Имя документа показывает строка меню, после File/Edit/View/Help — так
+    // просил владелец. Здесь его быть не должно, иначе оно видно дважды.
+    expect(screen.queryByText("notes.md — MarkNote")).toBeNull();
     expect(container.querySelector(".titlebar-drag-region")).toHaveAttribute("data-tauri-drag-region");
     expect(container.querySelector(".window-controls")?.closest("[data-tauri-drag-region]")).toBeNull();
     expect(container.querySelectorAll(".window-control")).toHaveLength(3);
