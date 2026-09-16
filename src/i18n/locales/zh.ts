@@ -3,10 +3,8 @@ import type { Dictionary } from "../types";
 const zh = {
   "app.name": "MarkNote",
   "start.newDocument": "新建文档",
-  "start.newFile": "新建文件",
   "start.openFile": "打开文件…",
   "start.dropFile": "或将文件拖至此处",
-  "start.hint": "开始键入以创建 Markdown 笔记。",
   "formatPicker.choose": "选择文档格式",
   "formatPicker.grid": "格式网格",
   "formatPicker.list": "格式列表",

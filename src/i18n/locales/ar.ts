@@ -3,10 +3,8 @@ import type { Dictionary } from "../types";
 const ar = {
   "app.name": "MarkNote",
   "start.newDocument": "مستند جديد",
-  "start.newFile": "ملف جديد",
   "start.openFile": "فتح ملف…",
   "start.dropFile": "أو أسقط ملفًا هنا",
-  "start.hint": "ابدأ الكتابة لإنشاء ملاحظة Markdown.",
   "formatPicker.choose": "اختر تنسيق المستند",
   "formatPicker.grid": "شبكة التنسيقات",
   "formatPicker.list": "قائمة التنسيقات",
