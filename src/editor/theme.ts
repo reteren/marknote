@@ -11,7 +11,7 @@ export const marknoteTheme: Extension = [
       fontSize: "var(--font-size-text)",
       lineHeight: "var(--line-height-text)",
       maxWidth: "var(--line-width)",
-      margin: "0 auto",
+      margin: "var(--editor-margin, 0 auto)",
       minHeight: "100%",
     },
     ".cm-scroller": {
@@ -43,11 +43,16 @@ export const marknoteTheme: Extension = [
     "&.cm-focused .cm-selectionBackground, &.cm-focused ::selection": {
       backgroundColor: "var(--text-selection)",
     },
+    ".cm-activeLine": {
+      backgroundColor: "var(--bg-primary-alt)",
+    },
     ".cm-gutters": {
-      display: "none",
       backgroundColor: "var(--bg-primary)",
       color: "var(--text-faint)",
       border: "0",
+    },
+    ".cm-gutterElement": {
+      color: "var(--text-faint)",
     },
     ".cm-tooltip": {
       backgroundColor: "var(--bg-secondary)",

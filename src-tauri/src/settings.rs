@@ -512,12 +512,15 @@ fn default_language() -> String {
     "en".to_owned()
 }
 
+// Умолчания совпадают с тем, как программа выглядит сегодня: --font-text в
+// src/styles/theme.css это Inter, --font-size-text это 16px. Иначе обновление
+// молча сменило бы шрифт и кегль у всех, кто ни одной настройки не трогал.
 fn default_font_family() -> String {
-    "system-serif".to_owned()
+    "system-sans".to_owned()
 }
 
 const fn default_font_size() -> u8 {
-    15
+    16
 }
 
 const fn default_zoom() -> i32 {

@@ -81,8 +81,12 @@ export const defaultSettings: Settings = {
     threeDotsToEllipsis: false,
   },
   editor: {
-    fontFamily: "system-serif",
-    fontSize: 15,
+    // Умолчания совпадают с тем, как программа выглядит сегодня: --font-text
+    // в src/styles/theme.css это Inter, --font-size-text это 16px. Иначе
+    // обновление молча перекрасило бы шрифт и сменило кегль у всех, кто ни
+    // одной настройки не трогал.
+    fontFamily: "system-sans",
+    fontSize: 16,
     zoomPercent: 100,
     columnWidth: "normal",
     tabWidth: 4,
