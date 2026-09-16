@@ -318,6 +318,63 @@ pub struct SettingsState {
     document: Mutex<SettingsDocument>,
 }
 
+pub const MIGRATION_FONT_FAMILY_DEFAULT: &str = "fontFamilyDefault";
+
+fn is_migration_applied(raw: &Value, migration_name: &str) -> bool {
+    raw.get("migrations")
+        .and_then(|m| m.as_object())
+        .and_then(|obj| obj.get(migration_name))
+        .and_then(|val| val.as_bool())
+        .unwrap_or(false)
+}
+
+fn set_migration_applied(raw: &mut Value, migration_name: &str) {
+    if !raw.is_object() {
+        *raw = Value::Object(Map::new());
+    }
+    let obj = raw.as_object_mut().unwrap();
+    if !obj.contains_key("migrations") || !obj["migrations"].is_object() {
+        obj.insert("migrations".to_string(), Value::Object(Map::new()));
+    }
+    let migrations = obj.get_mut("migrations").unwrap().as_object_mut().unwrap();
+    migrations.insert(migration_name.to_string(), Value::Bool(true));
+}
+
+/// Выполняет разовые переносы устаревших умолчаний в файле настроек.
+/// Возвращает true, если файл был изменён и требует перезаписи на диск.
+fn migrate_document(document: &mut SettingsDocument) -> bool {
+    if is_migration_applied(&document.raw, MIGRATION_FONT_FAMILY_DEFAULT) {
+        return false;
+    }
+
+    let is_old_serif_default = document
+        .raw
+        .get("editor")
+        .and_then(|editor| editor.get("fontFamily"))
+        .and_then(|val| val.as_str())
+        .map(|val| val.trim() == "system-serif")
+        .unwrap_or(false);
+
+    set_migration_applied(&mut document.raw, MIGRATION_FONT_FAMILY_DEFAULT);
+
+    if is_old_serif_default {
+        if let Some(editor) = document
+            .raw
+            .get_mut("editor")
+            .and_then(|e| e.as_object_mut())
+        {
+            editor.insert(
+                "fontFamily".to_string(),
+                Value::String("system-sans".to_string()),
+            );
+        }
+        document.settings.editor.font_family = "system-sans".to_string();
+        true
+    } else {
+        false
+    }
+}
+
 impl SettingsState {
     pub fn defaults(path: impl Into<PathBuf>) -> Self {
         Self {
@@ -329,21 +386,29 @@ impl SettingsState {
     /// Читает файл один раз. Отсутствующий файл нормален, повреждённый уносится в backup.
     pub fn load(path: impl Into<PathBuf>) -> Result<Self, SettingsError> {
         let path = path.into();
-        let document = match fs::read(&path) {
+        let (document, should_save) = match fs::read(&path) {
             Ok(bytes) => match parse_document(&bytes) {
-                Ok(document) => document,
+                Ok(mut document) => {
+                    let migrated = migrate_document(&mut document);
+                    (document, migrated)
+                }
                 Err(()) => {
                     quarantine_broken_file(&path)?;
-                    default_document()
+                    (default_document(), false)
                 }
             },
-            Err(error) if error.kind() == io::ErrorKind::NotFound => default_document(),
+            Err(error) if error.kind() == io::ErrorKind::NotFound => (default_document(), false),
             Err(error) => return Err(SettingsError::Io(error)),
         };
-        Ok(Self {
+        let state = Self {
             path,
             document: Mutex::new(document),
-        })
+        };
+        if should_save {
+            let raw = state.lock_document().raw.clone();
+            state.write_value(&raw)?;
+        }
+        Ok(state)
     }
 
     pub fn get(&self) -> Settings {
@@ -353,7 +418,8 @@ impl SettingsState {
     pub fn save(&self, mut settings: Settings) -> Result<Settings, SettingsError> {
         settings.validate();
         let mut document = self.lock_document();
-        let merged = merge_values(document.raw.clone(), serde_json::to_value(&settings)?);
+        let mut merged = merge_values(document.raw.clone(), serde_json::to_value(&settings)?);
+        set_migration_applied(&mut merged, MIGRATION_FONT_FAMILY_DEFAULT);
         self.write_value(&merged)?;
         document.settings = settings.clone();
         document.raw = merged;
@@ -370,7 +436,8 @@ impl SettingsState {
         if !self.path.exists() {
             let mut settings = document.settings.clone();
             settings.validate();
-            let merged = merge_values(document.raw.clone(), serde_json::to_value(&settings)?);
+            let mut merged = merge_values(document.raw.clone(), serde_json::to_value(&settings)?);
+            set_migration_applied(&mut merged, MIGRATION_FONT_FAMILY_DEFAULT);
             self.write_value(&merged)?;
             document.settings = settings;
             document.raw = merged;
@@ -402,9 +469,11 @@ fn parse_document(bytes: &[u8]) -> Result<SettingsDocument, ()> {
 }
 
 fn default_document() -> SettingsDocument {
+    let mut raw = Value::Object(Map::new());
+    set_migration_applied(&mut raw, MIGRATION_FONT_FAMILY_DEFAULT);
     SettingsDocument {
         settings: Settings::default(),
-        raw: Value::Object(Map::new()),
+        raw,
     }
 }
 
@@ -686,5 +755,151 @@ mod tests {
         assert_eq!(language_from_id(0x0401), Some("ar"));
         assert_eq!(language_from_id(0x0411), Some("ja"));
         assert_eq!(language_from_id(0x7c04), Some("zh"));
+    }
+
+    #[test]
+    fn old_default_system_serif_migrates_to_system_sans_and_is_rewritten_once() {
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let path = directory.path().join("settings.json");
+        fs::write(
+            &path,
+            br#"{"editor":{"fontFamily":"system-serif","zoomPercent":110}}"#,
+        )
+        .expect("write initial unmigrated settings");
+
+        // First load: old default must be migrated to system-sans and saved to disk.
+        let state = SettingsState::load(&path).expect("first load");
+        assert_eq!(state.get().editor.font_family, "system-sans");
+        assert_eq!(state.get().editor.zoom_percent, 110);
+
+        let written: Value = serde_json::from_slice(&fs::read(&path).expect("read migrated file"))
+            .expect("parse JSON");
+        assert_eq!(written["editor"]["fontFamily"], "system-sans");
+        assert_eq!(written["editor"]["zoomPercent"], 110);
+        assert_eq!(written["migrations"]["fontFamilyDefault"], true);
+
+        let mtime_after_first = fs::metadata(&path)
+            .expect("metadata")
+            .modified()
+            .expect("mtime");
+
+        // Small delay so that a hypothetical second write would produce a different timestamp.
+        std::thread::sleep(std::time::Duration::from_millis(50));
+
+        // Second load: migration already marked, file must NOT be rewritten.
+        let state2 = SettingsState::load(&path).expect("second load");
+        assert_eq!(state2.get().editor.font_family, "system-sans");
+
+        let mtime_after_second = fs::metadata(&path)
+            .expect("metadata")
+            .modified()
+            .expect("mtime");
+        assert_eq!(
+            mtime_after_first, mtime_after_second,
+            "migrated settings file should not be touched on second load"
+        );
+    }
+
+    #[test]
+    fn consciously_chosen_system_serif_is_never_overwritten_or_touched() {
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let path = directory.path().join("settings.json");
+        let initial_bytes = br#"{"editor":{"fontFamily":"system-serif","zoomPercent":120},"migrations":{"fontFamilyDefault":true}}"#;
+        fs::write(&path, initial_bytes).expect("write settings with conscious serif");
+
+        let mtime_before = fs::metadata(&path)
+            .expect("metadata")
+            .modified()
+            .expect("mtime");
+
+        std::thread::sleep(std::time::Duration::from_millis(50));
+
+        let state = SettingsState::load(&path).expect("load settings");
+        assert_eq!(
+            state.get().editor.font_family,
+            "system-serif",
+            "conscious choice of serif must be preserved"
+        );
+        assert_eq!(state.get().editor.zoom_percent, 120);
+
+        let current_bytes = fs::read(&path).expect("read file");
+        assert_eq!(
+            current_bytes, initial_bytes,
+            "file content should be completely untouched"
+        );
+
+        let mtime_after = fs::metadata(&path)
+            .expect("metadata")
+            .modified()
+            .expect("mtime");
+        assert_eq!(
+            mtime_before, mtime_after,
+            "file with conscious serif choice should not be touched at all"
+        );
+    }
+
+    #[test]
+    fn conscious_choice_of_serif_after_migration_is_persisted_and_survives_restart() {
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let path = directory.path().join("settings.json");
+        fs::write(
+            &path,
+            br#"{"editor":{"fontFamily":"system-serif","zoomPercent":100}}"#,
+        )
+        .expect("write old settings");
+
+        // 1. Initial load migrates to system-sans.
+        let state = SettingsState::load(&path).expect("initial load");
+        assert_eq!(state.get().editor.font_family, "system-sans");
+
+        // 2. User explicitly chooses system-serif and saves.
+        let mut settings = state.get();
+        settings.editor.font_family = "system-serif".to_owned();
+        state.save(settings).expect("save user choice");
+
+        let saved_json: Value =
+            serde_json::from_slice(&fs::read(&path).expect("read saved file")).expect("parse JSON");
+        assert_eq!(saved_json["editor"]["fontFamily"], "system-serif");
+        assert_eq!(saved_json["migrations"]["fontFamilyDefault"], true);
+
+        let mtime_saved = fs::metadata(&path)
+            .expect("metadata")
+            .modified()
+            .expect("mtime");
+        std::thread::sleep(std::time::Duration::from_millis(50));
+
+        // 3. Next application restart: conscious choice must NOT be reset or touched.
+        let restarted = SettingsState::load(&path).expect("load restarted");
+        assert_eq!(restarted.get().editor.font_family, "system-serif");
+
+        let mtime_restarted = fs::metadata(&path)
+            .expect("metadata")
+            .modified()
+            .expect("mtime");
+        assert_eq!(
+            mtime_saved, mtime_restarted,
+            "restarted load must not rewrite file with conscious serif"
+        );
+    }
+
+    #[test]
+    fn migration_preserves_unknown_fields_and_other_settings() {
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let path = directory.path().join("settings.json");
+        fs::write(
+            &path,
+            br#"{"editor":{"fontFamily":"system-serif","highlightCurrentLine":true},"customField":"test-value"}"#,
+        )
+        .expect("write settings with unknown fields");
+
+        let state = SettingsState::load(&path).expect("load settings");
+        assert_eq!(state.get().editor.font_family, "system-sans");
+
+        let written: Value =
+            serde_json::from_slice(&fs::read(&path).expect("read file")).expect("parse JSON");
+        assert_eq!(written["editor"]["fontFamily"], "system-sans");
+        assert_eq!(written["editor"]["highlightCurrentLine"], true);
+        assert_eq!(written["customField"], "test-value");
+        assert_eq!(written["migrations"]["fontFamilyDefault"], true);
     }
 }

@@ -8,7 +8,7 @@
     type TabId,
     type WorkspaceTab,
   } from "../state/workspace.svelte";
-  import { formatLabel, translate as t } from "../i18n";
+  import { translate as t } from "../i18n";
 
   type Props = {
     onNewTab?: () => void;
@@ -81,8 +81,7 @@
   function getTabInfo(tab: WorkspaceTab): { name: string; format: string } {
     const label = tabLabel(tab);
     const name = label.name === "Untitled" ? t("tabs.untitled") : label.name;
-    const format = formatLabel(tab.document.format.id, label.format);
-    return { name, format };
+    return { name, format: label.format };
   }
 </script>
 
@@ -133,9 +132,7 @@
         title={t("tabs.newTab") + " (Ctrl+T)"}
         aria-label={t("tabs.newTab")}
         onclick={handleNew}
-      >
-        +
-      </button>
+      ><span class="tab-new-btn-icon" aria-hidden="true">+</span></button>
     </div>
   </div>
 
@@ -198,7 +195,6 @@
     font-weight: 500;
     border-color: var(--bg-modifier-border);
     border-bottom-color: var(--bg-primary);
-    box-shadow: 0 -2px 0 0 var(--accent);
     z-index: 2;
   }
 
@@ -224,7 +220,6 @@
     color: var(--text-faint);
     margin-inline-start: 6px;
     line-height: 1.2;
-    text-transform: uppercase;
   }
 
   .tab.active .tab-format {
@@ -258,30 +253,42 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 22px;
-    height: 22px;
-    margin-bottom: 3px;
-    border: 1px dashed var(--bg-modifier-border);
+    width: 24px;
+    height: 24px;
+    margin-bottom: 1px;
+    border: none;
     border-radius: var(--radius-s);
     background: transparent;
     color: var(--text-muted);
     cursor: pointer;
     flex-shrink: 0;
     margin-inline-start: 4px;
-    font-size: 15px;
+    padding: 0;
+    font-size: 16px;
     line-height: 1;
     font-family: inherit;
-    transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+    transition: background 0.15s ease, color 0.15s ease;
   }
 
   .tab-new-btn:hover {
     background: var(--bg-modifier-hover);
-    border-color: var(--accent);
-    color: var(--accent);
+    color: var(--text-normal);
+  }
+
+  .tab-new-btn:active {
+    background: var(--bg-modifier-active);
   }
 
   .tab-new-btn:focus-visible {
     outline: 2px solid var(--accent);
     outline-offset: 1px;
+  }
+
+  .tab-new-btn-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+    transform: translateY(-1px);
   }
 </style>

@@ -34,6 +34,7 @@ const pt = {
   "menu.deleteLine": "Eliminar linha",
   "menu.moveLineUp": "Mover linha para cima",
   "menu.moveLineDown": "Mover linha para baixo",
+  "menu.zoomPercent": "Zoom {percent}",
   "menu.zoomIn": "Ampliar",
   "menu.zoomOut": "Reduzir",
   "menu.resetZoom": "Repor zoom",

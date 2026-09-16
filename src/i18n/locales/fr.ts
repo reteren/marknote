@@ -34,6 +34,7 @@ const fr = {
   "menu.deleteLine": "Supprimer la ligne",
   "menu.moveLineUp": "Déplacer la ligne vers le haut",
   "menu.moveLineDown": "Déplacer la ligne vers le bas",
+  "menu.zoomPercent": "Zoom {percent}",
   "menu.zoomIn": "Zoom avant",
   "menu.zoomOut": "Zoom arrière",
   "menu.resetZoom": "Réinitialiser le zoom",

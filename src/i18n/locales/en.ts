@@ -35,6 +35,7 @@ const en = {
   "menu.deleteLine": "Delete Line",
   "menu.moveLineUp": "Move Line Up",
   "menu.moveLineDown": "Move Line Down",
+  "menu.zoomPercent": "Zoom {percent}",
   "menu.zoomIn": "Zoom In",
   "menu.zoomOut": "Zoom Out",
   "menu.resetZoom": "Reset Zoom",

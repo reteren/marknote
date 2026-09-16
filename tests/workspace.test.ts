@@ -91,11 +91,11 @@ describe("workspace tabs", () => {
   it("labels named files and untitled text with their format", () => {
     const namedId = activeTab().id;
     replaceDocument(opened("C:/notes/readme.md"));
-    expect(tabLabel(activeTab())).toEqual({ name: "readme.md", format: "Markdown" });
+    expect(tabLabel(activeTab())).toEqual({ name: "readme.md", format: ".md" });
 
     const untitledId = openTab({ text: "A short draft with words" });
     expect(untitledId).not.toBe(namedId);
-    expect(tabLabel(activeTab())).toEqual({ name: "A short draft with words", format: "Markdown" });
+    expect(tabLabel(activeTab())).toEqual({ name: "A short draft with words", format: ".md" });
   });
 });
 

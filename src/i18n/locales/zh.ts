@@ -33,6 +33,7 @@ const zh = {
   "menu.deleteLine": "删除行",
   "menu.moveLineUp": "向上移动行",
   "menu.moveLineDown": "向下移动行",
+  "menu.zoomPercent": "缩放 {percent}",
   "menu.zoomIn": "放大",
   "menu.zoomOut": "缩小",
   "menu.resetZoom": "重置缩放",

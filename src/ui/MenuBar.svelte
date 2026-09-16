@@ -60,7 +60,9 @@
   }
 
   function selectableItems(items: MenuItem[]): MenuItem[] {
-    return items.filter((item) => !item.separator && !item.disabled);
+    // Подписи (kind: "label") — не команды: по ним не щёлкают и клавиатура
+    // их пропускает. Такая сейчас одна — текущий масштаб над пунктами View.
+    return items.filter((item) => !item.separator && !item.disabled && item.kind !== "label");
   }
 
   function focusMenuItem(item: MenuItem | undefined): void {
@@ -302,6 +304,8 @@
       {#each section?.items ?? [] as menuItem}
         {#if menuItem.separator}
           <div class="menu-separator" role="separator"></div>
+        {:else if menuItem.kind === "label"}
+          <div class="menu-caption" role="presentation">{menuItem.label}</div>
         {:else}
           <button
             type="button"
@@ -415,6 +419,16 @@
   .shortcut { color: var(--text-faint); font-family: var(--font-mono); font-size: var(--font-size-mono); white-space: nowrap; }
   .submenu-arrow { color: var(--text-muted); font-size: 18px; line-height: 0.7; }
   :global([dir="rtl"]) .submenu-arrow { transform: scaleX(-1); }
+  /* Подпись, а не пункт: без наведения, без фокуса, тише обычного текста. */
+  .menu-caption {
+    padding: 4px 9px 6px;
+    color: var(--text-faint);
+    font-size: 11px;
+    text-align: start;
+    cursor: default;
+    user-select: none;
+  }
+
   .menu-separator { height: 1px; margin: 4px 5px; background: var(--bg-modifier-border); }
   .submenu-panel {
     position: absolute;

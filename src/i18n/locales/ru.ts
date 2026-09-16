@@ -33,6 +33,7 @@ const ru = {
   "menu.deleteLine": "Удалить строку",
   "menu.moveLineUp": "Строку вверх",
   "menu.moveLineDown": "Строку вниз",
+  "menu.zoomPercent": "Масштаб {percent}",
   "menu.zoomIn": "Увеличить",
   "menu.zoomOut": "Уменьшить",
   "menu.resetZoom": "Сбросить масштаб",

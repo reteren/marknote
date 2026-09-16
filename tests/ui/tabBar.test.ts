@@ -74,14 +74,14 @@ describe("TabBar UI component", () => {
 
     // Tab 1: file name
     expect(tabElements[0].querySelector(".tab-title")?.textContent).toBe("todo.md");
-    expect(tabElements[0].querySelector(".tab-format")?.textContent).toBe("Markdown");
+    expect(tabElements[0].querySelector(".tab-format")?.textContent).toBe(".md");
 
     // Tab 2: first words of text
     expect(tabElements[1].querySelector(".tab-title")?.textContent).toBe("Idea for a new feature");
 
     // Tab 3: translated Untitled
     expect(tabElements[2].querySelector(".tab-title")?.textContent).toBe(t("tabs.untitled"));
-    expect(tabElements[2].querySelector(".tab-format")?.textContent).toBe("Plain Text");
+    expect(tabElements[2].querySelector(".tab-format")?.textContent).toBe(".txt");
   });
 
   it("highlights active tab and sets accessible aria attributes", () => {

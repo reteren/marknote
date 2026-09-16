@@ -33,6 +33,7 @@ const es = {
   "menu.deleteLine": "Eliminar línea",
   "menu.moveLineUp": "Subir línea",
   "menu.moveLineDown": "Bajar línea",
+  "menu.zoomPercent": "Zoom {percent}",
   "menu.zoomIn": "Ampliar",
   "menu.zoomOut": "Reducir",
   "menu.resetZoom": "Restablecer zoom",

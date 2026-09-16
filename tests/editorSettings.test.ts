@@ -59,6 +59,17 @@ describe("editor appearance settings", () => {
     expect(styleText).toContain("Georgia");
   });
 
+  it("applies system-sans fontFamily to editor theme with standard system fonts", () => {
+    const view = createTestEditor({
+      ...defaultSettings,
+      editor: { ...defaultSettings.editor, fontFamily: "system-sans" },
+    });
+    expect(view).toBeDefined();
+    const styleText = getStyleText();
+    expect(styleText).toContain("Segoe UI Variable");
+    expect(styleText).toContain("Segoe UI");
+  });
+
   it("applies fontSize to editor theme", () => {
     const view = createTestEditor({
       ...defaultSettings,

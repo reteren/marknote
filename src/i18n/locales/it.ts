@@ -34,6 +34,7 @@ const it = {
   "menu.deleteLine": "Elimina riga",
   "menu.moveLineUp": "Sposta riga su",
   "menu.moveLineDown": "Sposta riga giù",
+  "menu.zoomPercent": "Zoom {percent}",
   "menu.zoomIn": "Ingrandisci",
   "menu.zoomOut": "Riduci",
   "menu.resetZoom": "Reimposta zoom",

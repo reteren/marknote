@@ -33,6 +33,7 @@ const de = {
   "menu.deleteLine": "Zeile löschen",
   "menu.moveLineUp": "Zeile nach oben",
   "menu.moveLineDown": "Zeile nach unten",
+  "menu.zoomPercent": "Zoom {percent}",
   "menu.zoomIn": "Vergrößern",
   "menu.zoomOut": "Verkleinern",
   "menu.resetZoom": "Zoom zurücksetzen",

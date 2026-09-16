@@ -33,6 +33,7 @@ const ar = {
   "menu.deleteLine": "حذف السطر",
   "menu.moveLineUp": "نقل السطر لأعلى",
   "menu.moveLineDown": "نقل السطر لأسفل",
+  "menu.zoomPercent": "التكبير {percent}",
   "menu.zoomIn": "تكبير",
   "menu.zoomOut": "تصغير",
   "menu.resetZoom": "إعادة ضبط التكبير",

@@ -184,5 +184,8 @@ export function tabLabel(tab: WorkspaceTab): { name: string; format: string } {
   const name = document.path
     ? document.path.split(/[\\/]/u).pop() || document.path
     : document.text.trim().replace(/\s+/gu, " ").slice(0, 48) || "Untitled";
-  return { name, format: document.format.label || document.format.id };
+  const ext = document.format.defaultExtension?.trim();
+  const format = ext ? `.${ext.replace(/^\./u, "")}` : (document.format.label || document.format.id);
+  return { name, format };
 }
+

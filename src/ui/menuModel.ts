@@ -1,9 +1,13 @@
 import type { FormatCapabilities } from "../state/formats.svelte";
-import { formatLabel, translate as t } from "../i18n";
+import { formatLabel, interfaceLanguage, translate as t } from "../i18n";
+import { settingsState } from "../state/settings.svelte";
+
+export type MenuItemKind = "item" | "separator" | "label";
 
 export type MenuItem = {
   id: string;
   label: string;
+  kind?: MenuItemKind;
   shortcut?: string;
   separator: boolean;
   disabled: boolean;
@@ -31,6 +35,7 @@ export type MenuState = {
   canRedo?: boolean;
   canSave?: boolean;
   formatId?: string;
+  zoomPercent?: number;
 };
 
 function item(
@@ -44,6 +49,7 @@ function item(
   return {
     id,
     label,
+    kind: "item",
     ...(shortcut ? { shortcut } : {}),
     separator: false,
     disabled,
@@ -53,7 +59,17 @@ function item(
 }
 
 function separator(id: string): MenuItem {
-  return { id, label: "", separator: true, disabled: true };
+  return { id, label: "", kind: "separator", separator: true, disabled: true };
+}
+
+function caption(id: string, label: string): MenuItem {
+  return { id, label, kind: "label", separator: false, disabled: false };
+}
+
+function formatZoom(percent: number, locale = interfaceLanguage.locale): string {
+  const safe = Number.isFinite(percent) ? percent : 100;
+  const formatted = new Intl.NumberFormat(locale, { style: "percent" }).format(safe / 100);
+  return t("menu.zoomPercent", { percent: formatted });
 }
 
 function newItems(formats: readonly FormatCapabilities[], state: MenuState): MenuItem[] {
@@ -84,10 +100,12 @@ function newItems(formats: readonly FormatCapabilities[], state: MenuState): Men
 export function createMenuModel(
   formats: readonly FormatCapabilities[] = [],
   state: MenuState = {},
+  zoomPercent?: number,
 ): MenuSection[] {
   const notEditable = state.editable === false || state.readOnly === true;
   const noSelection = state.hasSelection === false;
   const newFormats = newItems(formats, state);
+  const currentZoom = zoomPercent ?? state.zoomPercent ?? settingsState.settings.editor.zoomPercent;
 
   return [
     {
@@ -132,6 +150,7 @@ export function createMenuModel(
       id: "view",
       label: t("menu.view"),
       items: [
+        caption("view.zoomPercent", formatZoom(currentZoom)),
         item("view.zoomIn", t("menu.zoomIn"), 'Ctrl + “+”'),
         item("view.zoomOut", t("menu.zoomOut"), 'Ctrl + “-”'),
         item("view.resetZoom", t("menu.resetZoom"), "Ctrl+0"),

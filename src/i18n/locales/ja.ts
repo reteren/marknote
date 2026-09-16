@@ -33,6 +33,7 @@ const ja = {
   "menu.deleteLine": "行を削除",
   "menu.moveLineUp": "行を上に移動",
   "menu.moveLineDown": "行を下に移動",
+  "menu.zoomPercent": "ズーム {percent}",
   "menu.zoomIn": "拡大",
   "menu.zoomOut": "縮小",
   "menu.resetZoom": "ズームをリセット",
