@@ -229,6 +229,8 @@ pub fn initialize(app: &mut tauri::App) -> tauri::Result<()> {
     state.mark_empty(MAIN_WINDOW_LABEL);
 
     if let Some(main) = app.get_webview_window(MAIN_WINDOW_LABEL) {
+        #[cfg(target_os = "windows")]
+        disable_browser_accelerator_keys(&main);
         install_window_handlers(&main, app.handle());
         apply_dark_titlebar(&main);
         let _ = main.set_title(INITIAL_WINDOW_TITLE);
@@ -387,9 +389,34 @@ fn create_window(app: &tauri::AppHandle, label: &str) -> Result<WebviewWindow, S
             UserMessage::MainWindowUnavailable.to_string()
         })?;
 
+    #[cfg(target_os = "windows")]
+    disable_browser_accelerator_keys(&window);
+
     install_window_handlers(&window, app);
     apply_dark_titlebar(&window);
     Ok(window)
+}
+
+#[cfg(target_os = "windows")]
+fn disable_browser_accelerator_keys(window: &WebviewWindow) {
+    use webview2_com::Microsoft::Web::WebView2::Win32::ICoreWebView2Settings3;
+    use windows::core::Interface;
+
+    if let Err(error) = window.with_webview(|webview| {
+        let result: windows::core::Result<()> = unsafe {
+            (|| {
+                let settings = webview.controller().CoreWebView2()?.Settings()?;
+                let settings3 = settings.cast::<ICoreWebView2Settings3>()?;
+                settings3.SetAreBrowserAcceleratorKeysEnabled(false)
+            })()
+        };
+
+        if let Err(error) = result {
+            eprintln!("Could not disable WebView2 browser accelerator keys: {error}");
+        }
+    }) {
+        eprintln!("Could not access WebView2 controller to disable browser accelerators: {error}");
+    }
 }
 
 fn install_window_handlers(window: &WebviewWindow, app: &tauri::AppHandle) {

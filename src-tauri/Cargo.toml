@@ -48,6 +48,8 @@ tempfile = "3"
 tauri = { version = "2.11.5", features = ["test"] }
 
 [target.'cfg(windows)'.dependencies]
+webview2-com = "=0.38.2"
+windows = "0.61.3"
 windows-sys = { version = "0.59", features = [
   "Win32_Foundation",
   "Win32_Graphics_Dwm",
