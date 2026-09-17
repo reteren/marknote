@@ -31,3 +31,5 @@ qa/shots/
 /artifacts/
 /scratch/
 /*.png
+/qa/*.log
+/qa/*.out

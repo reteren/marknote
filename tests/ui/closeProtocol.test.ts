@@ -22,6 +22,19 @@ vi.mock("@tauri-apps/api/window", () => ({
     close: vi.fn().mockResolvedValue(undefined),
   }),
 }));
+// Подписка на закрытие живёт на окне WEBVIEW, а не на окне как таковом:
+// Rust шлёт событие с целью webview_window, и до слушателей обычного окна оно
+// не доходит. Раньше здесь была подделка только для getCurrentWindow — тест
+// проходил, а программа закрывалась не спрашивая и через пять секунд. Подделка
+// не должна быть удобнее настоящего устройства, иначе она скрывает дефект.
+vi.mock("@tauri-apps/api/webviewWindow", () => ({
+  getCurrentWebviewWindow: () => ({
+    setTitle: vi.fn().mockResolvedValue(undefined),
+    listen: tauri.listen,
+    onFocusChanged: tauri.focusChanged,
+    close: vi.fn().mockResolvedValue(undefined),
+  }),
+}));
 
 import App from "../../src/App.svelte";
 import { documentState, resetDocument } from "../../src/state/document.svelte";

@@ -20,6 +20,13 @@ const mark = (from: number, to: number, className: string): DecorationSpec => ({
   decoration: Decoration.mark({ class: className }),
 });
 
+const line = (position: number, className: string): DecorationSpec => ({
+  from: position,
+  to: position,
+  decoration: Decoration.line({ class: className }),
+  line: true,
+});
+
 class TextWidget extends WidgetType {
   constructor(readonly text: string, readonly className: string) {
     super();
@@ -46,6 +53,28 @@ function isTaskChecked(node: SyntaxNode, state: EditorState) {
   return Boolean(marker && /^\[[xX]\]$/.test(state.doc.sliceString(marker.from, marker.to)));
 }
 
+function indentationWidth(text: string): number {
+  const indent = text.match(/^[ \t]*/u)?.[0] ?? "";
+  let width = 0;
+  for (const character of indent) {
+    width = character === "\t" ? width + (4 - (width % 4)) : width + 1;
+  }
+  return width;
+}
+
+function nestedListGuide(node: SyntaxNode, state: EditorState): DecorationSpec[] {
+  if (node.parent?.name !== "ListItem") return [];
+  const first = state.doc.lineAt(node.from).number;
+  const last = state.doc.lineAt(node.to).number;
+  const specs: DecorationSpec[] = [];
+  for (let number = first; number <= last; number += 1) {
+    const target = state.doc.line(number);
+    const indent = Math.max(1, Math.min(64, indentationWidth(target.text)));
+    specs.push(line(target.from, `cm-marknote-nested-list-line cm-marknote-nested-list-indent-${indent}`));
+  }
+  return specs;
+}
+
 /** Построение заголовков, списков, цитат и блочных виджетов. */
 export function decorationsForBlockNode(
   node: SyntaxNode,
@@ -65,6 +94,10 @@ export function decorationsForBlockNode(
     const specs: DecorationSpec[] = [mark(node.from, node.to, `cm-marknote-heading cm-marknote-heading-${level}`)];
     if (!active) specs.push(...children(node, "HeaderMark").map((child) => hide(child.from, child.to)));
     return specs;
+  }
+
+  if (node.name === "OrderedList" || node.name === "BulletList") {
+    return nestedListGuide(node, state);
   }
 
   if (node.name === "ListMark") {
@@ -191,6 +224,19 @@ export const livePreviewTheme = EditorView.theme({
   ".cm-marknote-heading-6": { fontSize: "var(--h6-size)", fontWeight: "var(--h6-weight)", color: "var(--h6-color)" },
   ".cm-marknote-bullet": { display: "inline-block", width: "1.25em", color: "var(--text-muted)" },
   ".cm-marknote-ordered-marker": { color: "var(--text-muted)" },
+  ".cm-line.cm-marknote-nested-list-line": { backgroundRepeat: "no-repeat" },
+  ...Object.fromEntries(
+    Array.from({ length: 64 }, (_, index) => {
+      const indent = index + 1;
+      const line = `calc(${indent}ch - 1px)`;
+      return [
+        `.cm-line.cm-marknote-nested-list-indent-${indent}`,
+        {
+          backgroundImage: `linear-gradient(to right, transparent ${line}, var(--bg-modifier-border) ${line}, var(--bg-modifier-border) ${indent}ch, transparent ${indent}ch)`,
+        },
+      ];
+    }),
+  ),
   ".cm-marknote-task-done": { color: "var(--text-muted)", textDecoration: "line-through" },
   ".cm-marknote-checkbox": {
     display: "inline-block",

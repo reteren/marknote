@@ -47,6 +47,8 @@ function isBlockNode(node: SyntaxNode) {
     node.name === "FootnoteDefinitionText" ||
     /^ATXHeading[1-6]$/.test(node.name) ||
     /^SetextHeading[12]$/.test(node.name) ||
+    node.name === "OrderedList" ||
+    node.name === "BulletList" ||
     node.name === "ListMark" ||
     node.name === "Task" ||
     node.name === "TaskMarker" ||
@@ -56,7 +58,7 @@ function isBlockNode(node: SyntaxNode) {
 
 function asRanges(specs: DecorationSpec[]) {
   const valid = specs
-    .filter((spec) => spec.to > spec.from)
+    .filter((spec) => spec.to > spec.from || spec.line)
     .map((spec) => ({ from: spec.from, to: spec.to, value: spec.decoration }));
   return Decoration.set(valid, true);
 }

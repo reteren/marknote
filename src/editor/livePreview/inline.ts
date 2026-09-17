@@ -37,6 +37,8 @@ export interface DecorationSpec {
   to: number;
   decoration: Decoration;
   atomic?: boolean;
+  /** A zero-width Decoration.line range still needs to be retained. */
+  line?: boolean;
 }
 
 const hide = (from: number, to: number): DecorationSpec => ({

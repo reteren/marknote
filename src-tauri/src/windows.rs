@@ -535,11 +535,15 @@ fn install_window_handlers(window: &WebviewWindow, app: &tauri::AppHandle) {
                 // whether to call `respond_to_close(allow = true/false)`.
                 // An unresponsive webview must not make its native window
                 // impossible to close, so arm a bounded fallback as well.
-                let _ = event_window.emit_to(
+                if let Err(error) = event_window.emit_to(
                     EventTarget::webview_window(&label),
                     "save-before-close",
                     serde_json::json!({}),
-                );
+                ) {
+                    // Молчать здесь нельзя: если событие не ушло, фронтенд не
+                    // спросит про несохранённое, и окно закроет сторож.
+                    eprintln!("Could not ask the window about unsaved changes: {error}");
+                }
                 let timeout_window = event_window.clone();
                 let timeout_app = app.clone();
                 let timeout_label = label.clone();

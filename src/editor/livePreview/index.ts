@@ -5,6 +5,7 @@ import { codeBlockTheme } from "./codeBlocks";
 import { tableTheme } from "./tables";
 import { calloutTheme } from "./callouts";
 import { footnoteTheme, footnoteTooltip } from "./footnotes";
+import { orderedListNormalization } from "../keymap";
 
 export function livePreview(opts?: {
   /** Жёсткий порог размера документа, перекрывающий настройку
@@ -16,6 +17,7 @@ export function livePreview(opts?: {
   resolveImage?: (src: string) => Promise<string>;
 }): Extension {
   return [
+    orderedListNormalization,
     livePreviewPlugin.of(opts ?? {}),
     livePreviewTheme,
     codeBlockTheme,

@@ -9,7 +9,7 @@ import {
   undo,
   insertNewlineAndIndent,
 } from "@codemirror/commands";
-import { EditorState, type Extension } from "@codemirror/state";
+import { ChangeSet, EditorState, type Extension } from "@codemirror/state";
 import { keymap, EditorView, type Command, type KeyBinding } from "@codemirror/view";
 import { insertNewlineContinueMarkup } from "@codemirror/lang-markdown";
 
@@ -51,8 +51,156 @@ function currentLine(state: EditorState, position: number): string {
   return state.doc.lineAt(position).text;
 }
 
+const orderedListLine = /^(?<indent>[ \t]*)(?<number>\d+)(?<delimiter>[.)])(?:(?<spacing>[ \t]+)(?<content>.*))?$/u;
+const bulletListLine = /^(?<indent>[ \t]*)(?<marker>[-+*])(?:(?<spacing>[ \t]+)(?<content>.*))?$/u;
+const headingLine = /^[ \t]{0,3}#{1,6}(?:[ \t]+|$)/u;
+const fenceLine = /^[ \t]{0,3}(?<marker>`{3,}|~{3,})/u;
+
+type ListContext = {
+  indent: number;
+  type: "ordered" | "bullet";
+  nextNumber: number;
+};
+
+type MarkerChange = { from: number; to: number; insert: string };
+
+function indentationWidth(indent: string): number {
+  let width = 0;
+  for (const character of indent) {
+    width = character === "\t" ? width + (4 - (width % 4)) : width + 1;
+  }
+  return width;
+}
+
+function indentationPrefixLength(text: string, maximumWidth = 4): number {
+  const indent = text.match(/^[ \t]*/u)?.[0] ?? "";
+  let width = 0;
+  for (let index = 0; index < indent.length; index += 1) {
+    const character = indent[index];
+    width = character === "\t" ? width + (4 - (width % 4)) : width + 1;
+    if (width >= maximumWidth) return index + 1;
+  }
+  return indent.length;
+}
+
+function isFenceClose(text: string, fence: string): boolean {
+  const marker = fence[0];
+  const minimum = fence.length;
+  return new RegExp(`^[ \\t]{0,3}${marker}{${minimum},}[ \\t]*$`, "u").test(text);
+}
+
+function isHorizontalRule(text: string): boolean {
+  const trimmed = text.trim();
+  return /^(?:\*\s*){3,}$|^(?:-\s*){3,}$|^(?:_\s*){3,}$/u.test(trimmed);
+}
+
+/**
+ * Finds the marker edits needed to make each contiguous ordered list count
+ * from one. The returned positions refer to `text`, so callers can compose
+ * these edits with the user's transaction without disturbing the selection.
+ */
+function orderedListMarkerChanges(text: string): MarkerChange[] {
+  const changes: MarkerChange[] = [];
+  const contexts: ListContext[] = [];
+  let fence: string | null = null;
+  let offset = 0;
+
+  for (const rawLine of text.split("\n")) {
+    const line = rawLine.endsWith("\r") ? rawLine.slice(0, -1) : rawLine;
+    const lineOffset = offset;
+    offset += rawLine.length + 1;
+
+    if (fence) {
+      if (isFenceClose(line, fence)) fence = null;
+      continue;
+    }
+    const possibleFence = fenceLine.exec(line)?.groups?.marker;
+    if (possibleFence) {
+      fence = possibleFence;
+      contexts.length = 0;
+      continue;
+    }
+    if (/^[ \t]*$/u.test(line) || headingLine.test(line) || isHorizontalRule(line)) {
+      contexts.length = 0;
+      continue;
+    }
+
+    const ordered = orderedListLine.exec(line);
+    if (ordered?.groups) {
+      const indent = indentationWidth(ordered.groups.indent ?? "");
+      while (contexts.length && contexts[contexts.length - 1].indent > indent) contexts.pop();
+
+      let context = contexts.find((candidate) => candidate.indent === indent);
+      if (!context || context.type !== "ordered") {
+        const index = contexts.findIndex((candidate) => candidate.indent === indent);
+        if (index >= 0) contexts.splice(index, contexts.length - index);
+        context = { indent, type: "ordered", nextNumber: 1 };
+        contexts.push(context);
+      }
+
+      const expected = context.nextNumber;
+      context.nextNumber += 1;
+      const number = ordered.groups.number ?? "";
+      if (number !== String(expected)) {
+        const numberFrom = lineOffset + (ordered.groups.indent?.length ?? 0);
+        changes.push({ from: numberFrom, to: numberFrom + number.length, insert: String(expected) });
+      }
+      continue;
+    }
+
+    const bullet = bulletListLine.exec(line);
+    if (bullet?.groups) {
+      const indent = indentationWidth(bullet.groups.indent ?? "");
+      while (contexts.length && contexts[contexts.length - 1].indent > indent) contexts.pop();
+      const index = contexts.findIndex((candidate) => candidate.indent === indent);
+      if (index >= 0) contexts.splice(index, contexts.length - index);
+      contexts.push({ indent, type: "bullet", nextNumber: 1 });
+      continue;
+    }
+
+    // A non-empty, non-heading line is a lazy continuation of the current
+    // list item in Markdown. Keep the open contexts so the next marker still
+    // continues its sequence. Blank lines and headings above explicitly close it.
+  }
+
+  return changes;
+}
+
+/** Renumber all ordered-list markers in a Markdown document. */
+export function normalizeOrderedLists(text: string): string {
+  const changes = orderedListMarkerChanges(text);
+  if (!changes.length) return text;
+  let result = text;
+  for (let index = changes.length - 1; index >= 0; index -= 1) {
+    const change = changes[index];
+    result = result.slice(0, change.from) + change.insert + result.slice(change.to);
+  }
+  return result;
+}
+
+function normalizeViewOrderedLists(view: EditorView): void {
+  const text = view.state.doc.toString();
+  if (normalizeOrderedLists(text) === text) return;
+  const changes = orderedListMarkerChanges(text);
+  if (changes.length) view.dispatch({ changes });
+}
+
+/**
+ * Keeps the persisted Markdown in sync with the displayed numbering after
+ * arbitrary edits, paste, line moves, and deletes. The filter composes the
+ * marker-only edits with the user's transaction, preserving cursor mapping.
+ */
+export const orderedListNormalization: Extension = EditorState.transactionFilter.of((transaction) => {
+  if (!transaction.docChanged) return transaction;
+  const text = transaction.newDoc.toString();
+  const changes = orderedListMarkerChanges(text);
+  if (!changes.length) return transaction;
+  const normalization = ChangeSet.of(changes, text.length);
+  return { changes: transaction.changes.compose(normalization) };
+});
+
 function isListLine(text: string): boolean {
-  return /^\s*(?:[-+*]|\d+[.)])\s+/.test(text);
+  return orderedListLine.test(text) || bulletListLine.test(text);
 }
 
 function isTableRow(text: string): boolean {
@@ -106,7 +254,7 @@ function changeSelectedLines(view: EditorView, remove: boolean): boolean {
       seen.add(number);
       const line = state.doc.line(number);
       if (remove) {
-        const amount = Math.min(4, line.text.match(/^ */)?.[0].length ?? 0);
+        const amount = indentationPrefixLength(line.text);
         if (amount > 0) changes.push({ from: line.from, to: line.from + amount });
       } else if (isListLine(line.text)) {
         changes.push({ from: line.from, to: line.from, insert: "    " });
@@ -124,7 +272,11 @@ function changeSelectedLines(view: EditorView, remove: boolean): boolean {
 function indent(view: EditorView, isInTable: (state: EditorState, position: number) => boolean = isTableContext): boolean {
   const range = view.state.selection.main;
   if (isInTable(view.state, range.head)) return false;
-  if (!range.empty) return changeSelectedLines(view, false);
+  if (!range.empty) {
+    const changed = changeSelectedLines(view, false);
+    if (changed) normalizeViewOrderedLists(view);
+    return changed;
+  }
 
   const line = view.state.doc.lineAt(range.head);
   if (isListLine(line.text)) {
@@ -132,23 +284,38 @@ function indent(view: EditorView, isInTable: (state: EditorState, position: numb
   } else {
     view.dispatch({ changes: { from: range.head, to: range.head, insert: "    " } });
   }
+  normalizeViewOrderedLists(view);
   return true;
 }
 
 function outdent(view: EditorView, isInTable: (state: EditorState, position: number) => boolean = isTableContext): boolean {
   const range = view.state.selection.main;
   if (isInTable(view.state, range.head)) return false;
-  if (!range.empty) return changeSelectedLines(view, true);
+  if (!range.empty) {
+    const changed = changeSelectedLines(view, true);
+    if (changed) normalizeViewOrderedLists(view);
+    return changed;
+  }
 
   const line = view.state.doc.lineAt(range.head);
-  const amount = Math.min(4, line.text.match(/^ */)?.[0].length ?? 0);
+  const amount = indentationPrefixLength(line.text);
   if (amount === 0) return true;
   view.dispatch({ changes: { from: line.from, to: line.from + amount } });
+  normalizeViewOrderedLists(view);
   return true;
 }
 
 function continueMarkdownList(view: EditorView): boolean {
-  return insertNewlineContinueMarkup(view) || insertNewlineAndIndent(view);
+  const handled = insertNewlineContinueMarkup(view) || insertNewlineAndIndent(view);
+  if (handled) normalizeViewOrderedLists(view);
+  return handled;
+}
+
+/** Shift+Enter inserts a plain line break and deliberately skips list markup. */
+function softBreak(view: EditorView): boolean {
+  const range = view.state.selection.main;
+  view.dispatch({ changes: { from: range.from, to: range.to, insert: "\n" } });
+  return true;
 }
 
 function pairInputHandler(
@@ -448,6 +615,7 @@ function createBindings(options: MarknoteKeymapOptions): KeyBinding[] {
     commandBinding("Mod-y", redo),
     commandBinding("Tab", (view) => indent(view, isInTable)),
     commandBinding("Shift-Tab", (view) => outdent(view, isInTable)),
+    commandBinding("Shift-Enter", softBreak),
     commandBinding("Enter", continueMarkdownList),
     commandBinding("Mod-b", (view) => toggleWrapper(view, "**", "**")),
     commandBinding("Mod-i", (view) => toggleWrapper(view, "*", "*")),
@@ -484,4 +652,4 @@ export function createMarknoteKeymap(options: MarknoteKeymapOptions = {}): Exten
 export const marknoteKeyBindings: readonly KeyBinding[] = createBindings({});
 export const getMarknoteKeyBindings = (options: MarknoteKeymapOptions = {}): readonly KeyBinding[] => createBindings(options);
 
-export { isListLine, toggleWrapper, toggleCodeBlock, indent, outdent, continueMarkdownList };
+export { isListLine, toggleWrapper, toggleCodeBlock, indent, outdent, continueMarkdownList, softBreak };

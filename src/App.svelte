@@ -5,6 +5,7 @@
   import { invoke } from "@tauri-apps/api/core";
 import type { UnlistenFn } from "@tauri-apps/api/event";
   import { getCurrentWindow } from "@tauri-apps/api/window";
+  import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { onMount, tick } from "svelte";
   import { installZoom, resetZoom, zoomIn, zoomOut } from "./editor/zoom";
   import { safeLinkHref } from "./editor/livePreview/inline";
@@ -1012,11 +1013,15 @@ import { EditorView, type EditorView as EditorViewType } from "@codemirror/view"
       onError: reportError,
     });
     void autosaveController.start();
-    rebuildEditor();
 
     const setup = async (): Promise<void> => {
       try {
-        const currentWindow = getCurrentWindow();
+        // Подписываемся на окне webview, а не на окне как таковом. Rust шлёт
+        // эти события через emit_to с целью webview_window, а события,
+        // адресованные webview, до слушателей обычного окна не доходят —
+        // именно поэтому программа закрывалась не спрашивая и с задержкой в
+        // пять секунд: ответа не было, срабатывал сторож по времени.
+        const currentWindow = getCurrentWebviewWindow();
         unlistenNativeClose = await currentWindow.listen("save-before-close", handleNativeCloseRequest);
         nativeCloseReady = true;
         unlistenOpen = await currentWindow.listen<OpenFileRequest>("open-file-request", ({ payload }) => {
@@ -1050,6 +1055,11 @@ import { EditorView, type EditorView as EditorViewType } from "@codemirror/view"
       void loadCreatableFormats();
     };
     void setup();
+    // Register the native close listener before constructing CodeMirror. The
+    // editor can take a noticeable amount of time on a cold WebView2 start;
+    // showing the window while that synchronous setup is still running used
+    // to leave the first native close event without a frontend recipient.
+    rebuildEditor();
 
     return () => {
       disposed = true;
