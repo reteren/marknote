@@ -182,19 +182,23 @@ export function createContextFormatGroups(state: MenuState = {}): MenuGroup[] {
         separator("format.separator.inline-code"),
         item("format.code", t("format.code"), "Ctrl+E", notEditable),
         item("format.link", t("format.link"), "Ctrl+K", notEditable),
+        separator("format.separator.clear-formatting"),
+        item("format.clearFormatting", t("format.clearFormatting"), "", notEditable),
       ],
     },
     {
       label: t("contextMenu.paragraph"),
       items: [
+        item("format.list", t("format.bulletList"), "", notEditable),
+        item("format.orderedList", t("format.orderedList"), "", notEditable),
+        item("format.taskList", t("format.taskList"), "", notEditable),
+        separator("format.separator.headings"),
         ...Array.from({ length: 6 }, (_, index) => {
           const level = index + 1;
           return item(`format.heading${level}`, t("format.heading", { level }), `Ctrl+${level}`, notEditable);
         }),
         separator("format.separator.clear-heading"),
         item("format.clearHeading", t("format.removeHeading"), "Ctrl+0", notEditable),
-        separator("format.separator.list"),
-        item("format.list", t("format.list"), "", notEditable),
       ],
     },
     {

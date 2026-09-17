@@ -97,6 +97,9 @@ export type AppActions = {
   highlight: (view?: EditorView | null) => ActionResult;
   heading: (level: number, view?: EditorView | null) => ActionResult;
   list: (view?: EditorView | null) => ActionResult;
+  orderedList: (view?: EditorView | null) => ActionResult;
+  taskList: (view?: EditorView | null) => ActionResult;
+  clearFormatting: (view?: EditorView | null) => ActionResult;
   table: (view?: EditorView | null) => ActionResult;
   callout: (view?: EditorView | null) => ActionResult;
   codeBlock: (view?: EditorView | null) => ActionResult;
@@ -138,6 +141,7 @@ const menuActionIds = new Set([
   "format.highlight",
   "format.code",
   "format.link",
+  "format.clearFormatting",
   "format.heading1",
   "format.heading2",
   "format.heading3",
@@ -146,6 +150,8 @@ const menuActionIds = new Set([
   "format.heading6",
   "format.clearHeading",
   "format.list",
+  "format.orderedList",
+  "format.taskList",
   "format.table",
   "format.callout",
   "format.codeBlock",
@@ -233,8 +239,191 @@ function formatHeading(view: EditorView, level: number): ActionResult {
   });
 }
 
-function formatList(view: EditorView): ActionResult {
-  return applyLines(view, (text) => (/^\s*(?:[-+*]|\d+[.)])\s+/.test(text) ? text : `- ${text}`));
+function applyNumberedLines(view: EditorView, update: (text: string, index: number) => string): ActionResult {
+  const changes: { from: number; to: number; insert: string }[] = [];
+  const seen = new Set<number>();
+  let lineIndex = 0;
+  for (const range of view.state.selection.ranges) {
+    const first = view.state.doc.lineAt(range.from).number;
+    const last = view.state.doc.lineAt(range.to).number;
+    for (let number = first; number <= last; number += 1) {
+      if (seen.has(number)) continue;
+      seen.add(number);
+      const line = view.state.doc.line(number);
+      const next = update(line.text, lineIndex);
+      lineIndex += 1;
+      if (next !== line.text) changes.push({ from: line.from, to: line.to, insert: next });
+    }
+  }
+  if (changes.length) view.dispatch({ changes });
+  return true;
+}
+
+function formatBulletList(view: EditorView): ActionResult {
+  return applyNumberedLines(view, (text) => {
+    const indent = text.match(/^\s*/)?.[0] ?? "";
+    const listMatch = text.match(/^(\s*)(?:[-+*]\s+\[[ xX]\]\s+|[-+*]\s+|\d+[.)]\s+)/u);
+    const body = listMatch ? text.slice(listMatch[0].length) : text.slice(indent.length);
+    return `${indent}- ${body}`;
+  });
+}
+
+function formatOrderedList(view: EditorView): ActionResult {
+  return applyNumberedLines(view, (text, index) => {
+    const indent = text.match(/^\s*/)?.[0] ?? "";
+    const listMatch = text.match(/^(\s*)(?:[-+*]\s+\[[ xX]\]\s+|[-+*]\s+|\d+[.)]\s+)/u);
+    const body = listMatch ? text.slice(listMatch[0].length) : text.slice(indent.length);
+    return `${indent}${index + 1}. ${body}`;
+  });
+}
+
+function formatTaskList(view: EditorView): ActionResult {
+  return applyNumberedLines(view, (text) => {
+    const indent = text.match(/^\s*/)?.[0] ?? "";
+    const listMatch = text.match(/^(\s*)(?:[-+*]\s+\[[ xX]\]\s+|[-+*]\s+|\d+[.)]\s+)/u);
+    const body = listMatch ? text.slice(listMatch[0].length) : text.slice(indent.length);
+    return `${indent}- [ ] ${body}`;
+  });
+}
+
+function isInlineWordChar(ch: string): boolean {
+  return /[^\s*_`~=\[\]()]/u.test(ch);
+}
+
+function stripInlineMarkup(text: string): string {
+  return text
+    .split("\n")
+    .map((line) => {
+      const prefixMatch = line.match(/^(\s*(?:#{1,6}\s+|[-+*]\s+\[[ xX]\]\s+|[-+*]\s+|\d+[.)]\s+))/u);
+      const prefix = prefixMatch ? prefixMatch[1] : "";
+      let body = prefixMatch ? line.slice(prefix.length) : line;
+
+      let prev: string;
+      do {
+        prev = body;
+        body = body
+          .replace(/`([^`\n]+)`/g, "$1")
+          .replace(/==([^=\n]+)==/g, "$1")
+          .replace(/~~([^~\n]+)~~/g, "$1")
+          .replace(/\*\*([^\n]+?)\*\*/g, "$1")
+          .replace(/\*([^\n]+?)\*/g, "$1");
+      } while (body !== prev);
+
+      return prefix + body;
+    })
+    .join("\n");
+}
+
+function clearFormattingInView(view: EditorView): ActionResult {
+  const state = view.state;
+  const inlinePairs = ["**", "~~", "==", "*", "`"];
+
+  if (!state.selection.main.empty) {
+    const changes: { from: number; to: number; insert: string }[] = [];
+    for (const range of state.selection.ranges) {
+      if (range.empty) continue;
+      let from = range.from;
+      let to = range.to;
+
+      let expanded = true;
+      while (expanded) {
+        expanded = false;
+        for (const p of inlinePairs) {
+          if (
+            from >= p.length &&
+            to + p.length <= state.doc.length &&
+            state.sliceDoc(from - p.length, from) === p &&
+            state.sliceDoc(to, to + p.length) === p
+          ) {
+            from -= p.length;
+            to += p.length;
+            expanded = true;
+            break;
+          }
+        }
+      }
+
+      const original = state.sliceDoc(from, to);
+      const stripped = stripInlineMarkup(original);
+      if (stripped !== original || from !== range.from || to !== range.to) {
+        changes.push({ from, to, insert: stripped });
+      }
+    }
+
+    if (changes.length > 0) {
+      view.dispatch({ changes });
+      return true;
+    }
+    return false;
+  }
+
+  const cursor = state.selection.main.from;
+  const line = state.doc.lineAt(cursor);
+  const col = cursor - line.from;
+
+  let wordFrom = col;
+  let wordTo = col;
+  while (wordFrom > 0 && isInlineWordChar(line.text[wordFrom - 1] ?? "")) wordFrom -= 1;
+  while (wordTo < line.text.length && isInlineWordChar(line.text[wordTo] ?? "")) wordTo += 1;
+
+  if (wordFrom === wordTo) {
+    if (wordFrom > 0 && isInlineWordChar(line.text[wordFrom - 1] ?? "")) {
+      wordFrom -= 1;
+      while (wordFrom > 0 && isInlineWordChar(line.text[wordFrom - 1] ?? "")) wordFrom -= 1;
+    } else if (wordTo < line.text.length && isInlineWordChar(line.text[wordTo] ?? "")) {
+      wordTo += 1;
+      while (wordTo < line.text.length && isInlineWordChar(line.text[wordTo] ?? "")) wordTo += 1;
+    } else {
+      let left = col;
+      while (left > 0 && /[*_`~=]/u.test(line.text[left - 1] ?? "")) left -= 1;
+      let right = col;
+      while (right < line.text.length && /[*_`~=]/u.test(line.text[right] ?? "")) right += 1;
+      if (left > 0 && isInlineWordChar(line.text[left - 1] ?? "")) {
+        wordTo = left;
+        wordFrom = left - 1;
+        while (wordFrom > 0 && isInlineWordChar(line.text[wordFrom - 1] ?? "")) wordFrom -= 1;
+      } else if (right < line.text.length && isInlineWordChar(line.text[right] ?? "")) {
+        wordFrom = right;
+        wordTo = right + 1;
+        while (wordTo < line.text.length && isInlineWordChar(line.text[wordTo] ?? "")) wordTo += 1;
+      }
+    }
+  }
+
+  if (wordFrom === wordTo) return false;
+
+  let left = wordFrom;
+  let right = wordTo;
+  let stripped = false;
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const p of inlinePairs) {
+      if (
+        left >= p.length &&
+        right + p.length <= line.text.length &&
+        line.text.slice(left - p.length, left) === p &&
+        line.text.slice(right, right + p.length) === p
+      ) {
+        left -= p.length;
+        right += p.length;
+        changed = true;
+        stripped = true;
+        break;
+      }
+    }
+  }
+
+  if (!stripped) return false;
+
+  const unwrapped = line.text.slice(wordFrom, wordTo);
+  const from = line.from + left;
+  const to = line.from + right;
+  view.dispatch({
+    changes: { from, to, insert: unwrapped },
+    selection: { anchor: from, head: from + unwrapped.length },
+  });
+  return true;
 }
 
 function formatLink(view: EditorView): ActionResult {
@@ -508,22 +697,25 @@ export function createActions(dependencies: ActionsDependencies = {}): AppAction
   const highlight = editCommand((view) => toggleWrapper(view, "==", "=="));
   const link = editCommand(formatLink);
   const heading = (level: number, view = getView()): ActionResult => (canEdit() && view ? formatHeading(view, level) : false);
-  const list = editCommand(formatList);
+  const list = editCommand(formatBulletList);
+  const orderedList = editCommand(formatOrderedList);
+  const taskList = editCommand(formatTaskList);
+  const clearFormatting = editCommand(clearFormattingInView);
   const table = editCommand((view) => {
-    insertAtSelection(view, "| Column | Value |\n| --- | --- |\n|  |  |", { anchor: view.state.selection.main.from + 2 });
+    insertAtSelection(view, "| Column 1 | Column 2 |\n| --- | --- |\n|  |  |\n", { anchor: view.state.selection.main.from + 2 });
     return true;
   });
   const callout = editCommand((view) => {
-    insertAtSelection(view, "> [!NOTE]\n> ", { anchor: view.state.selection.main.from + 12 });
+    insertAtSelection(view, "> [!NOTE] Note\n> \n", { anchor: view.state.selection.main.from + 17 });
     return true;
   });
   const codeBlock = editCommand(toggleCodeBlock);
   const mathBlock = editCommand((view) => {
-    insertAtSelection(view, "$$\n\n$$", { anchor: view.state.selection.main.from + 3 });
+    insertAtSelection(view, "$$\n\n$$\n", { anchor: view.state.selection.main.from + 3 });
     return true;
   });
   const horizontalRule = editCommand((view) => {
-    insertAtSelection(view, "---\n");
+    insertAtSelection(view, "\n---\n");
     return true;
   });
 
@@ -629,8 +821,11 @@ export function createActions(dependencies: ActionsDependencies = {}): AppAction
     ["format.highlight", () => highlight()],
     ["format.code", () => code()],
     ["format.link", () => link()],
+    ["format.clearFormatting", () => clearFormatting()],
     ["format.clearHeading", () => heading(0)],
     ["format.list", () => list()],
+    ["format.orderedList", () => orderedList()],
+    ["format.taskList", () => taskList()],
     ["format.table", () => table()],
     ["format.callout", () => callout()],
     ["format.codeBlock", () => codeBlock()],
@@ -772,6 +967,9 @@ export function createActions(dependencies: ActionsDependencies = {}): AppAction
     highlight,
     heading,
     list,
+    orderedList,
+    taskList,
+    clearFormatting,
     table,
     callout,
     codeBlock,

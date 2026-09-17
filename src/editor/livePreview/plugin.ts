@@ -92,7 +92,13 @@ function runBlockBuilders(
     view,
     node,
     active,
-    add: (range) => specs.push({ from: range.from, to: range.to, decoration: range.value }),
+    add: (range) =>
+      specs.push({
+        from: range.from,
+        to: range.to,
+        decoration: range.value,
+        line: range.from === range.to && Boolean((range.value as unknown as { point?: boolean }).point),
+      }),
     atomic: (range) => atomicRanges.push(range),
   };
   for (const builder of livePreviewBlockBuilders) {

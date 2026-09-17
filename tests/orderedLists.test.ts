@@ -1,3 +1,4 @@
+import { history, undo } from "@codemirror/commands";
 import { markdown } from "@codemirror/lang-markdown";
 import { EditorState } from "@codemirror/state";
 import type { EditorView } from "@codemirror/view";
@@ -82,6 +83,103 @@ describe("Obsidian-style ordered lists", () => {
     const view = makeView("1. same item", 12);
     expect(softBreak(view as EditorView)).toBe(true);
     expect(view.state.doc.toString()).toBe("1. same item\n");
+    expect(view.state.selection.main.head).toBe(13);
+  });
+
+  it("renumbers only after digit, delimiter, and space are typed, preserving cursor position", () => {
+    let state = EditorState.create({
+      doc: "1. first\n",
+      selection: { anchor: 9 },
+      extensions: [markdown(), orderedListNormalization],
+    });
+
+    // User types "3"
+    state = state.update({
+      changes: { from: 9, to: 9, insert: "3" },
+      selection: { anchor: 10 },
+      userEvent: "input.type",
+    }).state;
+    expect(state.doc.toString()).toBe("1. first\n3");
+    expect(state.selection.main.head).toBe(10);
+
+    // User types "." - delimiter typed, but spacing not yet typed: no renumbering
+    state = state.update({
+      changes: { from: 10, to: 10, insert: "." },
+      selection: { anchor: 11 },
+      userEvent: "input.type",
+    }).state;
+    expect(state.doc.toString()).toBe("1. first\n3.");
+    expect(state.selection.main.head).toBe(11);
+
+    // User types " " - delimiter and spacing complete: renumbers to 2. and preserves cursor
+    state = state.update({
+      changes: { from: 11, to: 11, insert: " " },
+      selection: { anchor: 12 },
+      userEvent: "input.type",
+    }).state;
+    expect(state.doc.toString()).toBe("1. first\n2. ");
+    expect(state.selection.main.head).toBe(12);
+
+    // User continues typing item content
+    state = state.update({
+      changes: { from: 12, to: 12, insert: "s" },
+      selection: { anchor: 13 },
+      userEvent: "input.type",
+    }).state;
+    expect(state.doc.toString()).toBe("1. first\n2. s");
+    expect(state.selection.main.head).toBe(13);
+  });
+
+  it("renumbers multi-digit markers after space and maps cursor correctly", () => {
+    let state = EditorState.create({
+      doc: "1. first\n",
+      selection: { anchor: 9 },
+      extensions: [markdown(), orderedListNormalization],
+    });
+
+    state = state.update({
+      changes: { from: 9, to: 9, insert: "99." },
+      selection: { anchor: 12 },
+      userEvent: "input.type",
+    }).state;
+    expect(state.doc.toString()).toBe("1. first\n99.");
+    expect(state.selection.main.head).toBe(12);
+
+    // Space completes marker: 99. shrinks to 2.
+    state = state.update({
+      changes: { from: 12, to: 12, insert: " " },
+      selection: { anchor: 13 },
+      userEvent: "input.type",
+    }).state;
+    expect(state.doc.toString()).toBe("1. first\n2. ");
+    expect(state.selection.main.head).toBe(12);
+  });
+
+  it("undoes Tab indentation on an ordered list item with a single Ctrl+Z", () => {
+    let state = EditorState.create({
+      doc: "1. first\n2. second",
+      selection: { anchor: 11 },
+      extensions: [markdown(), history(), orderedListNormalization],
+    });
+
+    // Indent second item: becomes sublist item "    1. second"
+    state = state.update({
+      changes: { from: 9, to: 9, insert: "    " },
+      selection: { anchor: 15 },
+      userEvent: "input.indent",
+    }).state;
+    expect(state.doc.toString()).toBe("1. first\n    1. second");
+
+    // Single undo restores the previous state
+    let undone = undo({
+      state,
+      dispatch: (tr) => {
+        state = state.update(tr).state;
+      },
+    });
+    expect(undone).toBe(true);
+    expect(state.doc.toString()).toBe("1. first\n2. second");
+    expect(state.selection.main.head).toBe(11);
   });
 
   it("starts after one at a heading or blank line and only accepts separated markers", () => {

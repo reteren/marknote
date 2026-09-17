@@ -9,7 +9,7 @@ import {
   undo,
   insertNewlineAndIndent,
 } from "@codemirror/commands";
-import { ChangeSet, EditorState, type Extension } from "@codemirror/state";
+import { ChangeSet, EditorState, Transaction, type Extension } from "@codemirror/state";
 import { keymap, EditorView, type Command, type KeyBinding } from "@codemirror/view";
 import { insertNewlineContinueMarkup } from "@codemirror/lang-markdown";
 
@@ -126,7 +126,7 @@ function orderedListMarkerChanges(text: string): MarkerChange[] {
     }
 
     const ordered = orderedListLine.exec(line);
-    if (ordered?.groups) {
+    if (ordered?.groups && ordered.groups.spacing) {
       const indent = indentationWidth(ordered.groups.indent ?? "");
       while (contexts.length && contexts[contexts.length - 1].indent > indent) contexts.pop();
 
@@ -182,7 +182,94 @@ function normalizeViewOrderedLists(view: EditorView): void {
   const text = view.state.doc.toString();
   if (normalizeOrderedLists(text) === text) return;
   const changes = orderedListMarkerChanges(text);
-  if (changes.length) view.dispatch({ changes });
+  if (changes.length) {
+    const norm = ChangeSet.of(changes, text.length);
+    view.dispatch({
+      changes,
+      selection: view.state.selection.map(norm),
+      userEvent: "input",
+    });
+  }
+}
+
+const listPrefixRegex = /^[ \t]*(?:\d+[.)]|[-+*])[ \t]+/u;
+
+function getListPrefix(lineText: string): string | null {
+  const match = listPrefixRegex.exec(lineText);
+  return match ? match[0] : null;
+}
+
+function isListBlockBoundary(text: string): boolean {
+  return /^[ \t]*$/u.test(text) || headingLine.test(text) || isHorizontalRule(text) || fenceLine.test(text);
+}
+
+function getMarkerChangesForTransaction(transaction: Transaction): MarkerChange[] {
+  let couldAffect = false;
+  let minFromB = transaction.newDoc.length;
+  let maxToB = 0;
+
+  transaction.changes.iterChanges((fromA, toA, fromB, toB, inserted) => {
+    if (fromB < minFromB) minFromB = fromB;
+    if (toB > maxToB) maxToB = toB;
+    if (couldAffect) return;
+
+    if (inserted.lines > 1 || transaction.startState.doc.lineAt(fromA).number !== transaction.startState.doc.lineAt(toA).number) {
+      couldAffect = true;
+      return;
+    }
+    const startLineText = transaction.startState.doc.lineAt(fromA).text;
+    const newLineText = transaction.newDoc.lineAt(fromB).text;
+    if (getListPrefix(startLineText) !== getListPrefix(newLineText)) {
+      couldAffect = true;
+      return;
+    }
+    const wasBlank = /^[ \t]*$/u.test(startLineText);
+    const isBlank = /^[ \t]*$/u.test(newLineText);
+    if (wasBlank !== isBlank) {
+      couldAffect = true;
+      return;
+    }
+    const wasBoundary = headingLine.test(startLineText) || isHorizontalRule(startLineText) || fenceLine.test(startLineText);
+    const isBoundaryLine = headingLine.test(newLineText) || isHorizontalRule(newLineText) || fenceLine.test(newLineText);
+    if (wasBoundary !== isBoundaryLine) {
+      couldAffect = true;
+      return;
+    }
+  });
+
+  if (!couldAffect) return [];
+
+  if (minFromB > maxToB) {
+    minFromB = 0;
+    maxToB = transaction.newDoc.length;
+  }
+
+  let startLine = transaction.newDoc.lineAt(Math.min(minFromB, transaction.newDoc.length)).number;
+  let endLine = transaction.newDoc.lineAt(Math.min(maxToB, transaction.newDoc.length)).number;
+
+  while (startLine > 1) {
+    const text = transaction.newDoc.line(startLine - 1).text;
+    if (isListBlockBoundary(text)) break;
+    startLine -= 1;
+  }
+
+  while (endLine < transaction.newDoc.lines) {
+    const text = transaction.newDoc.line(endLine + 1).text;
+    if (isListBlockBoundary(text)) break;
+    endLine += 1;
+  }
+
+  const fromPos = transaction.newDoc.line(startLine).from;
+  const toPos = transaction.newDoc.line(endLine).to;
+  const blockText = transaction.newDoc.sliceString(fromPos, toPos);
+  const blockChanges = orderedListMarkerChanges(blockText);
+  if (!blockChanges.length) return [];
+
+  return blockChanges.map((change) => ({
+    from: change.from + fromPos,
+    to: change.to + fromPos,
+    insert: change.insert,
+  }));
 }
 
 /**
@@ -192,11 +279,16 @@ function normalizeViewOrderedLists(view: EditorView): void {
  */
 export const orderedListNormalization: Extension = EditorState.transactionFilter.of((transaction) => {
   if (!transaction.docChanged) return transaction;
-  const text = transaction.newDoc.toString();
-  const changes = orderedListMarkerChanges(text);
+  const changes = getMarkerChangesForTransaction(transaction);
   if (!changes.length) return transaction;
-  const normalization = ChangeSet.of(changes, text.length);
-  return { changes: transaction.changes.compose(normalization) };
+  // Возвращаем исходную транзакцию как есть и добавляем перенумерацию отдельной
+  // последующей правкой. Так положение курсора, эффекты и все пометки — включая
+  // пометки истории отмены — переносятся самим CodeMirror, и их не нужно
+  // перекладывать руками. Прежний вариант собирал новую транзакцию по полям и
+  // терял всё, что забыли перечислить; заодно он лез в приватное поле
+  // annotations через приведение типа, а это сломалось бы на обновлении
+  // библиотеки молча.
+  return [transaction, { changes, sequential: true }];
 });
 
 function isListLine(text: string): boolean {
@@ -263,7 +355,7 @@ function changeSelectedLines(view: EditorView, remove: boolean): boolean {
   }
 
   if (changes.length > 0) {
-    view.dispatch({ changes });
+    view.dispatch({ changes, userEvent: remove ? "delete.dedent" : "input.indent", scrollIntoView: true });
     return true;
   }
   return false;
@@ -280,9 +372,19 @@ function indent(view: EditorView, isInTable: (state: EditorState, position: numb
 
   const line = view.state.doc.lineAt(range.head);
   if (isListLine(line.text)) {
-    view.dispatch({ changes: { from: line.from, to: line.from, insert: "    " } });
+    view.dispatch({
+      changes: { from: line.from, to: line.from, insert: "    " },
+      selection: { anchor: range.anchor + 4, head: range.head + 4 },
+      userEvent: "input.indent",
+      scrollIntoView: true,
+    });
   } else {
-    view.dispatch({ changes: { from: range.head, to: range.head, insert: "    " } });
+    view.dispatch({
+      changes: { from: range.head, to: range.head, insert: "    " },
+      selection: { anchor: range.head + 4 },
+      userEvent: "input.indent",
+      scrollIntoView: true,
+    });
   }
   normalizeViewOrderedLists(view);
   return true;
@@ -300,7 +402,14 @@ function outdent(view: EditorView, isInTable: (state: EditorState, position: num
   const line = view.state.doc.lineAt(range.head);
   const amount = indentationPrefixLength(line.text);
   if (amount === 0) return true;
-  view.dispatch({ changes: { from: line.from, to: line.from + amount } });
+  const newAnchor = Math.max(line.from, range.anchor - amount);
+  const newHead = Math.max(line.from, range.head - amount);
+  view.dispatch({
+    changes: { from: line.from, to: line.from + amount },
+    selection: { anchor: newAnchor, head: newHead },
+    userEvent: "delete.dedent",
+    scrollIntoView: true,
+  });
   normalizeViewOrderedLists(view);
   return true;
 }
@@ -314,7 +423,12 @@ function continueMarkdownList(view: EditorView): boolean {
 /** Shift+Enter inserts a plain line break and deliberately skips list markup. */
 function softBreak(view: EditorView): boolean {
   const range = view.state.selection.main;
-  view.dispatch({ changes: { from: range.from, to: range.to, insert: "\n" } });
+  view.dispatch({
+    changes: { from: range.from, to: range.to, insert: "\n" },
+    selection: { anchor: range.from + 1 },
+    userEvent: "input",
+    scrollIntoView: true,
+  });
   return true;
 }
 
@@ -638,12 +752,14 @@ function createBindings(options: MarknoteKeymapOptions): KeyBinding[] {
   return all;
 }
 
+const marknoteDefaultKeymap = defaultKeymap.filter((binding) => binding.key !== "Mod-Enter");
+
 /** Build the editor keymap, optionally supplying shell-owned command handlers. */
 export function createMarknoteKeymap(options: MarknoteKeymapOptions = {}): Extension {
   const bindings = createBindings(options);
   return [
     history({ minDepth: Infinity }),
-    keymap.of([...bindings, ...historyKeymap, ...defaultKeymap]),
+    keymap.of([...bindings, ...historyKeymap, ...marknoteDefaultKeymap]),
     EditorView.inputHandler.of(pairInputHandler),
   ];
 }

@@ -10,9 +10,10 @@
     | "edit.pastePlainText"
     | "bold" | "italic" | "code" | "strikethrough" | "highlight" | "link"
     | "format.bold" | "format.italic" | "format.strikethrough" | "format.highlight"
-    | "format.code" | "format.link"
+    | "format.code" | "format.link" | "format.clearFormatting"
     | "format.heading1" | "format.heading2" | "format.heading3" | "format.heading4" | "format.heading5" | "format.heading6"
-    | "format.clearHeading" | "format.list" | "format.table" | "format.callout" | "format.codeBlock" | "format.mathBlock" | "format.horizontalRule"
+    | "format.clearHeading" | "format.list" | "format.orderedList" | "format.taskList"
+    | "format.table" | "format.callout" | "format.codeBlock" | "format.mathBlock" | "format.horizontalRule"
     | "format.jsonValidate" | "format.jsonFormat"
     | "open-link" | "copy-link" | "edit-link" | "open-image" | "copy-image"
     | "insert-table" | "insert-callout" | "insert-code-block" | "insert-math-block" | "insert-hr";

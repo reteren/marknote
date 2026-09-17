@@ -23,9 +23,17 @@ function tableRows(table: SyntaxNode): SyntaxNode[] {
   return rows;
 }
 
+function getCellColumn(row: SyntaxNode, cell: SyntaxNode): number {
+  const delimiters = row.getChildren("TableDelimiter").sort((a, b) => a.from - b.from);
+  if (delimiters.length === 0) return 0;
+  const hasLeading = delimiters[0].from <= row.from + 1;
+  const pipesBefore = delimiters.filter((d) => d.to <= cell.from).length;
+  return Math.max(0, hasLeading ? pipesBefore - 1 : pipesBefore);
+}
+
 function tableCells(table: SyntaxNode): TableCellInfo[] {
   return tableRows(table).flatMap((row) =>
-    rowCells(row).map((node, column) => ({ node, column })),
+    rowCells(row).map((node) => ({ node, column: getCellColumn(row, node) })),
   );
 }
 
@@ -48,7 +56,7 @@ function cellWidth(state: EditorState, cell: SyntaxNode): number {
   const content = state.doc.sliceString(cell.from, cell.to).trim();
   // Ширина хранится CSS-переменной, а класс отвечает только за выравнивание.
   // Это оставляет исходный Markdown неизменным и выравнивает строки визуально.
-  return Math.max(4, Array.from(content).length + 2);
+  return Math.max(6, Array.from(content).length + 4);
 }
 
 function addTableCell(
@@ -57,9 +65,11 @@ function addTableCell(
   column: number,
   alignment: TableAlignment,
   width: number,
+  isHeader: boolean,
 ) {
   const className = [
     "cm-marknote-table-cell",
+    ...(isHeader ? ["cm-marknote-table-header-cell"] : []),
     `cm-marknote-table-column-${column + 1}`,
     `cm-marknote-table-align-${alignment}`,
   ].join(" ");
@@ -68,6 +78,50 @@ function addTableCell(
     attributes: { style: `--marknote-table-column-width: ${width}ch` },
   });
   if (cell.to > cell.from) ctx.add({ from: cell.from, to: cell.to, value });
+}
+
+function hideRowDelimitersAndGaps(
+  ctx: Parameters<BlockBuilder>[0],
+  row: SyntaxNode,
+  delimiters: SyntaxNode[],
+  cells: SyntaxNode[],
+) {
+  const hide = Decoration.replace({});
+
+  // 1. Скрываем все вертикальные черты таблицы (|)
+  for (const delim of delimiters) {
+    if (delim.to > delim.from) {
+      ctx.add({ from: delim.from, to: delim.to, value: hide });
+      ctx.atomic({ from: delim.from, to: delim.to, value: hide });
+    }
+  }
+
+  // 2. Скрываем промежутки между разделителями и ячейками (пробелы разметки),
+  // чтобы inline-block ячейки образовывали ровную сетку без паразитных сдвигов.
+  const items = [
+    ...delimiters.map((d) => ({ from: d.from, to: d.to })),
+    ...cells.map((c) => ({ from: c.from, to: c.to })),
+  ].sort((a, b) => a.from - b.from);
+
+  if (items.length > 0) {
+    if (items[0].from > row.from) {
+      ctx.add({ from: row.from, to: items[0].from, value: hide });
+      ctx.atomic({ from: row.from, to: items[0].from, value: hide });
+    }
+    for (let i = 0; i < items.length - 1; i++) {
+      const cur = items[i];
+      const next = items[i + 1];
+      if (next.from > cur.to) {
+        ctx.add({ from: cur.to, to: next.from, value: hide });
+        ctx.atomic({ from: cur.to, to: next.from, value: hide });
+      }
+    }
+    const last = items[items.length - 1];
+    if (row.to > last.to) {
+      ctx.add({ from: last.to, to: row.to, value: hide });
+      ctx.atomic({ from: last.to, to: row.to, value: hide });
+    }
+  }
 }
 
 /** Построитель визуального вида GFM-таблиц. */
@@ -83,17 +137,48 @@ export const tableBuilder: BlockBuilder = (ctx) => {
     ? separatorAlignments(ctx.view.state, delimiter, columnCount)
     : Array.from({ length: columnCount }, () => "left" as TableAlignment);
   const widths = Array.from({ length: columnCount }, (_, column) =>
-    Math.max(4, ...cells.filter((cell) => cell.column === column).map((cell) => cellWidth(ctx.view.state, cell.node))),
+    Math.max(6, ...cells.filter((cell) => cell.column === column).map((cell) => cellWidth(ctx.view.state, cell.node))),
   );
 
-  for (const { node, column } of cells) {
-    addTableCell(ctx, node, column, alignments[column] ?? "left", widths[column] ?? 4);
+  for (const row of rows) {
+    const isHeader = row.name === "TableHeader";
+    const rCells = rowCells(row);
+    const rDelimiters = row.getChildren("TableDelimiter").sort((a, b) => a.from - b.from);
+
+    // Скрываем вертикальные черты и пробелы разметки в строке
+    hideRowDelimitersAndGaps(ctx, row, rDelimiters, rCells);
+
+    // Оформляем ячейки строки
+    for (const cell of rCells) {
+      const col = getCellColumn(row, cell);
+      addTableCell(ctx, cell, col, alignments[col] ?? "left", widths[col] ?? 6, isHeader);
+    }
+
+    // Класс строки для запрета переноса строк сетки
+    const lineStart = ctx.view.state.doc.lineAt(row.from).from;
+    ctx.add({
+      from: lineStart,
+      to: lineStart,
+      value: Decoration.line({
+        class: isHeader
+          ? "cm-marknote-table-row cm-marknote-table-header-row"
+          : "cm-marknote-table-row",
+      }),
+    });
   }
 
+  // Скрываем строку-разделитель (синтаксическую строку Markdown)
   if (delimiter && delimiter.to > delimiter.from) {
     const hidden = Decoration.replace({});
     ctx.add({ from: delimiter.from, to: delimiter.to, value: hidden });
     ctx.atomic({ from: delimiter.from, to: delimiter.to, value: hidden });
+
+    const lineStart = ctx.view.state.doc.lineAt(delimiter.from).from;
+    ctx.add({
+      from: lineStart,
+      to: lineStart,
+      value: Decoration.line({ class: "cm-marknote-table-delimiter-row" }),
+    });
   }
 
   return true;
@@ -139,14 +224,45 @@ export const tableKeymap: KeyBinding[] = [
 
 /** CSS для ячеек и разделителей таблицы. */
 export const tableTheme = EditorView.theme({
+  ".cm-line.cm-marknote-table-row": {
+    whiteSpace: "nowrap",
+  },
+  ".cm-line.cm-marknote-table-delimiter-row": {
+    display: "none",
+    height: "0 !important",
+    lineHeight: "0 !important",
+    fontSize: "0 !important",
+    margin: "0 !important",
+    padding: "0 !important",
+    overflow: "hidden !important",
+    border: "none !important",
+  },
   ".cm-marknote-table-cell": {
     display: "inline-block",
+    boxSizing: "border-box",
+    width: "var(--marknote-table-column-width)",
     minWidth: "var(--marknote-table-column-width)",
-    padding: "0 0.4em",
+    padding: "4px 10px",
     verticalAlign: "top",
+    whiteSpace: "normal",
+    wordBreak: "break-word",
     fontFamily: "var(--font-text)",
     fontSize: "var(--font-size-text)",
     lineHeight: "var(--line-height-text)",
+    color: "var(--text-normal)",
+    backgroundColor: "transparent",
+    borderRight: "1px solid var(--bg-modifier-border)",
+    borderBottom: "1px solid var(--bg-modifier-border)",
+  },
+  ".cm-marknote-table-column-1": {
+    borderLeft: "1px solid var(--bg-modifier-border)",
+  },
+  ".cm-marknote-table-header-cell": {
+    fontWeight: "600",
+    backgroundColor: "var(--bg-secondary)",
+    color: "var(--text-normal)",
+    borderTop: "1px solid var(--bg-modifier-border)",
+    borderBottom: "2px solid var(--bg-modifier-border-hover)",
   },
   ".cm-marknote-table-align-left": { textAlign: "left" },
   ".cm-marknote-table-align-center": { textAlign: "center" },

@@ -816,11 +816,11 @@ import { EditorView, type EditorView as EditorViewType } from "@codemirror/view"
       case "copy-link":
       case "copy-image": copyText(payload); break;
       case "edit-link": insertLink(); break;
-      case "insert-table": insertText("| Column 1 | Column 2 |\n| --- | --- |\n|  |  |\n"); break;
-      case "insert-callout": insertText("> [!NOTE] Note\n> \n"); break;
+      case "insert-table": void actions.run("format.table"); break;
+      case "insert-callout": void actions.run("format.callout"); break;
       case "insert-code-block": void actions.run("format.codeBlock"); break;
-      case "insert-math-block": insertText("$$\n\n$$\n"); break;
-      case "insert-hr": insertText("\n---\n"); break;
+      case "insert-math-block": void actions.run("format.mathBlock"); break;
+      case "insert-hr": void actions.run("format.horizontalRule"); break;
     }
   }
 
@@ -862,6 +862,14 @@ import { EditorView, type EditorView as EditorViewType } from "@codemirror/view"
       case "format.highlight":
       case "format.code":
       case "format.codeBlock":
+      case "format.clearFormatting":
+      case "format.list":
+      case "format.orderedList":
+      case "format.taskList":
+      case "format.table":
+      case "format.callout":
+      case "format.mathBlock":
+      case "format.horizontalRule":
       case "format.jsonValidate":
       case "format.jsonFormat":
         void actions.run(id);
@@ -874,11 +882,6 @@ import { EditorView, type EditorView as EditorViewType } from "@codemirror/view"
       case "format.heading5": applyHeading(5); break;
       case "format.heading6": applyHeading(6); break;
       case "format.clearHeading": applyHeading(0); break;
-      case "format.list": applyList(); break;
-      case "format.table": insertText("| Column 1 | Column 2 |\n| --- | --- |\n|  |  |\n"); break;
-      case "format.callout": insertText("> [!NOTE] Note\n> \n"); break;
-      case "format.mathBlock": insertText("$$\n\n$$\n"); break;
-      case "format.horizontalRule": insertText("\n---\n"); break;
       case "view.zoomIn": void actions.run("view.zoomIn"); break;
       case "view.zoomOut": void actions.run("view.zoomOut"); break;
       case "view.resetZoom": void actions.run("view.resetZoom"); break;

@@ -69,8 +69,8 @@ describe("menu model", () => {
     expect(groups.map((group) => group.label)).toEqual(["Formatting", "Paragraph", "Insert"]);
     const groupIds = groups.map((group) => group.items.filter((item) => !item.separator).map((item) => item.id));
     expect(groupIds).toEqual([
-      ["format.bold", "format.italic", "format.strikethrough", "format.highlight", "format.code", "format.link"],
-      ["format.heading1", "format.heading2", "format.heading3", "format.heading4", "format.heading5", "format.heading6", "format.clearHeading", "format.list"],
+      ["format.bold", "format.italic", "format.strikethrough", "format.highlight", "format.code", "format.link", "format.clearFormatting"],
+      ["format.list", "format.orderedList", "format.taskList", "format.heading1", "format.heading2", "format.heading3", "format.heading4", "format.heading5", "format.heading6", "format.clearHeading"],
       ["format.table", "format.callout", "format.codeBlock", "format.mathBlock", "format.horizontalRule"],
     ]);
   });

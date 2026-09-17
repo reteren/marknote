@@ -35,3 +35,4 @@ qa/shots/
 /qa/*.out
 /qa/*.reg
 /qa/shots/
+/fixtures/

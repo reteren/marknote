@@ -6,6 +6,7 @@ import type { EditorView, KeyBinding } from "@codemirror/view";
 import { describe, expect, it, vi } from "vitest";
 import {
   continueMarkdownList,
+  createMarknoteKeymap,
   getMarknoteKeyBindings,
   isTableContext,
   marknoteKeyBindings,
@@ -59,16 +60,29 @@ describe("MarkNote editor keymap", () => {
     const list = makeView("- item", 2);
     expect(run("Tab", list)).toBe(true);
     expect(list.state.doc.toString()).toBe("    - item");
+    expect(list.state.selection.main.head).toBe(6);
 
     const prose = makeView("text", 2);
     expect(run("Tab", prose)).toBe(true);
     expect(prose.state.doc.toString()).toBe("te    xt");
+    expect(prose.state.selection.main.head).toBe(6);
+  });
+
+  it("undoes Tab indentation with a single Ctrl+Z", () => {
+    const view = makeView("text", 2, 2, [history()]);
+    expect(run("Tab", view)).toBe(true);
+    expect(view.state.doc.toString()).toBe("te    xt");
+    expect(view.state.selection.main.head).toBe(6);
+    expect(run("Mod-z", view)).toBe(true);
+    expect(view.state.doc.toString()).toBe("text");
+    expect(view.state.selection.main.head).toBe(2);
   });
 
   it("outdents a list item with Shift-Tab", () => {
     const view = makeView("    - item", 6);
     expect(run("Shift-Tab", view)).toBe(true);
     expect(view.state.doc.toString()).toBe("- item");
+    expect(view.state.selection.main.head).toBe(2);
   });
 
   it("continues a non-empty list and exits on an empty list item", () => {
@@ -210,5 +224,20 @@ describe("MarkNote editor keymap", () => {
     const view = makeView("* ", 2);
     expect(continueMarkdownList(view as EditorView)).toBe(true);
     expect(view.state.doc.toString()).toBe("");
+  });
+
+  it("inserts a line break and advances cursor on Shift-Enter", () => {
+    const view = makeView("hello world", 5);
+    expect(run("Shift-Enter", view)).toBe(true);
+    expect(view.state.doc.toString()).toBe("hello\n world");
+    expect(view.state.selection.main.head).toBe(6);
+  });
+
+  it("does not bind Mod-Enter so Ctrl+Enter does not insert a line", () => {
+    expect(marknoteKeyBindings.some((item) => item.key === "Mod-Enter")).toBe(false);
+    const keymapExtensions = createMarknoteKeymap() as any[];
+    const keymapPlugin = keymapExtensions[1];
+    const keyBindings = keymapPlugin.value as KeyBinding[];
+    expect(keyBindings.some((item) => item.key === "Mod-Enter")).toBe(false);
   });
 });

@@ -60,8 +60,8 @@ const saved = {
   format: editableFormat,
 };
 
-function viewFor(doc = documentState.text): EditorView {
-  let state = EditorState.create({ doc });
+function viewFor(doc = documentState.text, selection?: { anchor: number; head?: number }): EditorView {
+  let state = EditorState.create({ doc, ...(selection ? { selection } : {}) });
   return {
     get state() {
       return state;
@@ -296,6 +296,11 @@ describe("application actions", () => {
       expect(actions.hasAction(item.id), item.id).toBe(true);
     }
 
+    const contextItems = createContextFormatGroups().flatMap((group) => group.items).filter((item) => !item.separator);
+    for (const item of contextItems) {
+      expect(actions.hasAction(item.id), item.id).toBe(true);
+    }
+
     for (const id of [
       "cut", "copy", "paste", "delete", "select-all", "bold", "italic", "code", "strikethrough", "highlight", "link",
       "open-link", "copy-link", "edit-link", "open-image", "copy-image", "insert-table", "insert-callout",
@@ -303,5 +308,107 @@ describe("application actions", () => {
     ]) {
       expect(actions.hasAction(id), id).toBe(true);
     }
+  });
+
+  it("inserts bullet list, numbered list, and task list across lines", async () => {
+    const view = viewFor("First\nSecond\nThird", { anchor: 0, head: 18 });
+    const actions = makeActions(view);
+
+    await actions.run("format.list");
+    expect(view.state.doc.toString()).toBe("- First\n- Second\n- Third");
+
+    await actions.run("format.orderedList");
+    expect(view.state.doc.toString()).toBe("1. First\n2. Second\n3. Third");
+
+    await actions.run("format.taskList");
+    expect(view.state.doc.toString()).toBe("- [ ] First\n- [ ] Second\n- [ ] Third");
+  });
+
+  it("clears formatting on selection without stripping headings or list markers", async () => {
+    const doc = [
+      "# Heading with **bold** and *italic*",
+      "- [ ] Task with ~~strike~~ and ==highlight==",
+      "1. Numbered with `code` and ***both***",
+      "Normal text with **bold**",
+    ].join("\n");
+
+    const view = viewFor(doc, { anchor: 0, head: doc.length });
+    const actions = makeActions(view);
+
+    await actions.run("format.clearFormatting");
+    expect(view.state.doc.toString()).toBe([
+      "# Heading with bold and italic",
+      "- [ ] Task with strike and highlight",
+      "1. Numbered with code and both",
+      "Normal text with bold",
+    ].join("\n"));
+  });
+
+  it("clears formatting on word under cursor without selection like toggleWrapper", async () => {
+    // Bold
+    let view = viewFor("Hello **world** test", { anchor: 8 });
+    let actions = makeActions(view);
+    await actions.run("format.clearFormatting");
+    expect(view.state.doc.toString()).toBe("Hello world test");
+    expect(view.state.selection.main.from).toBe(6);
+    expect(view.state.selection.main.to).toBe(11);
+
+    // Code
+    view = viewFor("Hello `code` test", { anchor: 8 });
+    actions = makeActions(view);
+    await actions.run("format.clearFormatting");
+    expect(view.state.doc.toString()).toBe("Hello code test");
+
+    // Highlight
+    view = viewFor("Hello ==highlight== test", { anchor: 10 });
+    actions = makeActions(view);
+    await actions.run("format.clearFormatting");
+    expect(view.state.doc.toString()).toBe("Hello highlight test");
+
+    // Strikethrough
+    view = viewFor("Hello ~~strike~~ test", { anchor: 10 });
+    actions = makeActions(view);
+    await actions.run("format.clearFormatting");
+    expect(view.state.doc.toString()).toBe("Hello strike test");
+
+    // Italic
+    view = viewFor("Hello *italic* test", { anchor: 9 });
+    actions = makeActions(view);
+    await actions.run("format.clearFormatting");
+    expect(view.state.doc.toString()).toBe("Hello italic test");
+
+    // Nested wrappers
+    view = viewFor("Hello ***nested*** test", { anchor: 11 });
+    actions = makeActions(view);
+    await actions.run("format.clearFormatting");
+    expect(view.state.doc.toString()).toBe("Hello nested test");
+  });
+
+  it("inserts horizontal rule, table, callout, and math block via action system", async () => {
+    const view = viewFor("");
+    const actions = makeActions(view);
+
+    await actions.run("format.horizontalRule");
+    expect(view.state.doc.toString()).toBe("\n---\n");
+
+    const hrView = viewFor("");
+    const hrActions = makeActions(hrView);
+    await hrActions.run("insert-hr");
+    expect(hrView.state.doc.toString()).toBe("\n---\n");
+
+    const tableView = viewFor("");
+    const tableActions = makeActions(tableView);
+    await tableActions.run("format.table");
+    expect(tableView.state.doc.toString()).toContain("| Column 1 | Column 2 |");
+
+    const calloutView = viewFor("");
+    const calloutActions = makeActions(calloutView);
+    await calloutActions.run("format.callout");
+    expect(calloutView.state.doc.toString()).toContain("> [!NOTE]");
+
+    const mathView = viewFor("");
+    const mathActions = makeActions(mathView);
+    await mathActions.run("format.mathBlock");
+    expect(mathView.state.doc.toString()).toContain("$$");
   });
 });
