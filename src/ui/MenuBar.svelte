@@ -252,7 +252,15 @@
     const node = event.currentTarget instanceof HTMLElement ? event.currentTarget : undefined;
     const section = sectionById(openSectionId);
     activeItemIndex = selectableItems(section?.items ?? []).findIndex((candidate) => candidate.id === item.id);
-    if (item.submenu) openSubmenu(item, node);
+    if (item.submenu) {
+      openSubmenu(item, node);
+    } else {
+      // Ушли с пункта с подменю — подменю закрывается. Без этого список
+      // форматов оставался висеть, пока курсор гулял по соседним пунктам, и
+      // выглядело это так, будто он открылся сам по нажатию на File.
+      activeSubmenuId = null;
+      activeSubmenuIndex = 0;
+    }
   }
 
   function handleSubmenuHover(item: MenuItem): void {

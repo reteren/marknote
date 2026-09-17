@@ -1,6 +1,6 @@
 {
   "name": "marknote",
-  "version": "1.0.7",
+  "version": "1.0.8",
   "description": "Fast Markdown editor for Windows",
   "type": "module",
   "private": true,
@@ -9,6 +9,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "check": "svelte-check --tsconfig ./tsconfig.json",
+    "generate:installer-hooks": "node scripts/generate-installer-hooks.mjs",
     "tauri": "tauri",
     "test": "vitest run"
   },
