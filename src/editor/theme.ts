@@ -12,6 +12,11 @@ export const marknoteTheme: Extension = [
       lineHeight: "var(--line-height-text)",
       maxWidth: "var(--line-width)",
       margin: "var(--editor-margin, 0 auto)",
+      // Высота, а не только минимальная: без неё корень редактора растёт
+      // вместе с текстом, .cm-scroller никогда не переполняется, полосы
+      // прокрутки не появляется и колесо мыши ничего не делает — документ
+      // длиннее окна становится недоступен.
+      height: "100%",
       minHeight: "100%",
     },
     ".cm-scroller": {
