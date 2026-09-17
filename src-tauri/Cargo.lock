@@ -2300,7 +2300,7 @@ dependencies = [
 
 [[package]]
 name = "marknote"
-version = "1.0.10"
+version = "1.0.9"
 dependencies = [
  "anyhow",
  "chardetng",
