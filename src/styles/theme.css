@@ -219,6 +219,18 @@ input[type="checkbox"]:disabled {
   cursor: not-allowed;
 }
 
+/* WebView2 keeps a separate surface for native number spinners.  With the
+   dark color scheme it renders that surface as #2c2c2c even when the input
+   itself is darker, and ignores background overrides on the native pseudo.
+   Keep the native controls enabled and visible, but tone the complete
+   spinner surface down to the input background. */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  margin: 0;
+  opacity: 1;
+  filter: brightness(0.5);
+}
+
 /* Клавиатурный фокус виден всегда: в программе без настроек это единственный
    способ понять, где ты находишься */
 :focus-visible {

@@ -141,6 +141,19 @@ describe("SettingsWindow", () => {
     expect(screen.queryByRole("tab", { name: "Preview" })).not.toBeInTheDocument();
   });
 
+  it("renders every numeric setting with a native spinner control", async () => {
+    mount();
+
+    await selectSection("Editor");
+    expect(screen.getAllByRole("spinbutton")).toHaveLength(3);
+
+    await selectSection("Preview");
+    expect(screen.getAllByRole("spinbutton")).toHaveLength(1);
+
+    await selectSection("Files");
+    expect(screen.getAllByRole("spinbutton")).toHaveLength(1);
+  });
+
   it("closes on Escape and returns focus to the editor", async () => {
     const onClose = vi.fn();
     const onFocusEditor = vi.fn();
