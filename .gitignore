@@ -33,3 +33,5 @@ qa/shots/
 /*.png
 /qa/*.log
 /qa/*.out
+/qa/*.reg
+/qa/shots/

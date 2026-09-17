@@ -1,0 +1,67 @@
+; GENERATED FILE — do not edit by hand.
+; Source of truth: bundle.fileAssociations in src-tauri/tauri.conf.json.
+; Regenerate with: npm run generate:installer-hooks
+
+!macro NSIS_HOOK_POSTINSTALL
+  WriteRegStr HKCU "Software\MarkNote\Capabilities" "ApplicationName" "MarkNote"
+  WriteRegStr HKCU "Software\MarkNote\Capabilities" "ApplicationDescription" "Fast Markdown editor"
+  WriteRegStr HKCU "Software\MarkNote\Capabilities\FileAssociations" ".md" "Markdown Document"
+  WriteRegStr HKCU "Software\MarkNote\Capabilities\FileAssociations" ".markdown" "Markdown Document"
+  WriteRegStr HKCU "Software\MarkNote\Capabilities\FileAssociations" ".mdown" "Markdown Document"
+  WriteRegStr HKCU "Software\MarkNote\Capabilities\FileAssociations" ".mkd" "Markdown Document"
+  WriteRegStr HKCU "Software\MarkNote\Capabilities\FileAssociations" ".mdx" "Markdown Document"
+  WriteRegStr HKCU "Software\MarkNote\Capabilities\FileAssociations" ".txt" "Plain Text Document"
+  WriteRegStr HKCU "Software\MarkNote\Capabilities\FileAssociations" ".log" "Plain Text Document"
+  WriteRegStr HKCU "Software\MarkNote\Capabilities\FileAssociations" ".ini" "Plain Text Document"
+  WriteRegStr HKCU "Software\MarkNote\Capabilities\FileAssociations" ".cfg" "Plain Text Document"
+  WriteRegStr HKCU "Software\MarkNote\Capabilities\FileAssociations" ".conf" "Plain Text Document"
+  WriteRegStr HKCU "Software\MarkNote\Capabilities\FileAssociations" ".env" "Plain Text Document"
+  WriteRegStr HKCU "Software\MarkNote\Capabilities\FileAssociations" ".csv" "Plain Text Document"
+  WriteRegStr HKCU "Software\MarkNote\Capabilities\FileAssociations" ".tsv" "Plain Text Document"
+  WriteRegStr HKCU "Software\MarkNote\Capabilities\FileAssociations" ".json" "JSON Document"
+  WriteRegStr HKCU "Software\MarkNote\Capabilities\FileAssociations" ".yaml" "YAML Document"
+  WriteRegStr HKCU "Software\MarkNote\Capabilities\FileAssociations" ".yml" "YAML Document"
+  WriteRegStr HKCU "Software\MarkNote\Capabilities\FileAssociations" ".toml" "TOML Document"
+  WriteRegStr HKCU "Software\MarkNote\Capabilities\FileAssociations" ".xml" "XML Document"
+  WriteRegStr HKCU "Software\MarkNote\Capabilities\FileAssociations" ".css" "CSS Stylesheet"
+  WriteRegStr HKCU "Software\MarkNote\Capabilities\FileAssociations" ".js" "JavaScript Source"
+  WriteRegStr HKCU "Software\MarkNote\Capabilities\FileAssociations" ".ts" "TypeScript Source"
+  WriteRegStr HKCU "Software\MarkNote\Capabilities\FileAssociations" ".rs" "Rust Source"
+  WriteRegStr HKCU "Software\MarkNote\Capabilities\FileAssociations" ".py" "Python Source"
+  WriteRegStr HKCU "Software\Classes\Applications\${MAINBINARYNAME}.exe" "FriendlyAppName" "MarkNote"
+  WriteRegStr HKCU "Software\Classes\Applications\${MAINBINARYNAME}.exe\shell\open\command" "" "$\"$INSTDIR\${MAINBINARYNAME}.exe$\" $\"%1$\""
+  WriteRegStr HKCU "Software\Classes\Applications\${MAINBINARYNAME}.exe\SupportedTypes" ".md" ""
+  WriteRegStr HKCU "Software\Classes\Applications\${MAINBINARYNAME}.exe\SupportedTypes" ".markdown" ""
+  WriteRegStr HKCU "Software\Classes\Applications\${MAINBINARYNAME}.exe\SupportedTypes" ".mdown" ""
+  WriteRegStr HKCU "Software\Classes\Applications\${MAINBINARYNAME}.exe\SupportedTypes" ".mkd" ""
+  WriteRegStr HKCU "Software\Classes\Applications\${MAINBINARYNAME}.exe\SupportedTypes" ".mdx" ""
+  WriteRegStr HKCU "Software\Classes\Applications\${MAINBINARYNAME}.exe\SupportedTypes" ".txt" ""
+  WriteRegStr HKCU "Software\Classes\Applications\${MAINBINARYNAME}.exe\SupportedTypes" ".log" ""
+  WriteRegStr HKCU "Software\Classes\Applications\${MAINBINARYNAME}.exe\SupportedTypes" ".ini" ""
+  WriteRegStr HKCU "Software\Classes\Applications\${MAINBINARYNAME}.exe\SupportedTypes" ".cfg" ""
+  WriteRegStr HKCU "Software\Classes\Applications\${MAINBINARYNAME}.exe\SupportedTypes" ".conf" ""
+  WriteRegStr HKCU "Software\Classes\Applications\${MAINBINARYNAME}.exe\SupportedTypes" ".env" ""
+  WriteRegStr HKCU "Software\Classes\Applications\${MAINBINARYNAME}.exe\SupportedTypes" ".csv" ""
+  WriteRegStr HKCU "Software\Classes\Applications\${MAINBINARYNAME}.exe\SupportedTypes" ".tsv" ""
+  WriteRegStr HKCU "Software\Classes\Applications\${MAINBINARYNAME}.exe\SupportedTypes" ".json" ""
+  WriteRegStr HKCU "Software\Classes\Applications\${MAINBINARYNAME}.exe\SupportedTypes" ".yaml" ""
+  WriteRegStr HKCU "Software\Classes\Applications\${MAINBINARYNAME}.exe\SupportedTypes" ".yml" ""
+  WriteRegStr HKCU "Software\Classes\Applications\${MAINBINARYNAME}.exe\SupportedTypes" ".toml" ""
+  WriteRegStr HKCU "Software\Classes\Applications\${MAINBINARYNAME}.exe\SupportedTypes" ".xml" ""
+  WriteRegStr HKCU "Software\Classes\Applications\${MAINBINARYNAME}.exe\SupportedTypes" ".css" ""
+  WriteRegStr HKCU "Software\Classes\Applications\${MAINBINARYNAME}.exe\SupportedTypes" ".js" ""
+  WriteRegStr HKCU "Software\Classes\Applications\${MAINBINARYNAME}.exe\SupportedTypes" ".ts" ""
+  WriteRegStr HKCU "Software\Classes\Applications\${MAINBINARYNAME}.exe\SupportedTypes" ".rs" ""
+  WriteRegStr HKCU "Software\Classes\Applications\${MAINBINARYNAME}.exe\SupportedTypes" ".py" ""
+  WriteRegStr HKCU "Software\RegisteredApplications" "MarkNote" "Software\MarkNote\Capabilities"
+  !insertmacro UPDATEFILEASSOC
+!macroend
+
+!macro NSIS_HOOK_POSTUNINSTALL
+  DeleteRegValue HKCU "Software\RegisteredApplications" "MarkNote"
+  DeleteRegKey HKCU "Software\MarkNote\Capabilities"
+  DeleteRegKey /ifempty HKCU "Software\MarkNote"
+  DeleteRegKey HKCU "Software\Classes\Applications\${MAINBINARYNAME}.exe"
+  !insertmacro UPDATEFILEASSOC
+!macroend
+
