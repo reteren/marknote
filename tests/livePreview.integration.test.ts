@@ -72,6 +72,7 @@ describe("livePreview full builder integration", () => {
     expect(widgets.filter((name) => name === "FootnoteRefWidget")).toHaveLength(2);
     expect(widgets.filter((name) => name === "MathWidget")).toHaveLength(2);
     expect(widgets.filter((name) => name === "CheckboxWidget")).toHaveLength(3);
+    expect(widgets.filter((name) => name === "HrWidget")).toHaveLength(1);
   });
 
   it("does not let neighboring builders swallow citations, links, or foreign nodes", () => {

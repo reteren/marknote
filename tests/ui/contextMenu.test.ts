@@ -256,4 +256,47 @@ describe("ContextMenu user interactions", () => {
     expect(document.querySelector<HTMLElement>(".cm-content")?.textContent).toContain("Column 1");
     expect(documentState.text).toContain("Column 1");
   });
+
+  it("routes horizontal rule action into the document with proper separation and renders hr widget", async () => {
+    tauri.invoke.mockReset();
+    tauri.focusChanged.mockResolvedValue(async () => undefined);
+    tauri.listen.mockImplementation(async (name: string, handler: (event: { payload?: unknown }) => void) => {
+      const handlers = tauri.handlers.get(name) ?? new Set();
+      handlers.add(handler);
+      tauri.handlers.set(name, handlers);
+      return () => handlers.delete(handler);
+    });
+    tauri.invoke.mockImplementation(async (command: string) => {
+      if (command === "list_creatable_formats") return [markdownFormat];
+      if (command === "new_document") return { text: "Some preceding paragraph", format: markdownFormat };
+      if (command === "take_pending_file") return null;
+      return undefined;
+    });
+
+    render(App);
+    await settle();
+    const markdownTile = Array.from(document.querySelectorAll<HTMLButtonElement>("button"))
+      .find((button) => button.textContent?.includes(formatLabel("markdown", "Markdown")) && button.textContent.includes(".md"));
+    expect(markdownTile).toBeDefined();
+    await fireEvent.click(markdownTile!);
+    await settle();
+
+    const editorContent = document.querySelector<HTMLElement>(".cm-content")!;
+    const contextEvent = new MouseEvent("contextmenu", { bubbles: true, cancelable: true, button: 2, clientX: 10, clientY: 10 });
+    editorContent.dispatchEvent(contextEvent);
+    await settle();
+    expect(contextEvent.defaultPrevented).toBe(true);
+
+    const insertTrigger = Array.from(document.querySelectorAll<HTMLButtonElement>(".submenu-trigger"))
+      .find((button) => button.textContent?.includes(t("contextMenu.insert")))!;
+    await fireEvent.mouseEnter(insertTrigger);
+    await settle();
+    await fireEvent.click(Array.from(document.querySelectorAll<HTMLButtonElement>(`[role="menu"][aria-label="${t("contextMenu.insert")}"] button`))
+      .find((button) => button.textContent?.includes(t("format.horizontalRule")))!);
+    await settle();
+
+    expect(documentState.text).toBe("\n---\n\nSome preceding paragraph");
+    const hrElement = document.querySelector<HTMLElement>(".cm-marknote-hr");
+    expect(hrElement).not.toBeNull();
+  });
 });

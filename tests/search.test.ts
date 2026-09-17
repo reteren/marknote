@@ -267,13 +267,37 @@ describe("MarkNote Search logic (search.ts)", () => {
     const content = readFileSync(fixturePath, "utf-8");
     const state = createState(content);
 
-    it("быстро подсчитывает совпадения на 10 000 строках", () => {
-      const t0 = performance.now();
-      const stats = getSearchStats(state, { search: "Строка", caseSensitive: true });
-      const elapsed = performance.now() - t0;
+    // Меряем не секунды, а рост. Прежняя проверка требовала уложиться в 200 мс
+    // по стенным часам и падала, когда машина занята чем-то ещё, — она мерила
+    // загрузку компьютера, а не наш код. Ложная тревога дороже пропущенной
+    // медленности: на неё каждый раз тратится внимание.
+    //
+    // Здесь тот же поиск прогоняется на маленьком куске и на всём файле. Оба
+    // замера страдают от загрузки одинаково, поэтому их отношение устойчиво.
+    // Линейный поиск даёт отношение около размерного, квадратичный — кратно
+    // больше, и вот это проверка и ловит.
+    it("ищет за время, растущее линейно, а не квадратично", () => {
+      const smallDoc = content.slice(0, Math.floor(content.length / 10));
+      const smallState = createState(smallDoc);
+      const query = { search: "Строка", caseSensitive: true };
 
-      expect(stats.total).toBeGreaterThan(0);
-      expect(elapsed).toBeLessThan(200); // быстро и без зависаний
+      const measure = (target: EditorState): number => {
+        const started = performance.now();
+        getSearchStats(target, query);
+        return Math.max(performance.now() - started, 0.05);
+      };
+
+      // Прогрев: первый вызов платит за компиляцию и прогрев кэшей.
+      measure(smallState);
+      measure(state);
+
+      const small = Math.min(measure(smallState), measure(smallState));
+      const full = Math.min(measure(state), measure(state));
+
+      expect(getSearchStats(state, query).total).toBeGreaterThan(0);
+      // Документ в десять раз больше. Запас взят щедрый: проверка должна
+      // ловить смену порядка сложности, а не колебания в разы.
+      expect(full / small).toBeLessThan(40);
     });
   });
 });

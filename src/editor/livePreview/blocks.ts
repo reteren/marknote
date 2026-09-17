@@ -62,15 +62,20 @@ function indentationWidth(text: string): number {
   return width;
 }
 
+export function indentationGuideForLine(target: { from: number; text: string }): DecorationSpec | null {
+  const width = indentationWidth(target.text);
+  if (width < 4) return null;
+  const indent = Math.max(1, Math.min(64, width));
+  return line(target.from, `cm-marknote-nested-list-line cm-marknote-nested-list-indent-${indent}`);
+}
+
 function nestedListGuide(node: SyntaxNode, state: EditorState): DecorationSpec[] {
-  if (node.parent?.name !== "ListItem") return [];
   const first = state.doc.lineAt(node.from).number;
   const last = state.doc.lineAt(node.to).number;
   const specs: DecorationSpec[] = [];
   for (let number = first; number <= last; number += 1) {
-    const target = state.doc.line(number);
-    const indent = Math.max(1, Math.min(64, indentationWidth(target.text)));
-    specs.push(line(target.from, `cm-marknote-nested-list-line cm-marknote-nested-list-indent-${indent}`));
+    const spec = indentationGuideForLine(state.doc.line(number));
+    if (spec) specs.push(spec);
   }
   return specs;
 }
@@ -160,7 +165,7 @@ export function decorationsForBlockNode(
     return [{
       from: node.from,
       to: node.to,
-      decoration: Decoration.replace({ widget: new MathWidget(source, true), block: true }),
+      decoration: Decoration.replace({ widget: new MathWidget(source, true) }),
       atomic: true,
     }];
   }
@@ -170,7 +175,7 @@ export function decorationsForBlockNode(
     return [{
       from: node.from,
       to: node.to,
-      decoration: Decoration.replace({ widget: new HrWidget(), block: true }),
+      decoration: Decoration.replace({ widget: new HrWidget() }),
       atomic: true,
     }];
   }
@@ -222,35 +227,56 @@ export const livePreviewTheme = EditorView.theme({
   ".cm-marknote-heading-4": { fontSize: "var(--h4-size)", fontWeight: "var(--h4-weight)", color: "var(--h4-color)" },
   ".cm-marknote-heading-5": { fontSize: "var(--h5-size)", fontWeight: "var(--h5-weight)", color: "var(--h5-color)" },
   ".cm-marknote-heading-6": { fontSize: "var(--h6-size)", fontWeight: "var(--h6-weight)", color: "var(--h6-color)" },
-  ".cm-marknote-bullet": { display: "inline-block", width: "1.25em", color: "var(--text-muted)" },
+  ".cm-marknote-bullet": { display: "inline-block", width: "1.25em", textAlign: "center", color: "var(--text-muted)" },
   ".cm-marknote-ordered-marker": { color: "var(--text-muted)" },
   ".cm-line.cm-marknote-nested-list-line": { backgroundRepeat: "no-repeat" },
   ...Object.fromEntries(
     Array.from({ length: 64 }, (_, index) => {
       const indent = index + 1;
-      const line = `calc(${indent}ch - 1px)`;
+      const levels = Math.floor(indent / 4);
+      if (levels <= 0) return [`.cm-line.cm-marknote-nested-list-indent-${indent}`, {}];
+      const stops: string[] = [];
+      for (let k = 0; k < levels; k += 1) {
+        const pos = `${0.625 + k * 1.25}em`;
+        stops.push(
+          `transparent calc(${pos} - 1px), var(--bg-modifier-border-hover) calc(${pos} - 1px), var(--bg-modifier-border-hover) ${pos}, transparent ${pos}`,
+        );
+      }
       return [
         `.cm-line.cm-marknote-nested-list-indent-${indent}`,
         {
-          backgroundImage: `linear-gradient(to right, transparent ${line}, var(--bg-modifier-border) ${line}, var(--bg-modifier-border) ${indent}ch, transparent ${indent}ch)`,
+          backgroundImage: `linear-gradient(to right, ${stops.join(", ")})`,
         },
       ];
     }),
   ),
   ".cm-marknote-task-done": { color: "var(--text-muted)", textDecoration: "line-through" },
   ".cm-marknote-checkbox": {
-    display: "inline-block",
-    width: "1em",
-    height: "1em",
-    marginRight: "0.35em",
-    border: "1px solid var(--text-muted)",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: "0.95em",
+    height: "0.95em",
+    marginRight: "0.45em",
+    border: "1.5px solid var(--text-muted)",
     borderRadius: "var(--radius-s)",
-    verticalAlign: "-0.1em",
+    verticalAlign: "-0.18em",
     cursor: "pointer",
-    position: "relative",
+    boxSizing: "border-box",
+    lineHeight: "1",
+    userSelect: "none",
   },
-  ".cm-marknote-checkbox.is-checked": { backgroundColor: "var(--accent)", borderColor: "var(--accent)" },
-  ".cm-marknote-checkbox.is-checked::after": { content: "'✓'", color: "var(--text-on-accent)", position: "absolute", left: "0.1em", top: "-0.15em" },
+  ".cm-marknote-checkbox.is-checked": {
+    backgroundColor: "var(--accent)",
+    borderColor: "var(--accent)",
+  },
+  ".cm-marknote-checkbox.is-checked::after": {
+    content: "'✓'",
+    color: "var(--text-on-accent)",
+    fontSize: "0.75em",
+    fontWeight: "bold",
+    lineHeight: "1",
+  },
   ".cm-marknote-blockquote": { borderLeft: "2px solid var(--bg-modifier-border)", paddingLeft: "0.8em" },
   ".cm-marknote-quote-mark": { color: "var(--text-muted)", marginRight: "0.4em" },
   ".cm-marknote-callout": { borderLeft: "3px solid var(--accent)", paddingLeft: "0.8em" },

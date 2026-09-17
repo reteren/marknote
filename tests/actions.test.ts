@@ -396,6 +396,11 @@ describe("application actions", () => {
     await hrActions.run("insert-hr");
     expect(hrView.state.doc.toString()).toBe("\n---\n");
 
+    const textHrView = viewFor("Some text", { anchor: 9 });
+    const textHrActions = makeActions(textHrView);
+    await textHrActions.run("format.horizontalRule");
+    expect(textHrView.state.doc.toString()).toBe("Some text\n\n---\n");
+
     const tableView = viewFor("");
     const tableActions = makeActions(tableView);
     await tableActions.run("format.table");

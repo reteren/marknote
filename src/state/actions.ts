@@ -715,7 +715,43 @@ export function createActions(dependencies: ActionsDependencies = {}): AppAction
     return true;
   });
   const horizontalRule = editCommand((view) => {
-    insertAtSelection(view, "\n---\n");
+    const range = view.state.selection.main;
+    const doc = view.state.doc;
+    const before = doc.sliceString(0, range.from);
+    const after = doc.sliceString(range.to);
+
+    let prefix = "\n";
+    if (before.length > 0) {
+      if (before.endsWith("\n\n")) {
+        prefix = "";
+      } else if (before.endsWith("\n")) {
+        prefix = "\n";
+      } else {
+        prefix = "\n\n";
+      }
+    }
+
+    let suffix = "\n";
+    if (after.length > 0) {
+      if (after.startsWith("\n\n")) {
+        suffix = "\n";
+      } else if (after.startsWith("\n")) {
+        suffix = "\n\n";
+      } else {
+        suffix = "\n\n";
+      }
+    }
+
+    const insert = `${prefix}---${suffix}`;
+    const insertPos = range.from + insert.length;
+    view.dispatch({
+      changes: { from: range.from, to: range.to, insert },
+      selection: { anchor: insertPos },
+      scrollIntoView: true,
+    });
+    if (typeof view.focus === "function") {
+      view.focus();
+    }
     return true;
   });
 

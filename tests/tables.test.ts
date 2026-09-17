@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { syntaxTree } from "@codemirror/language";
 import { EditorState, type Range } from "@codemirror/state";
 import { markdown } from "@codemirror/lang-markdown";
@@ -133,11 +134,73 @@ describe("tableBuilder", () => {
     expect(bDeco?.value.spec.class).toContain("cm-marknote-table-column-2");
   });
 
-  it("leaves source text untouched while the cursor is in the table", () => {
+  it("keeps table rendered as an object when the cursor is in the table", () => {
     const state = tableState(doc);
     const { decorations, atomic } = buildTable(state, true);
-    expect(decorations).toHaveLength(0);
-    expect(atomic).toHaveLength(0);
+    expect(decorations.length).toBeGreaterThan(0);
+    expect(atomic.length).toBeGreaterThan(0);
+  });
+
+  it("attaches add row and add col widgets with correct tooltips", () => {
+    const state = tableState(doc);
+    const { decorations } = buildTable(state);
+
+    const widgets = decorations
+      .map(({ value }) => value.spec.widget)
+      .filter(Boolean);
+
+    // Should include TableAddRowWidget and TableAddColWidget
+    const addRowWidget = widgets.find((w) => w?.constructor?.name === "TableAddRowWidget");
+    const addColWidget = widgets.find((w) => w?.constructor?.name === "TableAddColWidget");
+
+    expect(addRowWidget).toBeDefined();
+    expect(addColWidget).toBeDefined();
+
+    // Verify DOM elements produced by widgets
+    const view = { state, dispatch: () => undefined } as unknown as EditorView;
+    const rowDom = addRowWidget.toDOM(view);
+    const colDom = addColWidget.toDOM(view);
+
+    expect(rowDom.querySelector("button")?.getAttribute("title")).toBe("Добавить строку снизу");
+    expect(colDom.getAttribute("title")).toBe("Добавить столбец справа");
+  });
+
+  it("attaches row and col movement controls with tooltips", () => {
+    const multiRowDoc = [
+      "| Left | Center | Right |",
+      "| :--- | :---:  | ---:  |",
+      "| A1   | B1     | C1    |",
+      "| A2   | B2     | C2    |",
+    ].join("\n");
+    const state = tableState(multiRowDoc);
+    const { decorations } = buildTable(state);
+
+    const widgets = decorations
+      .map(({ value }) => value.spec.widget)
+      .filter(Boolean);
+
+    const rowControls = widgets.filter((w) => w?.constructor?.name === "TableRowControlWidget");
+    const colControls = widgets.filter((w) => w?.constructor?.name === "TableColControlWidget");
+
+    expect(rowControls.length).toBe(2); // 2 body rows
+    expect(colControls.length).toBe(3); // 3 columns
+
+    const view = { state, dispatch: () => undefined } as unknown as EditorView;
+    const firstRowDom = rowControls[0].toDOM(view);
+    const lastRowDom = rowControls[1].toDOM(view);
+
+    // First row can move down
+    expect(firstRowDom.querySelector(".cm-marknote-table-move-down")?.getAttribute("title")).toBe("Переместить строку вниз");
+    // Last row can move up
+    expect(lastRowDom.querySelector(".cm-marknote-table-move-up")?.getAttribute("title")).toBe("Переместить строку вверх");
+
+    const firstColDom = colControls[0].toDOM(view);
+    const lastColDom = colControls[2].toDOM(view);
+
+    // First col can move right
+    expect(firstColDom.querySelector(".cm-marknote-table-move-right")?.getAttribute("title")).toBe("Переместить столбец вправо");
+    // Last col can move left
+    expect(lastColDom.querySelector(".cm-marknote-table-move-left")?.getAttribute("title")).toBe("Переместить столбец влево");
   });
 
   it("moves Tab and Shift-Tab between table cells", () => {

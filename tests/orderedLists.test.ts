@@ -189,8 +189,12 @@ describe("Obsidian-style ordered lists", () => {
     expect(normalizeOrderedLists("1. first\n9. second\n\n1) third\n9) fourth\n1 plain\n2 plain")).toBe(
       "1. first\n2. second\n\n1) third\n2) fourth\n1 plain\n2 plain",
     );
-    expect(isListLine("1.")).toBe(true);
-    expect(isListLine("1)")).toBe(true);
+    expect(isListLine("1.")).toBe(false);
+    expect(isListLine("1)")).toBe(false);
+    expect(isListLine("1. ")).toBe(true);
+    expect(isListLine("1) ")).toBe(true);
+    expect(isListLine("1.text")).toBe(false);
+    expect(isListLine("1. text")).toBe(true);
     expect(isListLine("1")).toBe(false);
   });
 
@@ -204,4 +208,19 @@ describe("Obsidian-style ordered lists", () => {
     expect(guides).toHaveLength(2);
     expect(guides.every((range) => range.from === range.to)).toBe(true);
   });
+
+  it("draws an indentation guide beside plain text indented with Tab or 4 spaces", () => {
+    const doc = "Plain text\n    123123\n        456456";
+    const state = EditorState.create({ doc, extensions: [markdown()] });
+    const result = buildDecorationSets(state, [{ from: 0, to: doc.length }]);
+    const guides = decorationRanges(result.decorations).filter((range) =>
+      range.decoration.spec.class?.includes("cm-marknote-nested-list-line"),
+    );
+    expect(guides).toHaveLength(2);
+    expect(guides[0].from).toBe(11); // start of "    123123"
+    expect(guides[0].decoration.spec.class).toContain("cm-marknote-nested-list-indent-4");
+    expect(guides[1].from).toBe(22); // start of "        456456"
+    expect(guides[1].decoration.spec.class).toContain("cm-marknote-nested-list-indent-8");
+  });
 });
+

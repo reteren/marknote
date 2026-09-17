@@ -1,10 +1,27 @@
 import { syntaxTree } from "@codemirror/language";
 import type { EditorState } from "@codemirror/state";
-import { Decoration, EditorView, type KeyBinding } from "@codemirror/view";
+import { Decoration, EditorView, WidgetType, type KeyBinding } from "@codemirror/view";
 import type { SyntaxNode } from "@lezer/common";
 import type { BlockBuilder } from "./types";
+import {
+  addTableRow,
+  addTableColumn,
+  moveTableRow,
+  moveTableColumn,
+  parseMarkdownTable,
+  formatMarkdownTable,
+  type TableAlignment,
+} from "../tableOperations";
 
-type TableAlignment = "left" | "center" | "right";
+export {
+  addTableRow,
+  addTableColumn,
+  moveTableRow,
+  moveTableColumn,
+  parseMarkdownTable,
+  formatMarkdownTable,
+  type TableAlignment,
+};
 
 type TableCellInfo = {
   node: SyntaxNode;
@@ -52,11 +69,9 @@ function separatorAlignments(state: EditorState, delimiter: SyntaxNode, columnCo
   return Array.from({ length: columnCount }, (_, column) => alignmentFor(withoutTrailing[column] ?? ""));
 }
 
-function cellWidth(state: EditorState, cell: SyntaxNode): number {
+function cellWidth(state: EditorState, cell: SyntaxNode, isHeader = false): number {
   const content = state.doc.sliceString(cell.from, cell.to).trim();
-  // Ширина хранится CSS-переменной, а класс отвечает только за выравнивание.
-  // Это оставляет исходный Markdown неизменным и выравнивает строки визуально.
-  return Math.max(6, Array.from(content).length + 4);
+  return Math.max(8, Array.from(content).length + (isHeader ? 6 : 2));
 }
 
 function addTableCell(
@@ -124,12 +139,285 @@ function hideRowDelimitersAndGaps(
   }
 }
 
+function findEnclosingTable(view: EditorView, position: number): SyntaxNode | null {
+  const tree = syntaxTree(view.state);
+  const safePos = Math.max(0, Math.min(position, view.state.doc.length));
+  let node: SyntaxNode | null = tree.resolve(safePos, 1);
+  while (node && node.name !== "Table") node = node.parent;
+  if (!node) {
+    node = tree.resolve(safePos, -1);
+    while (node && node.name !== "Table") node = node.parent;
+  }
+  return node;
+}
+
+/** Виджет кнопки «Добавить строку снизу» */
+export class TableAddRowWidget extends WidgetType {
+  constructor(readonly tableFrom: number) {
+    super();
+  }
+
+  eq(other: WidgetType): boolean {
+    return other instanceof TableAddRowWidget && other.tableFrom === this.tableFrom;
+  }
+
+  toDOM(view: EditorView): HTMLElement {
+    const container = document.createElement("div");
+    container.className = "cm-marknote-table-add-row-bar";
+
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "cm-marknote-table-btn cm-marknote-table-add-row-btn";
+    btn.title = "Добавить строку снизу";
+    btn.setAttribute("aria-label", "Добавить строку снизу");
+
+    const icon = document.createElement("span");
+    icon.className = "cm-marknote-table-btn-icon";
+    icon.textContent = "+";
+    btn.appendChild(icon);
+
+    const label = document.createElement("span");
+    label.className = "cm-marknote-table-btn-label";
+    label.textContent = "Добавить строку снизу";
+    btn.appendChild(label);
+
+    btn.addEventListener("mousedown", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const table = findEnclosingTable(view, this.tableFrom);
+      if (!table) return;
+      const text = view.state.doc.sliceString(table.from, table.to);
+      const updated = addTableRow(text);
+      view.dispatch({
+        changes: { from: table.from, to: table.to, insert: updated },
+      });
+    });
+
+    container.appendChild(btn);
+    return container;
+  }
+}
+
+/** Виджет кнопки «Добавить столбец справа» */
+export class TableAddColWidget extends WidgetType {
+  constructor(readonly tableFrom: number) {
+    super();
+  }
+
+  eq(other: WidgetType): boolean {
+    return other instanceof TableAddColWidget && other.tableFrom === this.tableFrom;
+  }
+
+  toDOM(view: EditorView): HTMLElement {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "cm-marknote-table-btn cm-marknote-table-add-col-btn";
+    btn.title = "Добавить столбец справа";
+    btn.setAttribute("aria-label", "Добавить столбец справа");
+    btn.textContent = "+";
+
+    btn.addEventListener("mousedown", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const table = findEnclosingTable(view, this.tableFrom);
+      if (!table) return;
+      const text = view.state.doc.sliceString(table.from, table.to);
+      const updated = addTableColumn(text);
+      view.dispatch({
+        changes: { from: table.from, to: table.to, insert: updated },
+      });
+    });
+
+    return btn;
+  }
+}
+
+/** Виджет ручки перемещения строки */
+export class TableRowControlWidget extends WidgetType {
+  constructor(
+    readonly tableFrom: number,
+    readonly rowIndex: number,
+    readonly totalRows: number,
+  ) {
+    super();
+  }
+
+  eq(other: WidgetType): boolean {
+    return (
+      other instanceof TableRowControlWidget &&
+      other.tableFrom === this.tableFrom &&
+      other.rowIndex === this.rowIndex &&
+      other.totalRows === this.totalRows
+    );
+  }
+
+  toDOM(view: EditorView): HTMLElement {
+    const container = document.createElement("span");
+    container.className = "cm-marknote-table-row-controls";
+
+    if (this.rowIndex > 0) {
+      const upBtn = document.createElement("button");
+      upBtn.type = "button";
+      upBtn.className = "cm-marknote-table-move-btn cm-marknote-table-move-up";
+      upBtn.title = "Переместить строку вверх";
+      upBtn.setAttribute("aria-label", "Переместить строку вверх");
+      upBtn.textContent = "▲";
+      upBtn.addEventListener("mousedown", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const table = findEnclosingTable(view, this.tableFrom);
+        if (!table) return;
+        const text = view.state.doc.sliceString(table.from, table.to);
+        const updated = moveTableRow(text, this.rowIndex, this.rowIndex - 1);
+        view.dispatch({
+          changes: { from: table.from, to: table.to, insert: updated },
+        });
+      });
+      container.appendChild(upBtn);
+    } else {
+      const ph = document.createElement("span");
+      ph.className = "cm-marknote-table-btn-placeholder";
+      container.appendChild(ph);
+    }
+
+    const grip = document.createElement("span");
+    grip.className = "cm-marknote-table-grip cm-marknote-table-row-grip";
+    grip.textContent = "⠿";
+    grip.title = "Переместить строку";
+    container.appendChild(grip);
+
+    if (this.rowIndex < this.totalRows - 1) {
+      const downBtn = document.createElement("button");
+      downBtn.type = "button";
+      downBtn.className = "cm-marknote-table-move-btn cm-marknote-table-move-down";
+      downBtn.title = "Переместить строку вниз";
+      downBtn.setAttribute("aria-label", "Переместить строку вниз");
+      downBtn.textContent = "▼";
+      downBtn.addEventListener("mousedown", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const table = findEnclosingTable(view, this.tableFrom);
+        if (!table) return;
+        const text = view.state.doc.sliceString(table.from, table.to);
+        const updated = moveTableRow(text, this.rowIndex, this.rowIndex + 1);
+        view.dispatch({
+          changes: { from: table.from, to: table.to, insert: updated },
+        });
+      });
+      container.appendChild(downBtn);
+    } else {
+      const ph = document.createElement("span");
+      ph.className = "cm-marknote-table-btn-placeholder";
+      container.appendChild(ph);
+    }
+
+    return container;
+  }
+}
+
+/** Спейсер для выравнивания шапки с ручками строк */
+export class TableColSpacerWidget extends WidgetType {
+  eq(): boolean {
+    return true;
+  }
+
+  toDOM(): HTMLElement {
+    const el = document.createElement("span");
+    el.className = "cm-marknote-table-header-spacer";
+    return el;
+  }
+}
+
+/** Виджет ручки перемещения столбца */
+export class TableColControlWidget extends WidgetType {
+  constructor(
+    readonly tableFrom: number,
+    readonly colIndex: number,
+    readonly totalCols: number,
+  ) {
+    super();
+  }
+
+  eq(other: WidgetType): boolean {
+    return (
+      other instanceof TableColControlWidget &&
+      other.tableFrom === this.tableFrom &&
+      other.colIndex === this.colIndex &&
+      other.totalCols === this.totalCols
+    );
+  }
+
+  toDOM(view: EditorView): HTMLElement {
+    const container = document.createElement("span");
+    container.className = "cm-marknote-table-col-controls";
+
+    if (this.colIndex > 0) {
+      const leftBtn = document.createElement("button");
+      leftBtn.type = "button";
+      leftBtn.className = "cm-marknote-table-move-btn cm-marknote-table-move-left";
+      leftBtn.title = "Переместить столбец влево";
+      leftBtn.setAttribute("aria-label", "Переместить столбец влево");
+      leftBtn.textContent = "◀";
+      leftBtn.addEventListener("mousedown", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const table = findEnclosingTable(view, this.tableFrom);
+        if (!table) return;
+        const text = view.state.doc.sliceString(table.from, table.to);
+        const updated = moveTableColumn(text, this.colIndex, this.colIndex - 1);
+        view.dispatch({
+          changes: { from: table.from, to: table.to, insert: updated },
+        });
+      });
+      container.appendChild(leftBtn);
+    } else {
+      const ph = document.createElement("span");
+      ph.className = "cm-marknote-table-btn-placeholder";
+      container.appendChild(ph);
+    }
+
+    const grip = document.createElement("span");
+    grip.className = "cm-marknote-table-grip cm-marknote-table-col-grip";
+    grip.textContent = "⋯";
+    grip.title = "Переместить столбец";
+    container.appendChild(grip);
+
+    if (this.colIndex < this.totalCols - 1) {
+      const rightBtn = document.createElement("button");
+      rightBtn.type = "button";
+      rightBtn.className = "cm-marknote-table-move-btn cm-marknote-table-move-right";
+      rightBtn.title = "Переместить столбец вправо";
+      rightBtn.setAttribute("aria-label", "Переместить столбец вправо");
+      rightBtn.textContent = "▶";
+      rightBtn.addEventListener("mousedown", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const table = findEnclosingTable(view, this.tableFrom);
+        if (!table) return;
+        const text = view.state.doc.sliceString(table.from, table.to);
+        const updated = moveTableColumn(text, this.colIndex, this.colIndex + 1);
+        view.dispatch({
+          changes: { from: table.from, to: table.to, insert: updated },
+        });
+      });
+      container.appendChild(rightBtn);
+    } else {
+      const ph = document.createElement("span");
+      ph.className = "cm-marknote-table-btn-placeholder";
+      container.appendChild(ph);
+    }
+
+    return container;
+  }
+}
+
 /** Построитель визуального вида GFM-таблиц. */
 export const tableBuilder: BlockBuilder = (ctx) => {
   if (ctx.node.name !== "Table") return false;
-  if (ctx.active) return true;
 
   const rows = tableRows(ctx.node);
+  const bodyRows = rows.filter((r) => r.name === "TableRow");
+  const headerRow = rows.find((r) => r.name === "TableHeader");
   const cells = tableCells(ctx.node);
   const columnCount = Math.max(0, ...rows.map((row) => rowCells(row).length));
   const delimiter = ctx.node.getChild("TableDelimiter");
@@ -137,9 +425,15 @@ export const tableBuilder: BlockBuilder = (ctx) => {
     ? separatorAlignments(ctx.view.state, delimiter, columnCount)
     : Array.from({ length: columnCount }, () => "left" as TableAlignment);
   const widths = Array.from({ length: columnCount }, (_, column) =>
-    Math.max(6, ...cells.filter((cell) => cell.column === column).map((cell) => cellWidth(ctx.view.state, cell.node))),
+    Math.max(
+      8,
+      ...cells
+        .filter((cell) => cell.column === column)
+        .map((cell) => cellWidth(ctx.view.state, cell.node, cell.node.parent?.name === "TableHeader")),
+    ),
   );
 
+  let bodyRowIdx = 0;
   for (const row of rows) {
     const isHeader = row.name === "TableHeader";
     const rCells = rowCells(row);
@@ -148,13 +442,64 @@ export const tableBuilder: BlockBuilder = (ctx) => {
     // Скрываем вертикальные черты и пробелы разметки в строке
     hideRowDelimitersAndGaps(ctx, row, rDelimiters, rCells);
 
+    // Для строки шапки добавляем спейсер для выравнивания с ручками строк
+    if (isHeader) {
+      ctx.add({
+        from: row.from,
+        to: row.from,
+        value: Decoration.widget({
+          widget: new TableColSpacerWidget(),
+          side: -1,
+        }),
+      });
+    }
+
+    // Для строк данных добавляем ручку перемещения строки
+    if (!isHeader) {
+      const curIdx = bodyRowIdx++;
+      ctx.add({
+        from: row.from,
+        to: row.from,
+        value: Decoration.widget({
+          widget: new TableRowControlWidget(ctx.node.from, curIdx, bodyRows.length),
+          side: -1,
+        }),
+      });
+    }
+
     // Оформляем ячейки строки
     for (const cell of rCells) {
       const col = getCellColumn(row, cell);
+
+      // Для шапки добавляем ручку перемещения столбца внутри ячейки
+      if (isHeader) {
+        ctx.add({
+          from: cell.from,
+          to: cell.from,
+          value: Decoration.widget({
+            widget: new TableColControlWidget(ctx.node.from, col, columnCount),
+            side: 1,
+          }),
+        });
+      }
+
       addTableCell(ctx, cell, col, alignments[col] ?? "left", widths[col] ?? 6, isHeader);
     }
 
-    // Класс строки для запрета переноса строк сетки
+    // В шапке добавляем кнопку добавления столбца справа
+    if (isHeader) {
+      ctx.add({
+        from: row.to,
+        to: row.to,
+        value: Decoration.widget({
+          widget: new TableAddColWidget(ctx.node.from),
+          side: 1,
+        }),
+      });
+    }
+
+    // Класс строки для запрета переноса строк сетки (на последней строке разрешаем перенос для кнопки добавления строки)
+    const isLastRow = row === rows[rows.length - 1];
     const lineStart = ctx.view.state.doc.lineAt(row.from).from;
     ctx.add({
       from: lineStart,
@@ -162,6 +507,8 @@ export const tableBuilder: BlockBuilder = (ctx) => {
       value: Decoration.line({
         class: isHeader
           ? "cm-marknote-table-row cm-marknote-table-header-row"
+          : isLastRow
+          ? "cm-marknote-table-row cm-marknote-table-last-row"
           : "cm-marknote-table-row",
       }),
     });
@@ -180,6 +527,18 @@ export const tableBuilder: BlockBuilder = (ctx) => {
       value: Decoration.line({ class: "cm-marknote-table-delimiter-row" }),
     });
   }
+
+  // Внизу таблицы добавляем кнопку добавления строки снизу
+  const lastRow = rows[rows.length - 1];
+  const addRowPos = lastRow ? lastRow.to : ctx.node.to;
+  ctx.add({
+    from: addRowPos,
+    to: addRowPos,
+    value: Decoration.widget({
+      widget: new TableAddRowWidget(ctx.node.from),
+      side: 1,
+    }),
+  });
 
   return true;
 };
@@ -206,7 +565,26 @@ function moveToCell(view: EditorView, backward: boolean): boolean {
   const target = backward
     ? cells[current - 1]
     : cells[current + 1];
-  if (!target) return false;
+  if (!target) {
+    if (!backward && current === cells.length - 1) {
+      // Tab на последней ячейке добавляет новую строку
+      const text = view.state.doc.sliceString(table.from, table.to);
+      const updated = addTableRow(text);
+      view.dispatch({
+        changes: { from: table.from, to: table.to, insert: updated },
+      });
+      const newTable = enclosingTable(view, range.head);
+      if (newTable) {
+        const newCells = cellsInTable(newTable);
+        const nextCell = newCells[current + 1];
+        if (nextCell) {
+          view.dispatch({ selection: { anchor: nextCell.from } });
+        }
+      }
+      return true;
+    }
+    return false;
+  }
 
   view.dispatch({
     selection: {
@@ -222,10 +600,15 @@ export const tableKeymap: KeyBinding[] = [
   { key: "Shift-Tab", run: (view) => moveToCell(view, true) },
 ];
 
-/** CSS для ячеек и разделителей таблицы. */
+/** CSS для ячеек, разделителей, ручек и кнопок таблицы. */
 export const tableTheme = EditorView.theme({
   ".cm-line.cm-marknote-table-row": {
     whiteSpace: "nowrap",
+    display: "flex",
+    alignItems: "center",
+  },
+  ".cm-line.cm-marknote-table-last-row": {
+    flexWrap: "wrap",
   },
   ".cm-line.cm-marknote-table-delimiter-row": {
     display: "none",
@@ -267,4 +650,128 @@ export const tableTheme = EditorView.theme({
   ".cm-marknote-table-align-left": { textAlign: "left" },
   ".cm-marknote-table-align-center": { textAlign: "center" },
   ".cm-marknote-table-align-right": { textAlign: "right" },
+
+  // Стили кнопок добавления строк и столбцов
+  ".cm-marknote-table-add-row-bar": {
+    display: "flex",
+    alignItems: "center",
+    padding: "4px 0 8px 0",
+    width: "100%",
+  },
+  ".cm-marknote-table-btn": {
+    fontFamily: "var(--font-interface, inherit)",
+    cursor: "pointer",
+    userSelect: "none",
+    transition: "all 0.15s ease-in-out",
+  },
+  ".cm-marknote-table-add-row-btn": {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "6px",
+    background: "var(--bg-secondary)",
+    border: "1px dashed var(--bg-modifier-border)",
+    borderRadius: "4px",
+    color: "var(--text-muted)",
+    fontSize: "12px",
+    padding: "3px 12px",
+  },
+  ".cm-marknote-table-add-row-btn:hover": {
+    background: "var(--bg-modifier-hover)",
+    borderColor: "var(--interactive-accent)",
+    color: "var(--text-normal)",
+  },
+  ".cm-marknote-table-btn-icon": {
+    fontWeight: "bold",
+    fontSize: "14px",
+    lineHeight: "1",
+  },
+  ".cm-marknote-table-btn-label": {
+    fontSize: "12px",
+  },
+  ".cm-marknote-table-add-col-btn": {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: "26px",
+    height: "26px",
+    marginLeft: "6px",
+    verticalAlign: "middle",
+    background: "var(--bg-secondary)",
+    border: "1px dashed var(--bg-modifier-border)",
+    borderRadius: "4px",
+    color: "var(--text-muted)",
+    fontSize: "15px",
+    fontWeight: "bold",
+    lineHeight: "1",
+  },
+  ".cm-marknote-table-add-col-btn:hover": {
+    background: "var(--bg-modifier-hover)",
+    borderColor: "var(--interactive-accent)",
+    color: "var(--text-normal)",
+  },
+
+  // Стили ручек и кнопок перемещения строк и столбцов
+  ".cm-marknote-table-row-controls": {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "flex-end",
+    gap: "1px",
+    width: "30px",
+    minWidth: "30px",
+    flexShrink: "0",
+    marginRight: "4px",
+    verticalAlign: "middle",
+    userSelect: "none",
+    opacity: "0.85",
+  },
+  ".cm-marknote-table-header-spacer": {
+    display: "inline-block",
+    width: "30px",
+    minWidth: "30px",
+    flexShrink: "0",
+    marginRight: "4px",
+  },
+  ".cm-marknote-table-btn-placeholder": {
+    display: "inline-block",
+    width: "11px",
+    height: "11px",
+  },
+  ".cm-marknote-table-col-controls": {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "1px",
+    marginRight: "4px",
+    verticalAlign: "middle",
+    userSelect: "none",
+    opacity: "0.85",
+  },
+  ".cm-marknote-table-row-controls:hover, .cm-marknote-table-col-controls:hover": {
+    opacity: "1",
+  },
+  ".cm-marknote-table-grip": {
+    color: "var(--text-faint)",
+    fontSize: "11px",
+    cursor: "grab",
+    padding: "0 1px",
+  },
+  ".cm-marknote-table-move-btn": {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: "11px",
+    height: "11px",
+    padding: "0",
+    border: "none",
+    background: "transparent",
+    color: "var(--text-muted)",
+    fontSize: "7px",
+    lineHeight: "1",
+    cursor: "pointer",
+    borderRadius: "2px",
+    transition: "all 0.1s ease",
+  },
+  ".cm-marknote-table-move-btn:hover": {
+    background: "var(--bg-modifier-hover)",
+    color: "var(--text-normal)",
+  },
 });

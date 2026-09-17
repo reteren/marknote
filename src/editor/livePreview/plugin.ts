@@ -9,7 +9,7 @@ import {
 } from "@codemirror/view";
 import type { SyntaxNode } from "@lezer/common";
 import { isNodeActive } from "./isNodeActive";
-import { decorationsForBlockNode } from "./blocks";
+import { decorationsForBlockNode, indentationGuideForLine } from "./blocks";
 import { codeBlockBuilder } from "./codeBlocks";
 import { tableBuilder } from "./tables";
 import { calloutBuilder } from "./callouts";
@@ -58,8 +58,9 @@ function isBlockNode(node: SyntaxNode) {
 
 function asRanges(specs: DecorationSpec[]) {
   const valid = specs
-    .filter((spec) => spec.to > spec.from || spec.line)
+    .filter((spec) => spec.to > spec.from || spec.line || Boolean(spec.decoration.spec.widget))
     .map((spec) => ({ from: spec.from, to: spec.to, value: spec.decoration }));
+  valid.sort((a, b) => a.from - b.from);
   return Decoration.set(valid, true);
 }
 
@@ -97,7 +98,10 @@ function runBlockBuilders(
         from: range.from,
         to: range.to,
         decoration: range.value,
-        line: range.from === range.to && Boolean((range.value as unknown as { point?: boolean }).point),
+        line:
+          range.from === range.to &&
+          Boolean((range.value as unknown as { point?: boolean }).point) &&
+          !Boolean((range.value.spec as { widget?: unknown }).widget),
       }),
     atomic: (range) => atomicRanges.push(range),
   };
@@ -133,6 +137,13 @@ function buildDecorationSetsInternal(
   const seen = new Set<string>();
   const tree = syntaxTree(state);
   for (const visible of visibleRanges) {
+    const startLine = state.doc.lineAt(visible.from).number;
+    const endLine = state.doc.lineAt(visible.to).number;
+    for (let number = startLine; number <= endLine; number += 1) {
+      const spec = indentationGuideForLine(state.doc.line(number));
+      if (spec) specs.push(spec);
+    }
+
     tree.iterate({
       from: visible.from,
       to: visible.to,

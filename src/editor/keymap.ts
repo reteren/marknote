@@ -9,7 +9,7 @@ import {
   undo,
   insertNewlineAndIndent,
 } from "@codemirror/commands";
-import { ChangeSet, EditorState, Transaction, type Extension } from "@codemirror/state";
+import { ChangeSet, EditorSelection, EditorState, Transaction, type Extension } from "@codemirror/state";
 import { keymap, EditorView, type Command, type KeyBinding } from "@codemirror/view";
 import { insertNewlineContinueMarkup } from "@codemirror/lang-markdown";
 
@@ -51,8 +51,8 @@ function currentLine(state: EditorState, position: number): string {
   return state.doc.lineAt(position).text;
 }
 
-const orderedListLine = /^(?<indent>[ \t]*)(?<number>\d+)(?<delimiter>[.)])(?:(?<spacing>[ \t]+)(?<content>.*))?$/u;
-const bulletListLine = /^(?<indent>[ \t]*)(?<marker>[-+*])(?:(?<spacing>[ \t]+)(?<content>.*))?$/u;
+const orderedListLine = /^(?<indent>[ \t]*)(?<number>\d+)(?<delimiter>[.)])(?<spacing>[ \t]+)(?<content>.*)$/u;
+const bulletListLine = /^(?<indent>[ \t]*)(?<marker>[-+*])(?<spacing>[ \t]+)(?<content>.*)$/u;
 const headingLine = /^[ \t]{0,3}#{1,6}(?:[ \t]+|$)/u;
 const fenceLine = /^[ \t]{0,3}(?<marker>`{3,}|~{3,})/u;
 
@@ -415,20 +415,26 @@ function outdent(view: EditorView, isInTable: (state: EditorState, position: num
 }
 
 function continueMarkdownList(view: EditorView): boolean {
-  const handled = insertNewlineContinueMarkup(view) || insertNewlineAndIndent(view);
+  const range = view.state.selection.main;
+  const line = view.state.doc.lineAt(range.head);
+  const isUnspacedList = /^[ \t]*(?:\d+[.)]|[-+*])(?![ \t])/u.test(line.text);
+  const handled = (!isUnspacedList && insertNewlineContinueMarkup(view)) || insertNewlineAndIndent(view);
   if (handled) normalizeViewOrderedLists(view);
   return handled;
 }
 
-/** Shift+Enter inserts a plain line break and deliberately skips list markup. */
+/** Shift+Enter inserts a line break and preserves current line indentation without list markup. */
 function softBreak(view: EditorView): boolean {
-  const range = view.state.selection.main;
-  view.dispatch({
-    changes: { from: range.from, to: range.to, insert: "\n" },
-    selection: { anchor: range.from + 1 },
-    userEvent: "input",
-    scrollIntoView: true,
+  const tr = view.state.changeByRange((range) => {
+    const line = view.state.doc.lineAt(range.from);
+    const indent = line.text.slice(0, range.from - line.from).match(/^[ \t]*/u)?.[0] ?? "";
+    const insert = "\n" + indent;
+    return {
+      changes: { from: range.from, to: range.to, insert },
+      range: EditorSelection.cursor(range.from + insert.length),
+    };
   });
+  view.dispatch(tr, { userEvent: "input", scrollIntoView: true });
   return true;
 }
 

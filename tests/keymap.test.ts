@@ -95,6 +95,62 @@ describe("MarkNote editor keymap", () => {
     expect(exited.state.doc.toString()).toBe("");
   });
 
+  it("Shift+Enter preserves current line indentation and does not create indent on unspaced 1.", () => {
+    const indented = makeView("    hello", 9);
+    expect(run("Shift-Enter", indented)).toBe(true);
+    expect(indented.state.doc.toString()).toBe("    hello\n    ");
+    expect(indented.state.selection.main.head).toBe(14);
+
+    const unspaced = makeView("1.", 2);
+    expect(run("Shift-Enter", unspaced)).toBe(true);
+    expect(unspaced.state.doc.toString()).toBe("1.\n");
+    expect(unspaced.state.selection.main.head).toBe(3);
+  });
+
+  it("activates list continuation on Enter only after space, preserving indentation on unspaced markers", () => {
+    // 1. without space: Enter inserts newline without deleting 1. or continuing as list
+    const unspacedNumber = makeView("1.", 2);
+    expect(run("Enter", unspacedNumber)).toBe(true);
+    expect(unspacedNumber.state.doc.toString()).toBe("1.\n");
+    expect(unspacedNumber.state.selection.main.head).toBe(3);
+
+    // 1.foo without space: normal newline
+    const unspacedText = makeView("1.foo", 5);
+    expect(run("Enter", unspacedText)).toBe(true);
+    expect(unspacedText.state.doc.toString()).toBe("1.foo\n");
+    expect(unspacedText.state.selection.main.head).toBe(6);
+
+    // 1. with space: continues numbering
+    const spaced = makeView("1. item", 7);
+    expect(run("Enter", spaced)).toBe(true);
+    expect(spaced.state.doc.toString()).toBe("1. item\n2. ");
+    expect(spaced.state.selection.main.head).toBe(11);
+
+    // Indented plain paragraph: preserves indentation
+    const indentedParagraph = makeView("    indented paragraph", 22);
+    expect(run("Enter", indentedParagraph)).toBe(true);
+    expect(indentedParagraph.state.doc.toString()).toBe("    indented paragraph\n    ");
+    expect(indentedParagraph.state.selection.main.head).toBe(27);
+
+    // Indented unspaced 1.: preserves indentation without list continuation
+    const indentedUnspaced = makeView("    1.", 6);
+    expect(run("Enter", indentedUnspaced)).toBe(true);
+    expect(indentedUnspaced.state.doc.toString()).toBe("    1.\n    ");
+    expect(indentedUnspaced.state.selection.main.head).toBe(11);
+  });
+
+  it("applies Tab list indent only after delimiter space", () => {
+    const unspaced = makeView("1.", 2);
+    expect(run("Tab", unspaced)).toBe(true);
+    expect(unspaced.state.doc.toString()).toBe("1.    ");
+    expect(unspaced.state.selection.main.head).toBe(6);
+
+    const spaced = makeView("1. item", 7);
+    expect(run("Tab", spaced)).toBe(true);
+    expect(spaced.state.doc.toString()).toBe("    1. item");
+    expect(spaced.state.selection.main.head).toBe(11);
+  });
+
   it("keeps Tab available to tableKeymap inside a Markdown table", () => {
     const view = makeView("| Name | Value |\n| --- | --- |\n| A | B |", 29);
     expect(isTableContext(view.state, view.state.selection.main.head)).toBe(true);
