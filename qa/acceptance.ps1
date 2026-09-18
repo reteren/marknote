@@ -178,6 +178,15 @@ $script:CurrentRun = 0
 $script:JournalPath = [IO.Path]::GetFullPath($JournalPath)
 $script:Results = @()
 $script:Utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+. (Join-Path $PSScriptRoot "Assert-NoForeignMarkNote.ps1")
+Assert-NoForeignMarkNote -BinaryPath $BinaryPath
+$script:ConfigDir = Join-Path ([IO.Path]::GetTempPath()) ("marknote-acceptance-" + $script:SessionId)
+New-Item -ItemType Directory -Path $script:ConfigDir -Force | Out-Null
+
+# Every process launched by this acceptance script uses isolated settings,
+# recent files, and window state instead of the owner's AppData directory.
+$script:PreviousConfigDir = $env:MARKNOTE_CONFIG_DIR
+$env:MARKNOTE_CONFIG_DIR = $script:ConfigDir
 
 $journalParent = Split-Path -Parent $script:JournalPath
 if (-not [string]::IsNullOrWhiteSpace($journalParent) -and -not (Test-Path -LiteralPath $journalParent)) {
@@ -194,8 +203,17 @@ try {
     Write-Warning "UI Automation/System.Windows.Forms недоступны: автоматическая проверка поиска TC-10 будет FAIL"
 }
 
+# Only the binary under test is counted and stopped. The owner may have the
+# installed MarkNote open at the same time; that window is not ours to close.
+function Get-TestMarkNoteProcesses {
+    $target = [IO.Path]::GetFullPath($BinaryPath)
+    @(Get-Process -Name marknote -ErrorAction SilentlyContinue | Where-Object {
+        try { [string]::Equals($_.Path, $target, [StringComparison]::OrdinalIgnoreCase) } catch { $false }
+    })
+}
+
 function Get-MarkNoteState {
-    $processes = @(Get-Process -Name marknote -ErrorAction SilentlyContinue)
+    $processes = @(Get-TestMarkNoteProcesses)
     $processInfo = @($processes | ForEach-Object {
         [PSCustomObject]@{
             Id = $_.Id
@@ -208,7 +226,7 @@ function Get-MarkNoteState {
     $rawWindows = @([MarkNote.Acceptance.Native]::EnumerateWindows())
     foreach ($window in $rawWindows) {
         $process = Get-Process -Id ([int]$window.ProcessId) -ErrorAction SilentlyContinue
-        if (-not $process -or $process.ProcessName -ne "marknote") { continue }
+        if (-not $process -or @($processes | Where-Object { $_.Id -eq $process.Id }).Count -eq 0) { continue }
         $windows += [PSCustomObject]@{
             Handle = $window.Handle
             ProcessId = [int]$window.ProcessId
@@ -280,7 +298,7 @@ function Stop-MarkNoteProcesses {
 
     $stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
     do {
-        $running = @(Get-Process -Name marknote -ErrorAction SilentlyContinue)
+        $running = @(Get-TestMarkNoteProcesses)
         if ($running.Count -eq 0) { break }
         foreach ($process in $running) {
             Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
@@ -291,7 +309,7 @@ function Stop-MarkNoteProcesses {
     } while ($stopwatch.Elapsed.TotalSeconds -lt $TimeoutSec)
     $stopwatch.Stop()
     Start-Sleep -Milliseconds 150
-    return (@(Get-Process -Name marknote -ErrorAction SilentlyContinue).Count -eq 0)
+    return (@(Get-TestMarkNoteProcesses).Count -eq 0)
 }
 
 function Wait-Until {
@@ -885,6 +903,7 @@ Write-Host "Папка fixtures:   $FixturesDir"
 Write-Host "Папка снимков:    $ShotsDir"
 Write-Host "JSONL-журнал:     $script:JournalPath"
 Write-Host "Сессия:           $script:SessionId"
+Write-Host "Изолированный конфиг: $script:ConfigDir"
 Write-Host ""
 
 for ($run = 1; $run -le $Runs; $run += 1) {
@@ -907,6 +926,13 @@ for ($run = 1; $run -le $Runs; $run += 1) {
 }
 
 [void](Stop-MarkNoteProcesses)
+$configDirForCleanup = $script:ConfigDir
+if ($null -eq $script:PreviousConfigDir) {
+    Remove-Item Env:MARKNOTE_CONFIG_DIR -ErrorAction SilentlyContinue
+} else {
+    $env:MARKNOTE_CONFIG_DIR = $script:PreviousConfigDir
+}
+Remove-Item -LiteralPath $configDirForCleanup -Recurse -Force -ErrorAction SilentlyContinue
 $allResults = @($script:Results)
 $totalRuns = $Runs
 $testsPerRun = 9
@@ -946,7 +972,7 @@ $summary = [ordered]@{
 [IO.File]::WriteAllText($summaryPath, ($summary | ConvertTo-Json -Depth 10), $script:Utf8NoBom)
 Write-Host "Подробный журнал:  $script:JournalPath"
 Write-Host "Сводка JSON:       $summaryPath"
-Write-Host "Остаток процессов marknote: $(@(Get-Process -Name marknote -ErrorAction SilentlyContinue).Count)"
+Write-Host "Остаток процессов marknote: $(@(Get-TestMarkNoteProcesses).Count)"
 
 if ($failedTests -gt 0 -or $fullyGreen -ne $totalRuns) {
     Write-Host "Приёмка завершена со статусом FAILED." -ForegroundColor Red

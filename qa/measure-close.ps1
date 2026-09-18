@@ -26,6 +26,10 @@ if ([string]::IsNullOrWhiteSpace($BinaryPath)) {
 if ([string]::IsNullOrWhiteSpace($FixturePath)) {
     $FixturePath = Join-Path $PSScriptRoot "..\fixtures\lf.md"
 }
+. (Join-Path $PSScriptRoot "Assert-NoForeignMarkNote.ps1")
+Assert-NoForeignMarkNote -BinaryPath $BinaryPath
+$script:ConfigDir = Join-Path ([IO.Path]::GetTempPath()) ("marknote-close-" + [Guid]::NewGuid().ToString("N"))
+New-Item -ItemType Directory -Path $script:ConfigDir -Force | Out-Null
 
 Add-Type @'
 using System;
@@ -92,6 +96,7 @@ function Start-MarkNote {
     $info.UseShellExecute = $false
     $info.CreateNoWindow = $true
     $info.WorkingDirectory = Split-Path -Parent $info.FileName
+    $info.Environment["MARKNOTE_CONFIG_DIR"] = $script:ConfigDir
     if ($Scenario -ne "empty") {
         $info.Arguments = '"' + [IO.Path]::GetFullPath($FixturePath).Replace('"', '\"') + '"'
     }
@@ -181,3 +186,4 @@ for ($run = 1; $run -le $Runs; $run++) {
 
 $results | Format-Table -AutoSize
 $results | ConvertTo-Json -Compress
+Remove-Item -LiteralPath $script:ConfigDir -Recurse -Force -ErrorAction SilentlyContinue

@@ -22,6 +22,12 @@
 
 .EXAMPLE
     .\qa\screenshot.ps1 -ProcessId 12345 -OutputPath "qa/shots/window.png"
+
+SAFETY NOTE
+    This script currently captures an already-running process and does not
+    launch MarkNote. If a future capture flow starts the program here, it must
+    create a unique temporary directory and set MARKNOTE_CONFIG_DIR before
+    Start-Process so the owner's AppData is never used by a test run.
 #>
 
 [CmdletBinding()]

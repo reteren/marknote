@@ -1,6 +1,7 @@
 mod atomic_write;
 mod binary;
 mod commands;
+mod config_dir;
 mod encoding;
 mod formats;
 mod messages;
@@ -26,11 +27,8 @@ pub fn run() {
         }))
         .plugin(settings_aware_window_state_plugin())
         .setup(|app| {
-            let recent_files_path = app
-                .path()
-                .app_config_dir()
-                .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?
-                .join("recent-files.json");
+            let config_dir = config_dir::for_app(app.handle())?;
+            let recent_files_path = config_dir.join("recent-files.json");
             let recent_files = recent_files::RecentFilesState::load(&recent_files_path)
                 .unwrap_or_else(|error| {
                     eprintln!("Could not load recent files; using defaults: {error}");
@@ -96,11 +94,8 @@ impl<R: Runtime> Plugin<R> for SettingsAwareWindowState<R> {
         app: &tauri::AppHandle<R>,
         config: serde_json::Value,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        let settings_path = app
-            .path()
-            .app_config_dir()
-            .map_err(|error| -> Box<dyn std::error::Error> { Box::new(error) })?
-            .join("settings.json");
+        let config_dir = config_dir::for_app(app)?;
+        let settings_path = config_dir.join("settings.json");
         let settings = settings::SettingsState::load(&settings_path).unwrap_or_else(|error| {
             eprintln!("Could not load settings; using defaults: {error}");
             settings::SettingsState::defaults(settings_path)
@@ -115,6 +110,15 @@ impl<R: Runtime> Plugin<R> for SettingsAwareWindowState<R> {
 
         let mut inner = tauri_plugin_window_state::Builder::default()
             .with_state_flags(state_flags)
+            // The plugin itself always starts from app_config_dir(), but its
+            // filename is joined with that path. An absolute filename makes
+            // the plugin's state follow MARKNOTE_CONFIG_DIR as well.
+            .with_filename(
+                config_dir
+                    .join(".window-state.json")
+                    .to_string_lossy()
+                    .into_owned(),
+            )
             .build();
         inner.initialize(app, config)?;
         self.inner = Some(inner);

@@ -21,10 +21,20 @@ namespace Win32 {
 
 $exePath = "C:\marknote\src-tauri\target\release\marknote.exe"
 $fixturePath = "C:\marknote\fixtures\table_empty.md"
+. (Join-Path $PSScriptRoot "Assert-NoForeignMarkNote.ps1")
+Assert-NoForeignMarkNote -BinaryPath $exePath
+$configDir = Join-Path ([IO.Path]::GetTempPath()) ("marknote-shots-" + [Guid]::NewGuid().ToString("N"))
+New-Item -ItemType Directory -Path $configDir -Force | Out-Null
+
+# Never let a screenshot run read or write the owner's real AppData settings.
+# Start-Process inherits this environment variable.
+$previousConfigDir = $env:MARKNOTE_CONFIG_DIR
+$env:MARKNOTE_CONFIG_DIR = $configDir
 
 Write-Host "Starting marknote..."
-$proc = Start-Process -FilePath $exePath -ArgumentList $fixturePath -PassThru
-Start-Sleep -Seconds 4
+try {
+    $proc = Start-Process -FilePath $exePath -ArgumentList $fixturePath -PassThru
+    Start-Sleep -Seconds 4
 
 # Move mouse to far away corner
 [System.Windows.Forms.Cursor]::Position = New-Object System.Drawing.Point(50, 50)
@@ -61,6 +71,14 @@ if ($targetWin) {
     & C:\marknote\qa\screenshot.ps1 -ProcessId $winPid -TitleFilter "table_empty" -OutputPath "C:\marknote\qa\shots\w119_table_hover.png"
 }
 
-Write-Host "Stopping process..."
-Stop-Process -Name marknote -Force -ErrorAction SilentlyContinue
+    Write-Host "Stopping process..."
+    Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
+} finally {
+    if ($null -eq $previousConfigDir) {
+        Remove-Item Env:MARKNOTE_CONFIG_DIR -ErrorAction SilentlyContinue
+    } else {
+        $env:MARKNOTE_CONFIG_DIR = $previousConfigDir
+    }
+    Remove-Item -LiteralPath $configDir -Recurse -Force -ErrorAction SilentlyContinue
+}
 Write-Host "Complete."
