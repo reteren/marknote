@@ -14,6 +14,7 @@
     type SettingsPatch,
   } from "../state/settings.svelte";
   import type { FormatCapabilities } from "../state/formats.svelte";
+  import { recentFilesState } from "../state/recentFiles.svelte";
   import SettingRow from "./settings/SettingRow.svelte";
   import packageInfo from "../../package.json";
 
@@ -136,8 +137,17 @@
   let resetError = $state(false);
   let copiedVersion = $state(false);
   let settingsFileError = $state(false);
+  let recentFilesCleared = $state(false);
   let zoomView = $derived(editorView);
   let matchingSections = $state<Section[]>(sections);
+
+  async function handleClearRecentFiles(): Promise<void> {
+    await recentFilesState.clear();
+    recentFilesCleared = true;
+    setTimeout(() => {
+      recentFilesCleared = false;
+    }, 2000);
+  }
 
   function settingValue(path: string): unknown {
     return path.split(".").reduce<unknown>((value, part) => (value as Record<string, unknown>)[part], settingsState.settings as unknown);
@@ -459,26 +469,50 @@
                   {#if descriptor.unit}<span>{t(descriptor.unit)}</span>{/if}
                 </label>
               {:else if descriptor.type === "select"}
-                <select
-                  value={String(settingValue(descriptor.path))}
-                  aria-label={t(descriptor.titleKey)}
-                  onchange={(event) => updateDescriptor(descriptor, event.currentTarget.value)}
-                >
-                  {#if descriptor.path === "files.newDocumentFormat"}
-                    {#each creatableFormats as format (format.id)}
-                      <option value={format.id}>{formatLabel(format.id, format.label)}</option>
-                    {/each}
-                    {#if creatableFormats.length === 0}<option value="markdown">{formatLabel("markdown", "Markdown")}</option>{/if}
-                  {:else}
-                    {#each descriptor.options ?? [] as option (option.value)}
-                      <option value={option.value}>
-                        {descriptor.path === "spellcheck.language" ? spellLanguageLabel(option) : t(option.labelKey)}
-                      </option>
-                    {/each}
+                {#if descriptor.path === "windows.startupAction"}
+                  <div class="startup-action-control">
+                    <select
+                      value={String(settingValue(descriptor.path))}
+                      aria-label={t(descriptor.titleKey)}
+                      onchange={(event) => updateDescriptor(descriptor, event.currentTarget.value)}
+                    >
+                      {#each descriptor.options ?? [] as option (option.value)}
+                        <option value={option.value}>
+                          {t(option.labelKey)}
+                        </option>
+                      {/each}
+                    </select>
+                    <button
+                      type="button"
+                      class="clear-recent-button"
+                      onclick={handleClearRecentFiles}
+                      title={t("settings.windows.clearRecentFiles")}
+                    >
+                      {recentFilesCleared ? t("settings.windows.recentFilesCleared") : t("settings.windows.clearRecentFiles")}
+                    </button>
+                  </div>
+                {:else}
+                  <select
+                    value={String(settingValue(descriptor.path))}
+                    aria-label={t(descriptor.titleKey)}
+                    onchange={(event) => updateDescriptor(descriptor, event.currentTarget.value)}
+                  >
+                    {#if descriptor.path === "files.newDocumentFormat"}
+                      {#each creatableFormats as format (format.id)}
+                        <option value={format.id}>{formatLabel(format.id, format.label)}</option>
+                      {/each}
+                      {#if creatableFormats.length === 0}<option value="markdown">{formatLabel("markdown", "Markdown")}</option>{/if}
+                    {:else}
+                      {#each descriptor.options ?? [] as option (option.value)}
+                        <option value={option.value}>
+                          {descriptor.path === "spellcheck.language" ? spellLanguageLabel(option) : t(option.labelKey)}
+                        </option>
+                      {/each}
+                    {/if}
+                  </select>
+                  {#if descriptor.path === "spellcheck.language" && dictionaryMissing(settingsState.settings.spellcheck.language)}
+                    <p class="dictionary-note">{t("settings.spelling.dictionaryUnavailable")}</p>
                   {/if}
-                </select>
-                {#if descriptor.path === "spellcheck.language" && dictionaryMissing(settingsState.settings.spellcheck.language)}
-                  <p class="dictionary-note">{t("settings.spelling.dictionaryUnavailable")}</p>
                 {/if}
               {:else}
                 <span class="fixed-value">{t(descriptor.display ?? "settings.value.fixed")}</span>
@@ -604,6 +638,9 @@
   .numeric-control span, .fixed-value { color: var(--text-muted); white-space: nowrap; }
   .settings-content select { width: 100%; max-width: 260px; }
   .dictionary-note { margin: 5px 0 0; color: var(--text-muted); font-size: 11px; }
+  .startup-action-control { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  .startup-action-control select { flex: 1 1 140px; min-width: 120px; }
+  .clear-recent-button { flex: 0 0 auto; font-size: 12px; white-space: nowrap; }
 
   .settings-footer {
     display: flex;

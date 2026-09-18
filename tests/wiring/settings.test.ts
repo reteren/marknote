@@ -35,11 +35,6 @@ export const SETTINGS_EXCEPTIONS: readonly SettingException[] = [
       "Обрабатывается в Rust: src-tauri/src/lib.rs (window_state_flags настраивает tauri_plugin_window_state)",
   },
   {
-    path: "windows.startupAction",
-    reason:
-      "Не применяется: значение startScreen работает само собой, а recentFiles неприменимо — списка недавних файлов в программе нет. Решение владельца: завести список или убрать настройку",
-  },
-  {
     path: "windows.raiseExistingWindow",
     reason:
       "Обрабатывается в Rust: src-tauri/src/windows.rs (existing_window_label поднимает уже открытое окно вместо создания дубликата)",

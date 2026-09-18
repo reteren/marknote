@@ -17,6 +17,7 @@ use crate::{
     atomic_write, binary, encoding as text_encoding,
     formats::{self, FormatCapabilities},
     messages::UserMessage,
+    recent_files::{RecentFileEntry, RecentFilesState},
     settings::{Settings, SettingsError, SettingsState},
     spellcheck,
     windows::{self, AppState, FileSnapshot},
@@ -113,6 +114,7 @@ pub struct NewDocument {
 pub fn open_file(
     window: WebviewWindow,
     state: State<'_, AppState>,
+    recent_files: State<'_, RecentFilesState>,
     path: String,
 ) -> Result<OpenedFile, CommandError> {
     let input_path = PathBuf::from(&path);
@@ -132,6 +134,7 @@ pub fn open_file(
     state.watcher.watch(window.label(), &canonical);
     state.track_file(&canonical, window.label());
     state.remember_file_snapshot(&canonical, &metadata);
+    let _ = recent_files.add(&canonical.to_string_lossy());
 
     Ok(OpenedFile {
         path: canonical.to_string_lossy().into_owned(),
@@ -184,6 +187,7 @@ pub fn respond_to_close(
 pub fn save_file(
     window: WebviewWindow,
     state: State<'_, AppState>,
+    recent_files: State<'_, RecentFilesState>,
     path: String,
     text: String,
     encoding: String,
@@ -220,6 +224,7 @@ pub fn save_file(
     if let Ok(metadata) = fs::metadata(&path) {
         state.remember_file_snapshot(&path, &metadata);
     }
+    let _ = recent_files.add(&path.to_string_lossy());
 
     Ok(save_result(path, format))
 }
@@ -230,6 +235,7 @@ pub async fn save_as(
     app: AppHandle,
     window: WebviewWindow,
     state: State<'_, AppState>,
+    recent_files: State<'_, RecentFilesState>,
     text: String,
     formatId: String,
     suggestedName: String,
@@ -283,6 +289,7 @@ pub async fn save_as(
     if let Ok(metadata) = fs::metadata(&path) {
         state.remember_file_snapshot(&path, &metadata);
     }
+    let _ = recent_files.add(&path.to_string_lossy());
 
     Ok(Some(save_result(path, format)))
 }
@@ -478,6 +485,38 @@ pub fn reveal_settings_file(state: State<'_, SettingsState>) -> Result<(), Comma
     {
         let _ = state;
         Err(CommandError::Message(UserMessage::ExplorerWindowsOnly))
+    }
+}
+
+#[tauri::command]
+pub fn get_recent_files(
+    state: State<'_, RecentFilesState>,
+) -> Result<Vec<RecentFileEntry>, CommandError> {
+    state.get_and_prune().map_err(map_recent_files_error)
+}
+
+#[tauri::command]
+pub fn add_recent_file(
+    state: State<'_, RecentFilesState>,
+    path: String,
+) -> Result<(), CommandError> {
+    state.add(&path).map_err(map_recent_files_error)
+}
+
+#[tauri::command]
+pub fn clear_recent_files(state: State<'_, RecentFilesState>) -> Result<(), CommandError> {
+    state.clear().map_err(map_recent_files_error)
+}
+
+fn map_recent_files_error(error: crate::recent_files::RecentFilesError) -> CommandError {
+    match error {
+        crate::recent_files::RecentFilesError::Io(error) => CommandError::Io(error),
+        crate::recent_files::RecentFilesError::AtomicWrite(error) => {
+            CommandError::AtomicWrite(error)
+        }
+        crate::recent_files::RecentFilesError::Json(error) => {
+            CommandError::AtomicWrite(anyhow::anyhow!(error))
+        }
     }
 }
 

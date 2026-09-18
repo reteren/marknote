@@ -4,6 +4,7 @@ mod commands;
 mod encoding;
 mod formats;
 mod messages;
+mod recent_files;
 mod settings;
 mod spellcheck;
 mod watcher;
@@ -25,6 +26,17 @@ pub fn run() {
         }))
         .plugin(settings_aware_window_state_plugin())
         .setup(|app| {
+            let recent_files_path = app
+                .path()
+                .app_config_dir()
+                .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?
+                .join("recent-files.json");
+            let recent_files = recent_files::RecentFilesState::load(&recent_files_path)
+                .unwrap_or_else(|error| {
+                    eprintln!("Could not load recent files; using defaults: {error}");
+                    recent_files::RecentFilesState::defaults(recent_files_path)
+                });
+            app.manage(recent_files);
             app.manage(windows::AppState::new(app.handle().clone()));
             Ok(windows::initialize(app)?)
         })
@@ -51,6 +63,9 @@ pub fn run() {
             commands::save_settings,
             commands::reset_settings,
             commands::reveal_settings_file,
+            commands::get_recent_files,
+            commands::add_recent_file,
+            commands::clear_recent_files,
         ])
         .run(tauri::generate_context!())
         .unwrap_or_else(|error| {

@@ -1143,6 +1143,7 @@ import { EditorView, type EditorView as EditorViewType } from "@codemirror/view"
         formats={formatsState.items}
         onSelect={(format) => void createNewDocument(format)}
         onOpenFile={() => void pickFile()}
+        onOpenPath={(path) => void openFile(path)}
         onDrop={handleDrop}
       />
     {/if}
