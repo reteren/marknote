@@ -140,4 +140,42 @@ describe("MarkNote Markdown extensions", () => {
     expect(result.decorations.size).toBe(0);
     expect(result.atomicRanges.size).toBe(0);
   });
+
+  it("отображает чекбокс даже когда курсор находится на той же строке в тексте задачи", () => {
+    const task = "- [ ] Hello world";
+    const taskMark = nodes(task, "TaskMarker")[0];
+    expect(taskMark).toBeDefined();
+
+    // 1. Курсор в тексте задачи ("Hello") — чекбокс остаётся отрендеренным виджетом
+    const cursorInText = 10; // "- [ ] Hell|o world"
+    const resultCursor = buildDecorationSets(state(task, cursorInText), [{ from: 0, to: task.length }]);
+    expect(hasWidget(resultCursor.decorations, taskMark.from, taskMark.to, "CheckboxWidget")).toBe(true);
+
+    // 2. Сразу после маркера на позиции 6 ("- [ ] |Hello world") — чекбокс отображается
+    const resultAfterMarker = buildDecorationSets(state(task, 6), [{ from: 0, to: task.length }]);
+    expect(hasWidget(resultAfterMarker.decorations, taskMark.from, taskMark.to, "CheckboxWidget")).toBe(true);
+
+    // 3. Даже при режиме revealMarkup: "line" чекбокс остаётся виджетом, когда курсор в тексте
+    const resultLineMode = buildDecorationSets(state(task, cursorInText), [{ from: 0, to: task.length }], { revealMarkup: "line" });
+    expect(hasWidget(resultLineMode.decorations, taskMark.from, taskMark.to, "CheckboxWidget")).toBe(true);
+
+    // 4. При выделении внутри диапазона маркера ([ ]) разметка раскрывается в текст
+    const selectInside = EditorState.create({
+      doc: task,
+      selection: EditorSelection.single(3), // курсор внутри "[ ]" между "[" и " "
+      extensions: language.extension,
+    });
+    const resultInside = buildDecorationSets(selectInside, [{ from: 0, to: task.length }]);
+    expect(hasWidget(resultInside.decorations, taskMark.from, taskMark.to, "CheckboxWidget")).toBe(false);
+
+    // 5. При стирании символов (удаление пробела после ']' -> "- [ ]") узел TaskMarker отсутствует и остаётся чистый текст
+    const erasedSpace = "- [ ]";
+    expect(nodes(erasedSpace, "TaskMarker")).toHaveLength(0);
+    const resultErased = buildDecorationSets(state(erasedSpace, 3), [{ from: 0, to: erasedSpace.length }]);
+    expect(hasWidget(resultErased.decorations, 2, 5, "CheckboxWidget")).toBe(false);
+
+    // При удалении скобок -> "- [ hello" TaskMarker отсутствует
+    const erasedBrackets = "- [ hello";
+    expect(nodes(erasedBrackets, "TaskMarker")).toHaveLength(0);
+  });
 });

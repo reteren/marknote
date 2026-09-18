@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { EditorSelection } from "@codemirror/state";
 import { redo, deleteLine, moveLineDown, moveLineUp, selectAll, undo } from "@codemirror/commands";
 import type { Command, EditorView } from "@codemirror/view";
 import { searchCommands } from "../editor/search";
@@ -239,23 +240,109 @@ function formatHeading(view: EditorView, level: number): ActionResult {
   });
 }
 
-function applyNumberedLines(view: EditorView, update: (text: string, index: number) => string): ActionResult {
-  const changes: { from: number; to: number; insert: string }[] = [];
+type LineUpdateResult = string | { text: string; prefixLength: number };
+
+function applyNumberedLines(
+  view: EditorView,
+  update: (text: string, index: number) => LineUpdateResult,
+): ActionResult {
   const seen = new Set<number>();
-  let lineIndex = 0;
+  const lineNumbers: number[] = [];
   for (const range of view.state.selection.ranges) {
     const first = view.state.doc.lineAt(range.from).number;
     const last = view.state.doc.lineAt(range.to).number;
     for (let number = first; number <= last; number += 1) {
-      if (seen.has(number)) continue;
-      seen.add(number);
-      const line = view.state.doc.line(number);
-      const next = update(line.text, lineIndex);
-      lineIndex += 1;
-      if (next !== line.text) changes.push({ from: line.from, to: line.to, insert: next });
+      if (!seen.has(number)) {
+        seen.add(number);
+        lineNumbers.push(number);
+      }
     }
   }
-  if (changes.length) view.dispatch({ changes });
+  lineNumbers.sort((a, b) => a - b);
+
+  type LineInfo = {
+    originalFrom: number;
+    originalLength: number;
+    oldPrefixLength: number;
+    newPrefixLength: number;
+    nextText: string;
+    newLineFrom: number;
+  };
+
+  const lineInfos = new Map<number, LineInfo>();
+  const changes: { from: number; to: number; insert: string }[] = [];
+  let cumulativeDelta = 0;
+
+  for (let lineIndex = 0; lineIndex < lineNumbers.length; lineIndex += 1) {
+    const number = lineNumbers[lineIndex];
+    const line = view.state.doc.line(number);
+    const res = update(line.text, lineIndex);
+    const nextText = typeof res === "string" ? res : res.text;
+
+    const listMatch = line.text.match(/^(\s*)(?:[-+*]\s+\[[ xX]\]\s+|[-+*]\s+|\d+[.)]\s+)/u);
+    const indentMatch = line.text.match(/^\s*/)?.[0] ?? "";
+    const oldPrefixLength = listMatch ? listMatch[0].length : indentMatch.length;
+    const newPrefixLength = typeof res === "string" ? oldPrefixLength : res.prefixLength;
+
+    const newLineFrom = line.from + cumulativeDelta;
+    lineInfos.set(number, {
+      originalFrom: line.from,
+      originalLength: line.length,
+      oldPrefixLength,
+      newPrefixLength,
+      nextText,
+      newLineFrom,
+    });
+
+    if (nextText !== line.text) {
+      changes.push({ from: line.from, to: line.to, insert: nextText });
+    }
+    cumulativeDelta += nextText.length - line.length;
+  }
+
+  const mapPosition = (pos: number): number => {
+    const line = view.state.doc.lineAt(pos);
+    const info = lineInfos.get(line.number);
+    if (!info) {
+      let delta = 0;
+      for (const num of lineNumbers) {
+        if (num < line.number) {
+          const li = lineInfos.get(num)!;
+          delta += li.nextText.length - li.originalLength;
+        }
+      }
+      return pos + delta;
+    }
+
+    const offset = pos - info.originalFrom;
+    if (offset <= info.oldPrefixLength) {
+      return info.newLineFrom + info.newPrefixLength;
+    }
+    return info.newLineFrom + info.newPrefixLength + (offset - info.oldPrefixLength);
+  };
+
+  const newRanges = view.state.selection.ranges.map((range) => {
+    const anchor = mapPosition(range.anchor);
+    const head = mapPosition(range.head);
+    return EditorSelection.range(anchor, head);
+  });
+  const newSelection = EditorSelection.create(newRanges, view.state.selection.mainIndex);
+
+  const hasChanges = changes.length > 0;
+  const selectionChanged = !newSelection.eq(view.state.selection);
+
+  if (hasChanges || selectionChanged) {
+    view.dispatch({
+      ...(hasChanges ? { changes } : {}),
+      ...(selectionChanged ? { selection: newSelection } : {}),
+      scrollIntoView: true,
+    });
+  }
+
+  if (typeof view.focus === "function") {
+    view.focus();
+  }
+
   return true;
 }
 
@@ -264,7 +351,8 @@ function formatBulletList(view: EditorView): ActionResult {
     const indent = text.match(/^\s*/)?.[0] ?? "";
     const listMatch = text.match(/^(\s*)(?:[-+*]\s+\[[ xX]\]\s+|[-+*]\s+|\d+[.)]\s+)/u);
     const body = listMatch ? text.slice(listMatch[0].length) : text.slice(indent.length);
-    return `${indent}- ${body}`;
+    const prefix = `${indent}- `;
+    return { text: `${prefix}${body}`, prefixLength: prefix.length };
   });
 }
 
@@ -273,7 +361,8 @@ function formatOrderedList(view: EditorView): ActionResult {
     const indent = text.match(/^\s*/)?.[0] ?? "";
     const listMatch = text.match(/^(\s*)(?:[-+*]\s+\[[ xX]\]\s+|[-+*]\s+|\d+[.)]\s+)/u);
     const body = listMatch ? text.slice(listMatch[0].length) : text.slice(indent.length);
-    return `${indent}${index + 1}. ${body}`;
+    const prefix = `${indent}${index + 1}. `;
+    return { text: `${prefix}${body}`, prefixLength: prefix.length };
   });
 }
 
@@ -282,7 +371,8 @@ function formatTaskList(view: EditorView): ActionResult {
     const indent = text.match(/^\s*/)?.[0] ?? "";
     const listMatch = text.match(/^(\s*)(?:[-+*]\s+\[[ xX]\]\s+|[-+*]\s+|\d+[.)]\s+)/u);
     const body = listMatch ? text.slice(listMatch[0].length) : text.slice(indent.length);
-    return `${indent}- [ ] ${body}`;
+    const prefix = `${indent}- [ ] `;
+    return { text: `${prefix}${body}`, prefixLength: prefix.length };
   });
 }
 
@@ -702,7 +792,7 @@ export function createActions(dependencies: ActionsDependencies = {}): AppAction
   const taskList = editCommand(formatTaskList);
   const clearFormatting = editCommand(clearFormattingInView);
   const table = editCommand((view) => {
-    insertAtSelection(view, "| Column 1 | Column 2 |\n| --- | --- |\n|  |  |\n", { anchor: view.state.selection.main.from + 2 });
+    insertAtSelection(view, "|  |  |\n| --- | --- |\n|  |  |\n", { anchor: view.state.selection.main.from + 2 });
     return true;
   });
   const callout = editCommand((view) => {

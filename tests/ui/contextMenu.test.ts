@@ -249,12 +249,9 @@ describe("ContextMenu user interactions", () => {
     const insertTrigger = Array.from(document.querySelectorAll<HTMLButtonElement>(".submenu-trigger"))
       .find((button) => button.textContent?.includes(t("contextMenu.insert")))!;
     await fireEvent.mouseEnter(insertTrigger);
-    await settle();
     await fireEvent.click(Array.from(document.querySelectorAll<HTMLButtonElement>(`[role="menu"][aria-label="${t("contextMenu.insert")}"] button`))
       .find((button) => button.textContent?.includes(t("format.table")))!);
-    await settle();
-    expect(document.querySelector<HTMLElement>(".cm-content")?.textContent).toContain("Column 1");
-    expect(documentState.text).toContain("Column 1");
+    expect(documentState.text).toBe("|  |  |\n| --- | --- |\n|  |  |\n");
   });
 
   it("routes horizontal rule action into the document with proper separation and renders hr widget", async () => {

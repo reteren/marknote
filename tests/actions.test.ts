@@ -404,7 +404,7 @@ describe("application actions", () => {
     const tableView = viewFor("");
     const tableActions = makeActions(tableView);
     await tableActions.run("format.table");
-    expect(tableView.state.doc.toString()).toContain("| Column 1 | Column 2 |");
+    expect(tableView.state.doc.toString()).toBe("|  |  |\n| --- | --- |\n|  |  |\n");
 
     const calloutView = viewFor("");
     const calloutActions = makeActions(calloutView);
@@ -415,5 +415,52 @@ describe("application actions", () => {
     const mathActions = makeActions(mathView);
     await mathActions.run("format.mathBlock");
     expect(mathView.state.doc.toString()).toContain("$$");
+  });
+
+  it("positions cursor immediately after marker when inserting task, bullet, and ordered lists", async () => {
+    // 1. Task list on empty line
+    const taskView = viewFor("", { anchor: 0 });
+    const taskActions = makeActions(taskView);
+    await taskActions.run("format.taskList");
+    expect(taskView.state.doc.toString()).toBe("- [ ] ");
+    expect(taskView.state.selection.main.from).toBe(6);
+    expect(taskView.state.selection.main.to).toBe(6);
+
+    // 2. Bullet list on empty line
+    const bulletView = viewFor("", { anchor: 0 });
+    const bulletActions = makeActions(bulletView);
+    await bulletActions.run("format.list");
+    expect(bulletView.state.doc.toString()).toBe("- ");
+    expect(bulletView.state.selection.main.from).toBe(2);
+    expect(bulletView.state.selection.main.to).toBe(2);
+
+    // 3. Ordered list on empty line
+    const orderedView = viewFor("", { anchor: 0 });
+    const orderedActions = makeActions(orderedView);
+    await orderedActions.run("format.orderedList");
+    expect(orderedView.state.doc.toString()).toBe("1. ");
+    expect(orderedView.state.selection.main.from).toBe(3);
+    expect(orderedView.state.selection.main.to).toBe(3);
+
+    // 4. Task list with cursor at column 0 of existing line
+    const textTaskView = viewFor("Buy milk", { anchor: 0 });
+    const textTaskActions = makeActions(textTaskView);
+    await textTaskActions.run("format.taskList");
+    expect(textTaskView.state.doc.toString()).toBe("- [ ] Buy milk");
+    expect(textTaskView.state.selection.main.from).toBe(6);
+    expect(textTaskView.state.selection.main.to).toBe(6);
+
+    // 5. Task list with cursor already inside body text keeps relative offset
+    const offsetView = viewFor("Buy milk", { anchor: 4 }); // "Buy |milk"
+    const offsetActions = makeActions(offsetView);
+    await offsetActions.run("format.taskList");
+    expect(offsetView.state.doc.toString()).toBe("- [ ] Buy milk");
+    expect(offsetView.state.selection.main.from).toBe(10); // "- [ ] Buy |milk"
+
+    // 6. Focus is called on view
+    let focused = false;
+    (taskView as unknown as { focus: () => void }).focus = () => { focused = true; };
+    await taskActions.run("format.taskList");
+    expect(focused).toBe(true);
   });
 });

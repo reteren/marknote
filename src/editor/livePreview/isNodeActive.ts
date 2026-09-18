@@ -13,7 +13,6 @@ const lineScopedNames = new Set([
   "SetextHeading2",
   "HeaderMark",
   "ListMark",
-  "TaskMarker",
   "QuoteMark",
   "Callout",
   "CalloutMark",
@@ -36,6 +35,10 @@ export function nodeActivationRange(node: SyntaxNode, doc?: Text): { from: numbe
  * - "cursor": узел раскрывается только когда курсор пересекает его зону;
  * - "line": раскрывается вся строка с курсором;
  * - "never": разметка не прячется вообще (узел всегда активен).
+ *
+ * Исключение: TaskMarker остаётся виджетом-чекбоксом даже когда курсор находится
+ * на той же строке в тексте задачи, и раскрывается в исходный текст только при
+ * взаимодействии с самим маркером.
  */
 export function isNodeActive(
   node: SyntaxNode,
@@ -44,6 +47,14 @@ export function isNodeActive(
   mode: MarkupRevealMode = "cursor",
 ): boolean {
   if (mode === "never") return true;
+
+  if (node.name === "TaskMarker") {
+    return selection.ranges.some((selectionRange) =>
+      selectionRange.empty
+        ? selectionRange.from > node.from && selectionRange.from < node.to
+        : selectionRange.from < node.to && selectionRange.to > node.from,
+    );
+  }
 
   const range = mode === "line" && doc
     ? {

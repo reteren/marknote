@@ -69,14 +69,72 @@ function separatorAlignments(state: EditorState, delimiter: SyntaxNode, columnCo
   return Array.from({ length: columnCount }, (_, column) => alignmentFor(withoutTrailing[column] ?? ""));
 }
 
-function cellWidth(state: EditorState, cell: SyntaxNode, isHeader = false): number {
-  const content = state.doc.sliceString(cell.from, cell.to).trim();
-  return Math.max(8, Array.from(content).length + (isHeader ? 6 : 2));
+interface RowCellItem {
+  col: number;
+  from: number;
+  to: number;
+  node: SyntaxNode | null;
+}
+
+function getRowCellItems(row: SyntaxNode): RowCellItem[] {
+  const delimiters = row.getChildren("TableDelimiter").sort((a, b) => a.from - b.from);
+  const textNodes = row.getChildren("TableCell").sort((a, b) => a.from - b.from);
+  const items: RowCellItem[] = [];
+
+  if (delimiters.length === 0) {
+    textNodes.forEach((node, col) => {
+      items.push({ col, from: node.from, to: node.to, node });
+    });
+    return items;
+  }
+
+  let colIdx = 0;
+  if (delimiters[0].from > row.from) {
+    const from = row.from;
+    const to = delimiters[0].from;
+    const node = textNodes.find((tn) => tn.from >= from && tn.to <= to) ?? null;
+    items.push({ col: colIdx++, from: node ? node.from : from, to: node ? node.to : to, node });
+  }
+
+  for (let i = 0; i < delimiters.length - 1; i++) {
+    const from = delimiters[i].to;
+    const to = delimiters[i + 1].from;
+    const node = textNodes.find((tn) => tn.from >= from && tn.to <= to) ?? null;
+    items.push({ col: colIdx++, from: node ? node.from : from, to: node ? node.to : to, node });
+  }
+
+  const lastDelim = delimiters[delimiters.length - 1];
+  if (lastDelim.to < row.to) {
+    const from = lastDelim.to;
+    const to = row.to;
+    const node = textNodes.find((tn) => tn.from >= from && tn.to <= to) ?? null;
+    items.push({ col: colIdx++, from: node ? node.from : from, to: node ? node.to : to, node });
+  }
+
+  return items;
+}
+
+export class TableEmptyCellWidget extends WidgetType {
+  constructor(readonly className: string, readonly width: number) {
+    super();
+  }
+
+  eq(other: WidgetType): boolean {
+    return other instanceof TableEmptyCellWidget && other.className === this.className && other.width === this.width;
+  }
+
+  toDOM(): HTMLElement {
+    const span = document.createElement("span");
+    span.className = this.className;
+    span.style.setProperty("--marknote-table-column-width", `${this.width}px`);
+    return span;
+  }
 }
 
 function addTableCell(
   ctx: Parameters<BlockBuilder>[0],
-  cell: SyntaxNode,
+  from: number,
+  to: number,
   column: number,
   alignment: TableAlignment,
   width: number,
@@ -88,18 +146,27 @@ function addTableCell(
     `cm-marknote-table-column-${column + 1}`,
     `cm-marknote-table-align-${alignment}`,
   ].join(" ");
-  const value = Decoration.mark({
-    class: className,
-    attributes: { style: `--marknote-table-column-width: ${width}ch` },
-  });
-  if (cell.to > cell.from) ctx.add({ from: cell.from, to: cell.to, value });
+
+  if (to > from) {
+    const value = Decoration.mark({
+      class: className,
+      attributes: { style: `--marknote-table-column-width: ${width}px` },
+    });
+    ctx.add({ from, to, value });
+  } else {
+    const value = Decoration.widget({
+      widget: new TableEmptyCellWidget(className, width),
+      side: 1,
+    });
+    ctx.add({ from, to: from, value });
+  }
 }
 
 function hideRowDelimitersAndGaps(
   ctx: Parameters<BlockBuilder>[0],
   row: SyntaxNode,
   delimiters: SyntaxNode[],
-  cells: SyntaxNode[],
+  cellItems: RowCellItem[],
 ) {
   const hide = Decoration.replace({});
 
@@ -111,30 +178,24 @@ function hideRowDelimitersAndGaps(
     }
   }
 
-  // 2. Скрываем промежутки между разделителями и ячейками (пробелы разметки),
-  // чтобы inline-block ячейки образовывали ровную сетку без паразитных сдвигов.
-  const items = [
-    ...delimiters.map((d) => ({ from: d.from, to: d.to })),
-    ...cells.map((c) => ({ from: c.from, to: c.to })),
-  ].sort((a, b) => a.from - b.from);
+  // 2. Скрываем промежутки между разделителями и текстом ячейки (пробелы разметки)
+  if (delimiters.length > 1) {
+    for (let i = 0; i < delimiters.length - 1; i++) {
+      const dLeft = delimiters[i];
+      const dRight = delimiters[i + 1];
+      const item = cellItems[i];
+      if (!item) continue;
 
-  if (items.length > 0) {
-    if (items[0].from > row.from) {
-      ctx.add({ from: row.from, to: items[0].from, value: hide });
-      ctx.atomic({ from: row.from, to: items[0].from, value: hide });
-    }
-    for (let i = 0; i < items.length - 1; i++) {
-      const cur = items[i];
-      const next = items[i + 1];
-      if (next.from > cur.to) {
-        ctx.add({ from: cur.to, to: next.from, value: hide });
-        ctx.atomic({ from: cur.to, to: next.from, value: hide });
+      if (item.node) {
+        if (item.from > dLeft.to) {
+          ctx.add({ from: dLeft.to, to: item.from, value: hide });
+          ctx.atomic({ from: dLeft.to, to: item.from, value: hide });
+        }
+        if (dRight.from > item.to) {
+          ctx.add({ from: item.to, to: dRight.from, value: hide });
+          ctx.atomic({ from: item.to, to: dRight.from, value: hide });
+        }
       }
-    }
-    const last = items[items.length - 1];
-    if (row.to > last.to) {
-      ctx.add({ from: last.to, to: row.to, value: hide });
-      ctx.atomic({ from: last.to, to: row.to, value: hide });
     }
   }
 }
@@ -175,11 +236,6 @@ export class TableAddRowWidget extends WidgetType {
     icon.className = "cm-marknote-table-btn-icon";
     icon.textContent = "+";
     btn.appendChild(icon);
-
-    const label = document.createElement("span");
-    label.className = "cm-marknote-table-btn-label";
-    label.textContent = "Добавить строку снизу";
-    btn.appendChild(label);
 
     btn.addEventListener("mousedown", (e) => {
       e.preventDefault();
@@ -334,6 +390,7 @@ export class TableColControlWidget extends WidgetType {
     readonly tableFrom: number,
     readonly colIndex: number,
     readonly totalCols: number,
+    readonly width: number = 8,
   ) {
     super();
   }
@@ -343,13 +400,15 @@ export class TableColControlWidget extends WidgetType {
       other instanceof TableColControlWidget &&
       other.tableFrom === this.tableFrom &&
       other.colIndex === this.colIndex &&
-      other.totalCols === this.totalCols
+      other.totalCols === this.totalCols &&
+      other.width === this.width
     );
   }
 
   toDOM(view: EditorView): HTMLElement {
     const container = document.createElement("span");
     container.className = "cm-marknote-table-col-controls";
+    container.style.setProperty("--marknote-col-ctrl-width", `${this.width}px`);
 
     if (this.colIndex > 0) {
       const leftBtn = document.createElement("button");
@@ -417,32 +476,36 @@ export const tableBuilder: BlockBuilder = (ctx) => {
 
   const rows = tableRows(ctx.node);
   const bodyRows = rows.filter((r) => r.name === "TableRow");
-  const headerRow = rows.find((r) => r.name === "TableHeader");
-  const cells = tableCells(ctx.node);
-  const columnCount = Math.max(0, ...rows.map((row) => rowCells(row).length));
   const delimiter = ctx.node.getChild("TableDelimiter");
+
+  const rowCellList = rows.map((r) => getRowCellItems(r));
+  const columnCount = Math.max(2, ...rowCellList.map((cells) => cells.length));
   const alignments = delimiter
     ? separatorAlignments(ctx.view.state, delimiter, columnCount)
     : Array.from({ length: columnCount }, () => "left" as TableAlignment);
-  const widths = Array.from({ length: columnCount }, (_, column) =>
-    Math.max(
-      8,
-      ...cells
-        .filter((cell) => cell.column === column)
-        .map((cell) => cellWidth(ctx.view.state, cell.node, cell.node.parent?.name === "TableHeader")),
-    ),
-  );
+
+  const widths = Array.from({ length: columnCount }, (_, col) => {
+    const colCells = rowCellList.flatMap((cells) => cells.filter((c) => c.col === col));
+    const maxLen = colCells.reduce((max, cell) => {
+      const text = ctx.view.state.doc.sliceString(cell.from, cell.to).trim();
+      return Math.max(max, text.length);
+    }, 0);
+    // Use consistent pixel widths so font-weight differences between header (600) and body (400)
+    // do not cause column misalignment (which happens if using 'ch' units).
+    return Math.max(100, maxLen * 10 + 24);
+  });
 
   let bodyRowIdx = 0;
-  for (const row of rows) {
+  for (let rIdx = 0; rIdx < rows.length; rIdx++) {
+    const row = rows[rIdx];
     const isHeader = row.name === "TableHeader";
-    const rCells = rowCells(row);
+    const rCells = rowCellList[rIdx];
     const rDelimiters = row.getChildren("TableDelimiter").sort((a, b) => a.from - b.from);
 
     // Скрываем вертикальные черты и пробелы разметки в строке
     hideRowDelimitersAndGaps(ctx, row, rDelimiters, rCells);
 
-    // Для строки шапки добавляем спейсер для выравнивания с ручками строк
+    // Для строки шапки добавляем спейсер
     if (isHeader) {
       ctx.add({
         from: row.from,
@@ -469,21 +532,21 @@ export const tableBuilder: BlockBuilder = (ctx) => {
 
     // Оформляем ячейки строки
     for (const cell of rCells) {
-      const col = getCellColumn(row, cell);
+      const col = cell.col;
 
-      // Для шапки добавляем ручку перемещения столбца внутри ячейки
+      // Для шапки добавляем ручку перемещения столбца
       if (isHeader) {
         ctx.add({
           from: cell.from,
           to: cell.from,
           value: Decoration.widget({
-            widget: new TableColControlWidget(ctx.node.from, col, columnCount),
+            widget: new TableColControlWidget(ctx.node.from, col, columnCount, widths[col]),
             side: 1,
           }),
         });
       }
 
-      addTableCell(ctx, cell, col, alignments[col] ?? "left", widths[col] ?? 6, isHeader);
+      addTableCell(ctx, cell.from, cell.to, col, alignments[col] ?? "left", widths[col] ?? 8, isHeader);
     }
 
     // В шапке добавляем кнопку добавления столбца справа
@@ -493,12 +556,12 @@ export const tableBuilder: BlockBuilder = (ctx) => {
         to: row.to,
         value: Decoration.widget({
           widget: new TableAddColWidget(ctx.node.from),
-          side: 1,
+          side: -1,
         }),
       });
     }
 
-    // Класс строки для запрета переноса строк сетки (на последней строке разрешаем перенос для кнопки добавления строки)
+    // Класс строки
     const isLastRow = row === rows[rows.length - 1];
     const lineStart = ctx.view.state.doc.lineAt(row.from).from;
     ctx.add({
@@ -536,7 +599,7 @@ export const tableBuilder: BlockBuilder = (ctx) => {
     to: addRowPos,
     value: Decoration.widget({
       widget: new TableAddRowWidget(ctx.node.from),
-      side: 1,
+      side: -1,
     }),
   });
 
@@ -549,8 +612,12 @@ function enclosingTable(view: EditorView, position: number): SyntaxNode | null {
   return node;
 }
 
-function cellsInTable(table: SyntaxNode): SyntaxNode[] {
-  return tableCells(table).map(({ node }) => node);
+function cellsInTable(table: SyntaxNode): Array<{ from: number; to: number }> {
+  const rows = tableRows(table);
+  return rows.flatMap((row) => {
+    const items = getRowCellItems(row);
+    return items.map((item) => ({ from: item.from, to: item.to }));
+  });
 }
 
 function moveToCell(view: EditorView, backward: boolean): boolean {
@@ -605,7 +672,8 @@ export const tableTheme = EditorView.theme({
   ".cm-line.cm-marknote-table-row": {
     whiteSpace: "nowrap",
     display: "flex",
-    alignItems: "center",
+    alignItems: "stretch",
+    position: "relative",
   },
   ".cm-line.cm-marknote-table-last-row": {
     flexWrap: "wrap",
@@ -625,7 +693,8 @@ export const tableTheme = EditorView.theme({
     boxSizing: "border-box",
     width: "var(--marknote-table-column-width)",
     minWidth: "var(--marknote-table-column-width)",
-    padding: "4px 10px",
+    minHeight: "28px",
+    padding: "4px 8px",
     verticalAlign: "top",
     whiteSpace: "normal",
     wordBreak: "break-word",
@@ -645,18 +714,29 @@ export const tableTheme = EditorView.theme({
     backgroundColor: "var(--bg-secondary)",
     color: "var(--text-normal)",
     borderTop: "1px solid var(--bg-modifier-border)",
-    borderBottom: "2px solid var(--bg-modifier-border-hover)",
+    borderBottom: "1px solid var(--bg-modifier-border)",
   },
   ".cm-marknote-table-align-left": { textAlign: "left" },
   ".cm-marknote-table-align-center": { textAlign: "center" },
   ".cm-marknote-table-align-right": { textAlign: "right" },
 
-  // Стили кнопок добавления строк и столбцов
+  // Стили кнопок добавления строк и столбцов (HOVER ONLY)
   ".cm-marknote-table-add-row-bar": {
+    position: "absolute",
+    top: "100%",
+    left: "0",
+    width: "100%",
+    height: "22px",
     display: "flex",
     alignItems: "center",
-    padding: "4px 0 8px 0",
-    width: "100%",
+    justifyContent: "center",
+    opacity: "0",
+    pointerEvents: "auto",
+    transition: "opacity 0.15s ease-in-out",
+    zIndex: "10",
+  },
+  ".cm-line.cm-marknote-table-last-row:hover .cm-marknote-table-add-row-bar, .cm-marknote-table-add-row-bar:hover": {
+    opacity: "1",
   },
   ".cm-marknote-table-btn": {
     fontFamily: "var(--font-interface, inherit)",
@@ -667,13 +747,18 @@ export const tableTheme = EditorView.theme({
   ".cm-marknote-table-add-row-btn": {
     display: "inline-flex",
     alignItems: "center",
-    gap: "6px",
+    justifyContent: "center",
+    width: "20px",
+    height: "18px",
     background: "var(--bg-secondary)",
-    border: "1px dashed var(--bg-modifier-border)",
-    borderRadius: "4px",
+    border: "1px solid var(--bg-modifier-border)",
+    borderRadius: "3px",
     color: "var(--text-muted)",
     fontSize: "12px",
-    padding: "3px 12px",
+    fontWeight: "bold",
+    lineHeight: "1",
+    cursor: "pointer",
+    padding: "0",
   },
   ".cm-marknote-table-add-row-btn:hover": {
     background: "var(--bg-modifier-hover)",
@@ -682,27 +767,33 @@ export const tableTheme = EditorView.theme({
   },
   ".cm-marknote-table-btn-icon": {
     fontWeight: "bold",
-    fontSize: "14px",
+    fontSize: "13px",
     lineHeight: "1",
-  },
-  ".cm-marknote-table-btn-label": {
-    fontSize: "12px",
   },
   ".cm-marknote-table-add-col-btn": {
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
-    width: "26px",
-    height: "26px",
-    marginLeft: "6px",
-    verticalAlign: "middle",
+    width: "18px",
+    height: "18px",
+    marginLeft: "4px",
+    alignSelf: "center",
+    flexShrink: "0",
     background: "var(--bg-secondary)",
-    border: "1px dashed var(--bg-modifier-border)",
-    borderRadius: "4px",
+    border: "1px solid var(--bg-modifier-border)",
+    borderRadius: "3px",
     color: "var(--text-muted)",
-    fontSize: "15px",
+    fontSize: "12px",
     fontWeight: "bold",
     lineHeight: "1",
+    cursor: "pointer",
+    padding: "0",
+    opacity: "0",
+    pointerEvents: "auto",
+    transition: "opacity 0.15s ease-in-out, background-color 0.1s ease",
+  },
+  ".cm-line.cm-marknote-table-header-row:hover .cm-marknote-table-add-col-btn, .cm-marknote-table-add-col-btn:hover": {
+    opacity: "1",
   },
   ".cm-marknote-table-add-col-btn:hover": {
     background: "var(--bg-modifier-hover)",
@@ -710,26 +801,33 @@ export const tableTheme = EditorView.theme({
     color: "var(--text-normal)",
   },
 
-  // Стили ручек и кнопок перемещения строк и столбцов
+  // Стили ручек и кнопок перемещения строк и столбцов (HOVER ONLY)
   ".cm-marknote-table-row-controls": {
+    position: "absolute",
+    right: "100%",
+    top: "50%",
+    transform: "translateY(-50%)",
+    marginRight: "4px",
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "flex-end",
     gap: "1px",
     width: "30px",
-    minWidth: "30px",
-    flexShrink: "0",
-    marginRight: "4px",
-    verticalAlign: "middle",
+    opacity: "0",
+    pointerEvents: "none",
+    transition: "opacity 0.15s ease-in-out",
     userSelect: "none",
-    opacity: "0.85",
+    zIndex: "10",
+  },
+  ".cm-line.cm-marknote-table-row:hover .cm-marknote-table-row-controls, .cm-marknote-table-row-controls:hover": {
+    opacity: "1",
+    pointerEvents: "auto",
   },
   ".cm-marknote-table-header-spacer": {
-    display: "inline-block",
-    width: "30px",
-    minWidth: "30px",
-    flexShrink: "0",
-    marginRight: "4px",
+    display: "none !important",
+    width: "0 !important",
+    margin: "0 !important",
+    padding: "0 !important",
   },
   ".cm-marknote-table-btn-placeholder": {
     display: "inline-block",
@@ -737,16 +835,30 @@ export const tableTheme = EditorView.theme({
     height: "11px",
   },
   ".cm-marknote-table-col-controls": {
+    position: "relative",
+    width: "0 !important",
+    minWidth: "0 !important",
+    maxWidth: "0 !important",
+    height: "0 !important",
+    margin: "0 !important",
+    padding: "0 !important",
     display: "inline-flex",
     alignItems: "center",
-    gap: "1px",
-    marginRight: "4px",
-    verticalAlign: "middle",
+    justifyContent: "center",
+    overflow: "visible",
+    opacity: "0",
+    pointerEvents: "none",
+    transition: "opacity 0.15s ease-in-out",
+    zIndex: "20",
     userSelect: "none",
-    opacity: "0.85",
+    whiteSpace: "nowrap",
+    left: "calc(var(--marknote-col-ctrl-width, 8ch) / 2)",
+    top: "-3px",
+    transform: "translate(-50%, -100%)",
   },
-  ".cm-marknote-table-row-controls:hover, .cm-marknote-table-col-controls:hover": {
+  ".cm-line.cm-marknote-table-header-row:hover .cm-marknote-table-col-controls, .cm-marknote-table-col-controls:hover": {
     opacity: "1",
+    pointerEvents: "auto",
   },
   ".cm-marknote-table-grip": {
     color: "var(--text-faint)",
