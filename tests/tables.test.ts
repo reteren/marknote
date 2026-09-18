@@ -5,7 +5,7 @@ import { markdown } from "@codemirror/lang-markdown";
 import { Decoration, EditorView } from "@codemirror/view";
 import { GFM } from "@lezer/markdown";
 import { describe, expect, it } from "vitest";
-import { tableBuilder, tableKeymap } from "../src/editor/livePreview/tables";
+import { tableBuilder, tableKeymap, moveTableColumn, moveTableRow, parseMarkdownTable } from "../src/editor/livePreview/tables";
 import type { BuilderContext } from "../src/editor/livePreview/types";
 
 function tableState(doc: string): EditorState {
@@ -165,7 +165,7 @@ describe("tableBuilder", () => {
     expect(colDom.getAttribute("title")).toBe("Добавить столбец справа");
   });
 
-  it("attaches row and col movement controls with tooltips", () => {
+  it("attaches row and col movement drag handles with tooltips", () => {
     const multiRowDoc = [
       "| Left | Center | Right |",
       "| :--- | :---:  | ---:  |",
@@ -189,18 +189,43 @@ describe("tableBuilder", () => {
     const firstRowDom = rowControls[0].toDOM(view);
     const lastRowDom = rowControls[1].toDOM(view);
 
-    // First row can move down
-    expect(firstRowDom.querySelector(".cm-marknote-table-move-down")?.getAttribute("title")).toBe("Переместить строку вниз");
-    // Last row can move up
-    expect(lastRowDom.querySelector(".cm-marknote-table-move-up")?.getAttribute("title")).toBe("Переместить строку вверх");
+    // Each row control has a single thick drag handle line
+    expect(firstRowDom.querySelector(".cm-marknote-table-row-handle")?.getAttribute("title")).toBe("Переместить строку");
+    expect(lastRowDom.querySelector(".cm-marknote-table-row-handle")?.getAttribute("title")).toBe("Переместить строку");
 
     const firstColDom = colControls[0].toDOM(view);
     const lastColDom = colControls[2].toDOM(view);
 
-    // First col can move right
-    expect(firstColDom.querySelector(".cm-marknote-table-move-right")?.getAttribute("title")).toBe("Переместить столбец вправо");
-    // Last col can move left
-    expect(lastColDom.querySelector(".cm-marknote-table-move-left")?.getAttribute("title")).toBe("Переместить столбец влево");
+    // Each column control has a hitarea and a single thick drag handle line
+    expect(firstColDom.querySelector(".cm-marknote-table-col-handle")?.getAttribute("title")).toBe("Переместить столбец");
+    expect(lastColDom.querySelector(".cm-marknote-table-col-handle")?.getAttribute("title")).toBe("Переместить столбец");
+  });
+
+  it("preserves markdown structure and alignments when moving columns and rows", () => {
+    const multiRowDoc = [
+      "| Left | Center | Right |",
+      "| :--- | :---:  | ---:  |",
+      "| A1   | B1     | C1    |",
+      "| A2   | B2     | C2    |",
+    ].join("\n");
+
+    // Move column 0 to index 2
+    const movedCol = moveTableColumn(multiRowDoc, 0, 2);
+    expect(movedCol).toContain("| Center | Right | Left |");
+    const parsedCol = parseMarkdownTable(movedCol);
+    expect(parsedCol?.headers).toEqual(["Center", "Right", "Left"]);
+    expect(parsedCol?.alignments).toEqual(["center", "right", "left"]);
+    expect(parsedCol?.rows[0]).toEqual(["B1", "C1", "A1"]);
+    expect(parsedCol?.rows[1]).toEqual(["B2", "C2", "A2"]);
+
+    // Move row 0 to index 1
+    const movedRow = moveTableRow(multiRowDoc, 0, 1);
+    expect(movedRow).toContain("| Left | Center | Right |");
+    const parsedRow = parseMarkdownTable(movedRow);
+    expect(parsedRow?.headers).toEqual(["Left", "Center", "Right"]);
+    expect(parsedRow?.alignments).toEqual(["left", "center", "right"]);
+    expect(parsedRow?.rows[0]).toEqual(["A2", "B2", "C2"]);
+    expect(parsedRow?.rows[1]).toEqual(["A1", "B1", "C1"]);
   });
 
   it("moves Tab and Shift-Tab between table cells", () => {

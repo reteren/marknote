@@ -126,7 +126,7 @@ export class TableEmptyCellWidget extends WidgetType {
   toDOM(): HTMLElement {
     const span = document.createElement("span");
     span.className = this.className;
-    span.style.setProperty("--marknote-table-column-width", `${this.width}px`);
+    span.style.setProperty("--marknote-table-column-width", `${this.width}em`);
     return span;
   }
 }
@@ -147,10 +147,17 @@ function addTableCell(
     `cm-marknote-table-align-${alignment}`,
   ].join(" ");
 
+  const attrs: Record<string, string> = {
+    style: `--marknote-table-column-width: ${width}em`,
+  };
+  if (isHeader) {
+    attrs["data-col"] = `${column}`;
+  }
+
   if (to > from) {
     const value = Decoration.mark({
       class: className,
-      attributes: { style: `--marknote-table-column-width: ${width}px` },
+      attributes: attrs,
     });
     ctx.add({ from, to, value });
   } else {
@@ -212,19 +219,205 @@ function findEnclosingTable(view: EditorView, position: number): SyntaxNode | nu
   return node;
 }
 
-/** Виджет кнопки «Добавить строку снизу» */
+function initColDrag(
+  e: MouseEvent,
+  view: EditorView,
+  tableFrom: number,
+  srcCol: number,
+  totalCols: number,
+  handleEl: HTMLElement,
+) {
+  e.preventDefault();
+  e.stopPropagation();
+
+  const startX = e.clientX;
+  let hasMoved = false;
+  let currentTargetCol = srcCol;
+
+  const updateHighlights = (dragCol: number, targetCol: number) => {
+    const dragCells = view.dom.querySelectorAll(`.cm-marknote-table-column-${dragCol + 1}`);
+    dragCells.forEach((el) => el.classList.add("cm-marknote-col-dragging"));
+
+    const allColCells = view.dom.querySelectorAll(".cm-marknote-table-cell");
+    allColCells.forEach((el) => {
+      el.classList.remove("cm-marknote-col-drop-target-left", "cm-marknote-col-drop-target-right");
+    });
+    if (targetCol !== dragCol) {
+      const targetCells = view.dom.querySelectorAll(`.cm-marknote-table-column-${targetCol + 1}`);
+      const dropClass = targetCol > dragCol ? "cm-marknote-col-drop-target-right" : "cm-marknote-col-drop-target-left";
+      targetCells.forEach((el) => el.classList.add(dropClass));
+    }
+  };
+
+  const clearHighlights = () => {
+    view.dom.querySelectorAll(".cm-marknote-col-dragging").forEach((el) => el.classList.remove("cm-marknote-col-dragging"));
+    view.dom.querySelectorAll(".cm-marknote-col-drop-target-left").forEach((el) => el.classList.remove("cm-marknote-col-drop-target-left"));
+    view.dom.querySelectorAll(".cm-marknote-col-drop-target-right").forEach((el) => el.classList.remove("cm-marknote-col-drop-target-right"));
+    handleEl.classList.remove("cm-marknote-handle-active");
+    if (typeof document !== "undefined" && document.body) {
+      document.body.style.cursor = "";
+      document.body.classList.remove("cm-marknote-table-dragging");
+    }
+  };
+
+  handleEl.classList.add("cm-marknote-handle-active");
+  if (typeof document !== "undefined" && document.body) {
+    document.body.style.cursor = "grabbing";
+    document.body.classList.add("cm-marknote-table-dragging");
+  }
+
+  const onMouseMove = (moveEvent: MouseEvent) => {
+    const deltaX = moveEvent.clientX - startX;
+    if (Math.abs(deltaX) > 4) {
+      hasMoved = true;
+    }
+
+    const headerRow = view.dom.querySelector(".cm-marknote-table-header-row");
+    if (headerRow) {
+      const headerCells = Array.from(headerRow.querySelectorAll(".cm-marknote-table-cell")) as HTMLElement[];
+      for (let c = 0; c < headerCells.length; c++) {
+        const rect = headerCells[c].getBoundingClientRect();
+        if (moveEvent.clientX >= rect.left && moveEvent.clientX <= rect.right) {
+          currentTargetCol = c;
+          break;
+        }
+      }
+    }
+
+    updateHighlights(srcCol, currentTargetCol);
+  };
+
+  const onMouseUp = () => {
+    if (typeof window !== "undefined") {
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup", onMouseUp);
+    }
+    clearHighlights();
+
+    if (hasMoved && currentTargetCol !== srcCol) {
+      const currentTable = findEnclosingTable(view, tableFrom);
+      if (!currentTable) return;
+      const text = view.state.doc.sliceString(currentTable.from, currentTable.to);
+      const updated = moveTableColumn(text, srcCol, currentTargetCol);
+      view.dispatch({
+        changes: { from: currentTable.from, to: currentTable.to, insert: updated },
+      });
+    }
+  };
+
+  if (typeof window !== "undefined") {
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseup", onMouseUp);
+  }
+  updateHighlights(srcCol, srcCol);
+}
+
+function initRowDrag(
+  e: MouseEvent,
+  view: EditorView,
+  tableFrom: number,
+  srcBodyRowIdx: number,
+  totalBodyRows: number,
+  handleEl: HTMLElement,
+) {
+  e.preventDefault();
+  e.stopPropagation();
+
+  const startY = e.clientY;
+  let hasMoved = false;
+  let currentTargetRow = srcBodyRowIdx;
+
+  const updateHighlights = (dragRow: number, targetRow: number) => {
+    const rowLines = Array.from(view.dom.querySelectorAll(".cm-line.cm-marknote-table-row:not(.cm-marknote-table-header-row)")) as HTMLElement[];
+    rowLines.forEach((el, idx) => {
+      el.classList.toggle("cm-marknote-row-dragging", idx === dragRow);
+      el.classList.toggle("cm-marknote-row-drop-target", idx === targetRow && targetRow !== dragRow);
+    });
+  };
+
+  const clearHighlights = () => {
+    view.dom.querySelectorAll(".cm-marknote-row-dragging").forEach((el) => el.classList.remove("cm-marknote-row-dragging"));
+    view.dom.querySelectorAll(".cm-marknote-row-drop-target").forEach((el) => el.classList.remove("cm-marknote-row-drop-target"));
+    handleEl.classList.remove("cm-marknote-handle-active");
+    if (typeof document !== "undefined" && document.body) {
+      document.body.style.cursor = "";
+      document.body.classList.remove("cm-marknote-table-dragging");
+    }
+  };
+
+  handleEl.classList.add("cm-marknote-handle-active");
+  if (typeof document !== "undefined" && document.body) {
+    document.body.style.cursor = "grabbing";
+    document.body.classList.add("cm-marknote-table-dragging");
+  }
+
+  const onMouseMove = (moveEvent: MouseEvent) => {
+    const deltaY = moveEvent.clientY - startY;
+    if (Math.abs(deltaY) > 4) {
+      hasMoved = true;
+    }
+
+    const rowLines = Array.from(view.dom.querySelectorAll(".cm-line.cm-marknote-table-row:not(.cm-marknote-table-header-row)")) as HTMLElement[];
+    for (let r = 0; r < rowLines.length; r++) {
+      const rect = rowLines[r].getBoundingClientRect();
+      if (moveEvent.clientY >= rect.top && moveEvent.clientY <= rect.bottom) {
+        currentTargetRow = r;
+        break;
+      }
+    }
+
+    updateHighlights(srcBodyRowIdx, currentTargetRow);
+  };
+
+  const onMouseUp = () => {
+    if (typeof window !== "undefined") {
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup", onMouseUp);
+    }
+    clearHighlights();
+
+    if (hasMoved && currentTargetRow !== srcBodyRowIdx) {
+      const currentTable = findEnclosingTable(view, tableFrom);
+      if (!currentTable) return;
+      const text = view.state.doc.sliceString(currentTable.from, currentTable.to);
+      const updated = moveTableRow(text, srcBodyRowIdx, currentTargetRow);
+      view.dispatch({
+        changes: { from: currentTable.from, to: currentTable.to, insert: updated },
+      });
+    }
+  };
+
+  if (typeof window !== "undefined") {
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseup", onMouseUp);
+  }
+  updateHighlights(srcBodyRowIdx, srcBodyRowIdx);
+}
+
+/** Виджет кнопки «Добавить строку снизу» (тонкая полоска во всю ширину с плюсом по центру) */
 export class TableAddRowWidget extends WidgetType {
-  constructor(readonly tableFrom: number) {
+  constructor(readonly tableFrom: number, readonly totalWidthEm: number = 0) {
     super();
   }
 
   eq(other: WidgetType): boolean {
-    return other instanceof TableAddRowWidget && other.tableFrom === this.tableFrom;
+    return (
+      other instanceof TableAddRowWidget &&
+      other.tableFrom === this.tableFrom &&
+      other.totalWidthEm === this.totalWidthEm
+    );
   }
 
   toDOM(view: EditorView): HTMLElement {
     const container = document.createElement("div");
     container.className = "cm-marknote-table-add-row-bar";
+    if (this.totalWidthEm > 0) {
+      container.style.width = `${this.totalWidthEm}em`;
+    }
+
+    const line = document.createElement("div");
+    line.className = "cm-marknote-table-add-row-line";
+    container.appendChild(line);
 
     const btn = document.createElement("button");
     btn.type = "button";
@@ -254,17 +447,38 @@ export class TableAddRowWidget extends WidgetType {
   }
 }
 
-/** Виджет кнопки «Добавить столбец справа» */
+/** Виджет кнопки «Добавить столбец справа» (тонкая полоска во всю высоту с плюсом по центру) */
 export class TableAddColWidget extends WidgetType {
-  constructor(readonly tableFrom: number) {
+  constructor(
+    readonly tableFrom: number,
+    readonly totalRows: number = 2,
+    readonly totalWidthEm: number = 0,
+  ) {
     super();
   }
 
   eq(other: WidgetType): boolean {
-    return other instanceof TableAddColWidget && other.tableFrom === this.tableFrom;
+    return (
+      other instanceof TableAddColWidget &&
+      other.tableFrom === this.tableFrom &&
+      other.totalRows === this.totalRows &&
+      other.totalWidthEm === this.totalWidthEm
+    );
   }
 
   toDOM(view: EditorView): HTMLElement {
+    const container = document.createElement("div");
+    container.className = "cm-marknote-table-add-col-bar";
+    container.title = "Добавить столбец справа";
+    container.setAttribute("aria-label", "Добавить столбец справа");
+    if (this.totalWidthEm > 0) {
+      container.style.left = `${this.totalWidthEm}em`;
+    }
+
+    const line = document.createElement("div");
+    line.className = "cm-marknote-table-add-col-line";
+    container.appendChild(line);
+
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = "cm-marknote-table-btn cm-marknote-table-add-col-btn";
@@ -283,12 +497,42 @@ export class TableAddColWidget extends WidgetType {
         changes: { from: table.from, to: table.to, insert: updated },
       });
     });
+    container.appendChild(btn);
 
-    return btn;
+    const updateHeight = () => {
+      const table = findEnclosingTable(view, this.tableFrom);
+      if (!table) return;
+      try {
+        const topCoords = view.coordsAtPos(table.from);
+        const bottomCoords = view.coordsAtPos(table.to);
+        if (topCoords && bottomCoords && bottomCoords.bottom > topCoords.top) {
+          container.style.height = `${bottomCoords.bottom - topCoords.top}px`;
+          return;
+        }
+      } catch {
+        // coordsAtPos might fail if unrendered/offscreen
+      }
+      container.style.height = `${Math.max(2, this.totalRows) * 2.2}em`;
+    };
+
+    container.style.height = `${Math.max(2, this.totalRows) * 2.2}em`;
+    if (typeof requestAnimationFrame === "function") {
+      requestAnimationFrame(updateHeight);
+    }
+
+    container.addEventListener("mouseenter", () => {
+      updateHeight();
+      container.classList.add("cm-marknote-add-col-active");
+    });
+    container.addEventListener("mouseleave", () => {
+      container.classList.remove("cm-marknote-add-col-active");
+    });
+
+    return container;
   }
 }
 
-/** Виджет ручки перемещения строки */
+/** Виджет ручки перемещения строки (толстая линия-ручка на левом краю) */
 export class TableRowControlWidget extends WidgetType {
   constructor(
     readonly tableFrom: number,
@@ -310,63 +554,18 @@ export class TableRowControlWidget extends WidgetType {
   toDOM(view: EditorView): HTMLElement {
     const container = document.createElement("span");
     container.className = "cm-marknote-table-row-controls";
+    container.setAttribute("data-row", `${this.rowIndex}`);
 
-    if (this.rowIndex > 0) {
-      const upBtn = document.createElement("button");
-      upBtn.type = "button";
-      upBtn.className = "cm-marknote-table-move-btn cm-marknote-table-move-up";
-      upBtn.title = "Переместить строку вверх";
-      upBtn.setAttribute("aria-label", "Переместить строку вверх");
-      upBtn.textContent = "▲";
-      upBtn.addEventListener("mousedown", (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        const table = findEnclosingTable(view, this.tableFrom);
-        if (!table) return;
-        const text = view.state.doc.sliceString(table.from, table.to);
-        const updated = moveTableRow(text, this.rowIndex, this.rowIndex - 1);
-        view.dispatch({
-          changes: { from: table.from, to: table.to, insert: updated },
-        });
-      });
-      container.appendChild(upBtn);
-    } else {
-      const ph = document.createElement("span");
-      ph.className = "cm-marknote-table-btn-placeholder";
-      container.appendChild(ph);
-    }
+    const handle = document.createElement("div");
+    handle.className = "cm-marknote-table-row-handle";
+    handle.title = "Переместить строку";
+    handle.setAttribute("aria-label", "Переместить строку");
 
-    const grip = document.createElement("span");
-    grip.className = "cm-marknote-table-grip cm-marknote-table-row-grip";
-    grip.textContent = "⠿";
-    grip.title = "Переместить строку";
-    container.appendChild(grip);
+    handle.addEventListener("mousedown", (e) => {
+      initRowDrag(e, view, this.tableFrom, this.rowIndex, this.totalRows, handle);
+    });
 
-    if (this.rowIndex < this.totalRows - 1) {
-      const downBtn = document.createElement("button");
-      downBtn.type = "button";
-      downBtn.className = "cm-marknote-table-move-btn cm-marknote-table-move-down";
-      downBtn.title = "Переместить строку вниз";
-      downBtn.setAttribute("aria-label", "Переместить строку вниз");
-      downBtn.textContent = "▼";
-      downBtn.addEventListener("mousedown", (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        const table = findEnclosingTable(view, this.tableFrom);
-        if (!table) return;
-        const text = view.state.doc.sliceString(table.from, table.to);
-        const updated = moveTableRow(text, this.rowIndex, this.rowIndex + 1);
-        view.dispatch({
-          changes: { from: table.from, to: table.to, insert: updated },
-        });
-      });
-      container.appendChild(downBtn);
-    } else {
-      const ph = document.createElement("span");
-      ph.className = "cm-marknote-table-btn-placeholder";
-      container.appendChild(ph);
-    }
-
+    container.appendChild(handle);
     return container;
   }
 }
@@ -384,7 +583,7 @@ export class TableColSpacerWidget extends WidgetType {
   }
 }
 
-/** Виджет ручки перемещения столбца */
+/** Виджет ручки перемещения столбца (толстая линия-ручка над столбцом) */
 export class TableColControlWidget extends WidgetType {
   constructor(
     readonly tableFrom: number,
@@ -408,64 +607,24 @@ export class TableColControlWidget extends WidgetType {
   toDOM(view: EditorView): HTMLElement {
     const container = document.createElement("span");
     container.className = "cm-marknote-table-col-controls";
-    container.style.setProperty("--marknote-col-ctrl-width", `${this.width}px`);
+    container.setAttribute("data-col", `${this.colIndex}`);
+    container.style.setProperty("--marknote-col-ctrl-width", `${this.width}em`);
 
-    if (this.colIndex > 0) {
-      const leftBtn = document.createElement("button");
-      leftBtn.type = "button";
-      leftBtn.className = "cm-marknote-table-move-btn cm-marknote-table-move-left";
-      leftBtn.title = "Переместить столбец влево";
-      leftBtn.setAttribute("aria-label", "Переместить столбец влево");
-      leftBtn.textContent = "◀";
-      leftBtn.addEventListener("mousedown", (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        const table = findEnclosingTable(view, this.tableFrom);
-        if (!table) return;
-        const text = view.state.doc.sliceString(table.from, table.to);
-        const updated = moveTableColumn(text, this.colIndex, this.colIndex - 1);
-        view.dispatch({
-          changes: { from: table.from, to: table.to, insert: updated },
-        });
-      });
-      container.appendChild(leftBtn);
-    } else {
-      const ph = document.createElement("span");
-      ph.className = "cm-marknote-table-btn-placeholder";
-      container.appendChild(ph);
-    }
+    const hitarea = document.createElement("div");
+    hitarea.className = "cm-marknote-table-col-hitarea";
+    hitarea.setAttribute("data-col", `${this.colIndex}`);
 
-    const grip = document.createElement("span");
-    grip.className = "cm-marknote-table-grip cm-marknote-table-col-grip";
-    grip.textContent = "⋯";
-    grip.title = "Переместить столбец";
-    container.appendChild(grip);
+    const handle = document.createElement("div");
+    handle.className = "cm-marknote-table-col-handle";
+    handle.title = "Переместить столбец";
+    handle.setAttribute("aria-label", "Переместить столбец");
 
-    if (this.colIndex < this.totalCols - 1) {
-      const rightBtn = document.createElement("button");
-      rightBtn.type = "button";
-      rightBtn.className = "cm-marknote-table-move-btn cm-marknote-table-move-right";
-      rightBtn.title = "Переместить столбец вправо";
-      rightBtn.setAttribute("aria-label", "Переместить столбец вправо");
-      rightBtn.textContent = "▶";
-      rightBtn.addEventListener("mousedown", (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        const table = findEnclosingTable(view, this.tableFrom);
-        if (!table) return;
-        const text = view.state.doc.sliceString(table.from, table.to);
-        const updated = moveTableColumn(text, this.colIndex, this.colIndex + 1);
-        view.dispatch({
-          changes: { from: table.from, to: table.to, insert: updated },
-        });
-      });
-      container.appendChild(rightBtn);
-    } else {
-      const ph = document.createElement("span");
-      ph.className = "cm-marknote-table-btn-placeholder";
-      container.appendChild(ph);
-    }
+    handle.addEventListener("mousedown", (e) => {
+      initColDrag(e, view, this.tableFrom, this.colIndex, this.totalCols, handle);
+    });
 
+    hitarea.appendChild(handle);
+    container.appendChild(hitarea);
     return container;
   }
 }
@@ -474,6 +633,7 @@ export class TableColControlWidget extends WidgetType {
 export const tableBuilder: BlockBuilder = (ctx) => {
   if (ctx.node.name !== "Table") return false;
 
+  const isPreview = ctx.view.state.doc.sliceString(0, 200).includes("<!-- table-preview-controls -->");
   const rows = tableRows(ctx.node);
   const bodyRows = rows.filter((r) => r.name === "TableRow");
   const delimiter = ctx.node.getChild("TableDelimiter");
@@ -490,10 +650,11 @@ export const tableBuilder: BlockBuilder = (ctx) => {
       const text = ctx.view.state.doc.sliceString(cell.from, cell.to).trim();
       return Math.max(max, text.length);
     }, 0);
-    // Use consistent pixel widths so font-weight differences between header (600) and body (400)
-    // do not cause column misalignment (which happens if using 'ch' units).
-    return Math.max(100, maxLen * 10 + 24);
+    // Use em units so columns scale proportionally with text zoom (Ctrl + '+')
+    // while keeping exact alignment between header and body rows.
+    return Math.max(6, Math.ceil(maxLen * 0.65 + 2));
   });
+  const totalWidthEm = widths.reduce((sum, w) => sum + w, 0);
 
   let bodyRowIdx = 0;
   for (let rIdx = 0; rIdx < rows.length; rIdx++) {
@@ -555,7 +716,7 @@ export const tableBuilder: BlockBuilder = (ctx) => {
         from: row.to,
         to: row.to,
         value: Decoration.widget({
-          widget: new TableAddColWidget(ctx.node.from),
+          widget: new TableAddColWidget(ctx.node.from, rows.length, totalWidthEm),
           side: -1,
         }),
       });
@@ -568,11 +729,11 @@ export const tableBuilder: BlockBuilder = (ctx) => {
       from: lineStart,
       to: lineStart,
       value: Decoration.line({
-        class: isHeader
+        class: (isHeader
           ? "cm-marknote-table-row cm-marknote-table-header-row"
           : isLastRow
           ? "cm-marknote-table-row cm-marknote-table-last-row"
-          : "cm-marknote-table-row",
+          : "cm-marknote-table-row") + (isPreview ? " cm-marknote-table-preview-controls" : ""),
       }),
     });
   }
@@ -598,7 +759,7 @@ export const tableBuilder: BlockBuilder = (ctx) => {
     from: addRowPos,
     to: addRowPos,
     value: Decoration.widget({
-      widget: new TableAddRowWidget(ctx.node.from),
+      widget: new TableAddRowWidget(ctx.node.from, totalWidthEm),
       side: -1,
     }),
   });
@@ -693,18 +854,18 @@ export const tableTheme = EditorView.theme({
     boxSizing: "border-box",
     width: "var(--marknote-table-column-width)",
     minWidth: "var(--marknote-table-column-width)",
-    minHeight: "28px",
-    padding: "4px 8px",
+    minHeight: "1.75em",
+    padding: "0.25em 0.5em",
     verticalAlign: "top",
     whiteSpace: "normal",
     wordBreak: "break-word",
     fontFamily: "var(--font-text)",
-    fontSize: "var(--font-size-text)",
     lineHeight: "var(--line-height-text)",
     color: "var(--text-normal)",
     backgroundColor: "transparent",
     borderRight: "1px solid var(--bg-modifier-border)",
     borderBottom: "1px solid var(--bg-modifier-border)",
+    transition: "background-color 0.15s ease, border-color 0.15s ease",
   },
   ".cm-marknote-table-column-1": {
     borderLeft: "1px solid var(--bg-modifier-border)",
@@ -720,23 +881,34 @@ export const tableTheme = EditorView.theme({
   ".cm-marknote-table-align-center": { textAlign: "center" },
   ".cm-marknote-table-align-right": { textAlign: "right" },
 
-  // Стили кнопок добавления строк и столбцов (HOVER ONLY)
+  // Стили кнопок добавления строк и столбцов (тонкие полоски во всю длину/высоту с плюсом по центру)
   ".cm-marknote-table-add-row-bar": {
     position: "absolute",
     top: "100%",
     left: "0",
     width: "100%",
-    height: "22px",
+    height: "16px",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
     opacity: "0",
-    pointerEvents: "auto",
+    pointerEvents: "none",
     transition: "opacity 0.15s ease-in-out",
     zIndex: "10",
   },
-  ".cm-line.cm-marknote-table-last-row:hover .cm-marknote-table-add-row-bar, .cm-marknote-table-add-row-bar:hover": {
+  ".cm-line.cm-marknote-table-last-row:hover .cm-marknote-table-add-row-bar, .cm-marknote-table-add-row-bar:hover, .cm-line.cm-marknote-table-preview-controls .cm-marknote-table-add-row-bar": {
     opacity: "1",
+    pointerEvents: "auto",
+  },
+  ".cm-marknote-table-add-row-line": {
+    position: "absolute",
+    left: "0",
+    right: "0",
+    top: "50%",
+    height: "2px",
+    background: "var(--accent, #5EACC7)",
+    borderRadius: "1px",
+    pointerEvents: "none",
   },
   ".cm-marknote-table-btn": {
     fontFamily: "var(--font-interface, inherit)",
@@ -745,94 +917,133 @@ export const tableTheme = EditorView.theme({
     transition: "all 0.15s ease-in-out",
   },
   ".cm-marknote-table-add-row-btn": {
+    position: "relative",
+    zIndex: "2",
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
     width: "20px",
-    height: "18px",
-    background: "var(--bg-secondary)",
-    border: "1px solid var(--bg-modifier-border)",
-    borderRadius: "3px",
-    color: "var(--text-muted)",
+    height: "16px",
+    background: "var(--bg-primary, #202020)",
+    border: "1px solid var(--accent, #5EACC7)",
+    borderRadius: "8px",
+    color: "var(--text-normal)",
     fontSize: "12px",
     fontWeight: "bold",
     lineHeight: "1",
     cursor: "pointer",
     padding: "0",
+    transition: "all 0.15s ease",
   },
   ".cm-marknote-table-add-row-btn:hover": {
-    background: "var(--bg-modifier-hover)",
-    borderColor: "var(--interactive-accent)",
-    color: "var(--text-normal)",
+    background: "var(--accent, #5EACC7)",
+    color: "var(--text-on-accent, #ffffff)",
+    transform: "scale(1.1)",
   },
   ".cm-marknote-table-btn-icon": {
     fontWeight: "bold",
     fontSize: "13px",
     lineHeight: "1",
   },
+  ".cm-marknote-table-add-col-bar": {
+    position: "absolute",
+    top: "0",
+    left: "100%",
+    width: "16px",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    opacity: "0",
+    pointerEvents: "none",
+    transition: "opacity 0.15s ease-in-out",
+    zIndex: "10",
+  },
+  ".cm-line.cm-marknote-table-header-row:hover .cm-marknote-table-add-col-bar, .cm-marknote-table-add-col-bar:hover, .cm-marknote-table-add-col-bar.cm-marknote-add-col-active, .cm-line.cm-marknote-table-preview-controls .cm-marknote-table-add-col-bar": {
+    opacity: "1",
+    pointerEvents: "auto",
+  },
+  ".cm-marknote-table-add-col-line": {
+    position: "absolute",
+    top: "0",
+    bottom: "0",
+    left: "50%",
+    width: "2px",
+    transform: "translateX(-50%)",
+    background: "var(--accent, #5EACC7)",
+    borderRadius: "1px",
+    pointerEvents: "none",
+  },
   ".cm-marknote-table-add-col-btn": {
+    position: "absolute",
+    top: "50%",
+    left: "50%",
+    transform: "translate(-50%, -50%)",
+    zIndex: "2",
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
-    width: "18px",
-    height: "18px",
-    marginLeft: "4px",
-    alignSelf: "center",
-    flexShrink: "0",
-    background: "var(--bg-secondary)",
-    border: "1px solid var(--bg-modifier-border)",
-    borderRadius: "3px",
-    color: "var(--text-muted)",
+    width: "16px",
+    height: "20px",
+    background: "var(--bg-primary, #202020)",
+    border: "1px solid var(--accent, #5EACC7)",
+    borderRadius: "8px",
+    color: "var(--text-normal)",
     fontSize: "12px",
     fontWeight: "bold",
     lineHeight: "1",
     cursor: "pointer",
     padding: "0",
-    opacity: "0",
-    pointerEvents: "auto",
-    transition: "opacity 0.15s ease-in-out, background-color 0.1s ease",
-  },
-  ".cm-line.cm-marknote-table-header-row:hover .cm-marknote-table-add-col-btn, .cm-marknote-table-add-col-btn:hover": {
-    opacity: "1",
+    transition: "all 0.15s ease",
   },
   ".cm-marknote-table-add-col-btn:hover": {
-    background: "var(--bg-modifier-hover)",
-    borderColor: "var(--interactive-accent)",
-    color: "var(--text-normal)",
+    background: "var(--accent, #5EACC7)",
+    color: "var(--text-on-accent, #ffffff)",
+    transform: "translate(-50%, -50%) scale(1.1)",
   },
 
-  // Стили ручек и кнопок перемещения строк и столбцов (HOVER ONLY)
+  // Стили ручек перемещения строк и столбцов (толстые линии, HOVER ONLY)
   ".cm-marknote-table-row-controls": {
     position: "absolute",
-    right: "100%",
+    left: "-24px",
     top: "50%",
     transform: "translateY(-50%)",
-    marginRight: "4px",
+    width: "20px",
     display: "inline-flex",
     alignItems: "center",
-    justifyContent: "flex-end",
-    gap: "1px",
-    width: "30px",
+    justifyContent: "center",
     opacity: "0",
     pointerEvents: "none",
     transition: "opacity 0.15s ease-in-out",
     userSelect: "none",
     zIndex: "10",
   },
-  ".cm-line.cm-marknote-table-row:hover .cm-marknote-table-row-controls, .cm-marknote-table-row-controls:hover": {
+  ".cm-line.cm-marknote-table-row:hover .cm-marknote-table-row-controls, .cm-marknote-table-row-controls:hover, .cm-line.cm-marknote-table-preview-controls .cm-marknote-table-row-controls": {
     opacity: "1",
     pointerEvents: "auto",
   },
+  ".cm-marknote-table-row-handle": {
+    width: "18px",
+    height: "4px",
+    borderRadius: "2px",
+    background: "var(--text-faint, #666)",
+    cursor: "grab",
+    transition: "background 0.15s ease, transform 0.1s ease",
+  },
+  ".cm-marknote-table-row-handle:hover": {
+    background: "var(--text-muted, #888)",
+  },
+  ".cm-marknote-table-row-handle.cm-marknote-handle-active": {
+    background: "var(--accent, #5EACC7) !important",
+    cursor: "grabbing !important",
+    transform: "scaleX(1.2)",
+    boxShadow: "0 0 6px rgba(94, 172, 199, 0.6)",
+  },
+
   ".cm-marknote-table-header-spacer": {
     display: "none !important",
     width: "0 !important",
     margin: "0 !important",
     padding: "0 !important",
-  },
-  ".cm-marknote-table-btn-placeholder": {
-    display: "inline-block",
-    width: "11px",
-    height: "11px",
   },
   ".cm-marknote-table-col-controls": {
     position: "relative",
@@ -846,44 +1057,72 @@ export const tableTheme = EditorView.theme({
     alignItems: "center",
     justifyContent: "center",
     overflow: "visible",
-    opacity: "0",
-    pointerEvents: "none",
-    transition: "opacity 0.15s ease-in-out",
-    zIndex: "20",
+    zIndex: "25",
     userSelect: "none",
     whiteSpace: "nowrap",
-    left: "calc(var(--marknote-col-ctrl-width, 8ch) / 2)",
-    top: "-3px",
-    transform: "translate(-50%, -100%)",
+    pointerEvents: "none",
   },
-  ".cm-line.cm-marknote-table-header-row:hover .cm-marknote-table-col-controls, .cm-marknote-table-col-controls:hover": {
-    opacity: "1",
-    pointerEvents: "auto",
-  },
-  ".cm-marknote-table-grip": {
-    color: "var(--text-faint)",
-    fontSize: "11px",
-    cursor: "grab",
-    padding: "0 1px",
-  },
-  ".cm-marknote-table-move-btn": {
-    display: "inline-flex",
+  ".cm-marknote-table-col-hitarea": {
+    position: "absolute",
+    top: "-12px",
+    left: "0",
+    width: "var(--marknote-col-ctrl-width, 8em)",
+    height: "18px",
+    display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    width: "11px",
-    height: "11px",
-    padding: "0",
-    border: "none",
-    background: "transparent",
-    color: "var(--text-muted)",
-    fontSize: "7px",
-    lineHeight: "1",
-    cursor: "pointer",
-    borderRadius: "2px",
-    transition: "all 0.1s ease",
+    pointerEvents: "auto",
+    cursor: "grab",
   },
-  ".cm-marknote-table-move-btn:hover": {
-    background: "var(--bg-modifier-hover)",
-    color: "var(--text-normal)",
+  ".cm-marknote-table-col-handle": {
+    width: "32px",
+    height: "4px",
+    borderRadius: "2px",
+    background: "var(--text-faint, #666)",
+    opacity: "0",
+    pointerEvents: "auto",
+    transition: "opacity 0.15s ease-in-out, background 0.15s ease, transform 0.1s ease",
+    cursor: "grab",
+  },
+  ".cm-marknote-table-col-hitarea:hover .cm-marknote-table-col-handle, .cm-marknote-table-col-controls:hover .cm-marknote-table-col-handle, .cm-line.cm-marknote-table-preview-controls .cm-marknote-table-col-handle": {
+    opacity: "1",
+    background: "var(--text-muted, #888)",
+  },
+  ".cm-line.cm-marknote-table-header-row:has(.cm-marknote-table-column-1:hover) .cm-marknote-table-col-controls[data-col='0'] .cm-marknote-table-col-handle": { opacity: "1" },
+  ".cm-line.cm-marknote-table-header-row:has(.cm-marknote-table-column-2:hover) .cm-marknote-table-col-controls[data-col='1'] .cm-marknote-table-col-handle": { opacity: "1" },
+  ".cm-line.cm-marknote-table-header-row:has(.cm-marknote-table-column-3:hover) .cm-marknote-table-col-controls[data-col='2'] .cm-marknote-table-col-handle": { opacity: "1" },
+  ".cm-line.cm-marknote-table-header-row:has(.cm-marknote-table-column-4:hover) .cm-marknote-table-col-controls[data-col='3'] .cm-marknote-table-col-handle": { opacity: "1" },
+  ".cm-line.cm-marknote-table-header-row:has(.cm-marknote-table-column-5:hover) .cm-marknote-table-col-controls[data-col='4'] .cm-marknote-table-col-handle": { opacity: "1" },
+  ".cm-line.cm-marknote-table-header-row:has(.cm-marknote-table-column-6:hover) .cm-marknote-table-col-controls[data-col='5'] .cm-marknote-table-col-handle": { opacity: "1" },
+  ".cm-line.cm-marknote-table-header-row:has(.cm-marknote-table-column-7:hover) .cm-marknote-table-col-controls[data-col='6'] .cm-marknote-table-col-handle": { opacity: "1" },
+  ".cm-line.cm-marknote-table-header-row:has(.cm-marknote-table-column-8:hover) .cm-marknote-table-col-controls[data-col='7'] .cm-marknote-table-col-handle": { opacity: "1" },
+  ".cm-line.cm-marknote-table-header-row:has(.cm-marknote-table-column-9:hover) .cm-marknote-table-col-controls[data-col='8'] .cm-marknote-table-col-handle": { opacity: "1" },
+  ".cm-line.cm-marknote-table-header-row:has(.cm-marknote-table-column-10:hover) .cm-marknote-table-col-controls[data-col='9'] .cm-marknote-table-col-handle": { opacity: "1" },
+  ".cm-marknote-table-col-handle.cm-marknote-handle-active": {
+    opacity: "1 !important",
+    background: "var(--accent, #5EACC7) !important",
+    cursor: "grabbing !important",
+    transform: "scaleY(1.3)",
+    boxShadow: "0 0 6px rgba(94, 172, 199, 0.6)",
+  },
+
+  // Подсветка перетаскиваемого столбца и строки акцентным цветом (#5EACC7)
+  ".cm-marknote-table-cell.cm-marknote-col-dragging": {
+    backgroundColor: "rgba(94, 172, 199, 0.16) !important",
+    borderColor: "var(--accent, #5EACC7) !important",
+  },
+  ".cm-marknote-table-cell.cm-marknote-col-drop-target-left": {
+    borderLeft: "3px solid var(--accent, #5EACC7) !important",
+  },
+  ".cm-marknote-table-cell.cm-marknote-col-drop-target-right": {
+    borderRight: "3px solid var(--accent, #5EACC7) !important",
+  },
+  ".cm-line.cm-marknote-table-row.cm-marknote-row-dragging .cm-marknote-table-cell": {
+    backgroundColor: "rgba(94, 172, 199, 0.16) !important",
+    borderTop: "2px solid var(--accent, #5EACC7) !important",
+    borderBottom: "2px solid var(--accent, #5EACC7) !important",
+  },
+  ".cm-line.cm-marknote-table-row.cm-marknote-row-drop-target .cm-marknote-table-cell": {
+    borderTop: "3px solid var(--accent, #5EACC7) !important",
   },
 });
