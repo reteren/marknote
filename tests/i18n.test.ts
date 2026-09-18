@@ -14,7 +14,7 @@ vi.mock("@tauri-apps/api/core", () => ({ invoke: invokeMock }));
 
 const defaultSettings = () => ({
   language: "en",
-  spellcheck: { enabled: true, languages: ["en"], skipCodeFormulaLinks: true },
+  spellcheck: { enabled: true, language: "en", skipCodeFormulaLinks: true },
   autoCorrect: {
     smartQuotes: false,
     doubleHyphenToEmDash: false,

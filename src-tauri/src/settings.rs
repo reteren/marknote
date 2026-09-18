@@ -1,5 +1,4 @@
 use std::{
-    collections::BTreeSet,
     fs, io,
     path::{Path, PathBuf},
     sync::Mutex,
@@ -57,7 +56,7 @@ impl Settings {
     /// Ограничивает значения, пришедшие из IPC или файла, безопасными диапазонами.
     pub fn validate(&mut self) {
         self.language = normalize_language(&self.language, true);
-        self.spellcheck.languages = normalize_spellcheck_languages(&self.spellcheck.languages);
+        self.spellcheck.language = normalize_spellcheck_language(&self.spellcheck.language);
         self.editor.zoom_percent = self
             .editor
             .zoom_percent
@@ -80,8 +79,8 @@ impl Settings {
 pub struct SpellcheckSettings {
     #[serde(default = "default_true")]
     pub enabled: bool,
-    #[serde(default = "default_spellcheck_languages")]
-    pub languages: Vec<String>,
+    #[serde(default = "default_spellcheck_language")]
+    pub language: String,
     #[serde(default = "default_true")]
     pub skip_code_formula_links: bool,
 }
@@ -90,7 +89,7 @@ impl Default for SpellcheckSettings {
     fn default() -> Self {
         Self {
             enabled: true,
-            languages: default_spellcheck_languages(),
+            language: default_spellcheck_language(),
             skip_code_formula_links: true,
         }
     }
@@ -319,6 +318,7 @@ pub struct SettingsState {
 }
 
 pub const MIGRATION_FONT_FAMILY_DEFAULT: &str = "fontFamilyDefault";
+pub const MIGRATION_SPELLCHECK_SINGLE_LANGUAGE: &str = "spellcheckSingleLanguage";
 
 fn is_migration_applied(raw: &Value, migration_name: &str) -> bool {
     raw.get("migrations")
@@ -340,9 +340,23 @@ fn set_migration_applied(raw: &mut Value, migration_name: &str) {
     migrations.insert(migration_name.to_string(), Value::Bool(true));
 }
 
+/// Проставляет отметки обо всех переносах: файл, записанный этой версией,
+/// уже в новом виде, и переносить в нём нечего.
+fn mark_all_migrations_applied(raw: &mut Value) {
+    set_migration_applied(raw, MIGRATION_FONT_FAMILY_DEFAULT);
+    set_migration_applied(raw, MIGRATION_SPELLCHECK_SINGLE_LANGUAGE);
+}
+
 /// Выполняет разовые переносы устаревших умолчаний в файле настроек.
 /// Возвращает true, если файл был изменён и требует перезаписи на диск.
 fn migrate_document(document: &mut SettingsDocument) -> bool {
+    let font_family = migrate_font_family_default(document);
+    let spellcheck_language = migrate_spellcheck_single_language(document);
+    font_family || spellcheck_language
+}
+
+/// Старое умолчание шрифта (`system-serif`) заменяется на нынешнее.
+fn migrate_font_family_default(document: &mut SettingsDocument) -> bool {
     if is_migration_applied(&document.raw, MIGRATION_FONT_FAMILY_DEFAULT) {
         return false;
     }
@@ -373,6 +387,48 @@ fn migrate_document(document: &mut SettingsDocument) -> bool {
     } else {
         false
     }
+}
+
+/// Переносит старый список языков проверки на единственный язык.
+///
+/// Из массива берётся первый пригодный код: область правки сообщает язык
+/// движку атрибутом `lang`, а он принимает ровно одну метку языка, поэтому
+/// все языки списка, кроме первого, никогда и не проверялись. Устаревший
+/// массив удаляется, чтобы файл не хранил обещание, которого не было.
+fn migrate_spellcheck_single_language(document: &mut SettingsDocument) -> bool {
+    if is_migration_applied(&document.raw, MIGRATION_SPELLCHECK_SINGLE_LANGUAGE) {
+        return false;
+    }
+
+    set_migration_applied(&mut document.raw, MIGRATION_SPELLCHECK_SINGLE_LANGUAGE);
+
+    let Some(spellcheck) = document
+        .raw
+        .get_mut("spellcheck")
+        .and_then(|section| section.as_object_mut())
+    else {
+        return false;
+    };
+    let Some(old_languages) = spellcheck.remove("languages") else {
+        return false;
+    };
+
+    // Язык, уже записанный в новом поле, осознаннее старого списка.
+    if spellcheck.contains_key("language") {
+        return true;
+    }
+
+    let Some(first) = old_languages
+        .as_array()
+        .and_then(|list| list.iter().find_map(Value::as_str))
+    else {
+        return true;
+    };
+
+    let language = normalize_spellcheck_language(first);
+    spellcheck.insert("language".to_string(), Value::String(language.clone()));
+    document.settings.spellcheck.language = language;
+    true
 }
 
 impl SettingsState {
@@ -419,7 +475,7 @@ impl SettingsState {
         settings.validate();
         let mut document = self.lock_document();
         let mut merged = merge_values(document.raw.clone(), serde_json::to_value(&settings)?);
-        set_migration_applied(&mut merged, MIGRATION_FONT_FAMILY_DEFAULT);
+        mark_all_migrations_applied(&mut merged);
         self.write_value(&merged)?;
         document.settings = settings.clone();
         document.raw = merged;
@@ -437,7 +493,7 @@ impl SettingsState {
             let mut settings = document.settings.clone();
             settings.validate();
             let mut merged = merge_values(document.raw.clone(), serde_json::to_value(&settings)?);
-            set_migration_applied(&mut merged, MIGRATION_FONT_FAMILY_DEFAULT);
+            mark_all_migrations_applied(&mut merged);
             self.write_value(&merged)?;
             document.settings = settings;
             document.raw = merged;
@@ -470,7 +526,7 @@ fn parse_document(bytes: &[u8]) -> Result<SettingsDocument, ()> {
 
 fn default_document() -> SettingsDocument {
     let mut raw = Value::Object(Map::new());
-    set_migration_applied(&mut raw, MIGRATION_FONT_FAMILY_DEFAULT);
+    mark_all_migrations_applied(&mut raw);
     SettingsDocument {
         settings: Settings::default(),
         raw,
@@ -514,17 +570,17 @@ fn normalize_language(language: &str, allow_system: bool) -> String {
     }
 }
 
-fn normalize_spellcheck_languages(languages: &[String]) -> Vec<String> {
-    let mut seen = BTreeSet::new();
-    let mut normalized = Vec::new();
-    for language in languages {
-        let normalized_code = language.trim().to_ascii_lowercase();
-        let code = normalized_code.split(['-', '_']).next().unwrap_or_default();
-        if UI_LANGUAGES.contains(&code) && seen.insert(code.to_owned()) {
-            normalized.push(code.to_owned());
-        }
+/// Язык проверки орфографии — ровно один код из числа поддерживаемых.
+/// Региональная метка вида `ru-RU` сводится к базовому коду, незнакомый язык — к
+/// умолчанию: пустое значение оставило бы область правки вовсе без метки.
+fn normalize_spellcheck_language(language: &str) -> String {
+    let normalized = language.trim().to_ascii_lowercase();
+    let code = normalized.split(['-', '_']).next().unwrap_or_default();
+    if UI_LANGUAGES.contains(&code) {
+        code.to_owned()
+    } else {
+        default_spellcheck_language()
     }
-    normalized
 }
 
 pub fn resolve_language(preference: &str, system_language: &str) -> String {
@@ -609,8 +665,8 @@ const fn default_preview_limit() -> u64 {
     5 * 1024 * 1024
 }
 
-fn default_spellcheck_languages() -> Vec<String> {
-    vec!["en".to_owned()]
+fn default_spellcheck_language() -> String {
+    "en".to_owned()
 }
 
 const fn default_true() -> bool {
@@ -696,7 +752,7 @@ mod tests {
             language: "ar".to_owned(),
             spellcheck: SpellcheckSettings {
                 enabled: false,
-                languages: vec!["ru".to_owned(), "fr".to_owned()],
+                language: "ru".to_owned(),
                 skip_code_formula_links: false,
             },
             auto_correct: AutoCorrectSettings {
@@ -879,6 +935,116 @@ mod tests {
         assert_eq!(
             mtime_saved, mtime_restarted,
             "restarted load must not rewrite file with conscious serif"
+        );
+    }
+
+    #[test]
+    fn spellcheck_language_is_normalized_to_a_single_supported_code() {
+        assert_eq!(normalize_spellcheck_language("ru-RU"), "ru");
+        assert_eq!(normalize_spellcheck_language("  PT_br "), "pt");
+        assert_eq!(normalize_spellcheck_language("kl"), "en");
+        assert_eq!(normalize_spellcheck_language(""), "en");
+        // Значение вида "en ru" — не метка языка, а список; он сводится к умолчанию.
+        assert_eq!(normalize_spellcheck_language("en ru"), "en");
+    }
+
+    #[test]
+    fn old_spellcheck_language_list_migrates_to_the_first_language_once() {
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let path = directory.path().join("settings.json");
+        fs::write(
+            &path,
+            br#"{"spellcheck":{"enabled":true,"languages":["ru","en","de"],"skipCodeFormulaLinks":false},"migrations":{"fontFamilyDefault":true}}"#,
+        )
+        .expect("write old settings with a list of languages");
+
+        // Первая загрузка: из списка остаётся первый язык, файл переписывается.
+        let state = SettingsState::load(&path).expect("first load");
+        assert_eq!(state.get().spellcheck.language, "ru");
+        assert!(!state.get().spellcheck.skip_code_formula_links);
+
+        let written: Value = serde_json::from_slice(&fs::read(&path).expect("read migrated file"))
+            .expect("parse JSON");
+        assert_eq!(written["spellcheck"]["language"], "ru");
+        assert!(
+            written["spellcheck"].get("languages").is_none(),
+            "устаревший список языков не должен оставаться в файле"
+        );
+        assert_eq!(written["migrations"]["spellcheckSingleLanguage"], true);
+
+        let mtime_after_first = fs::metadata(&path)
+            .expect("metadata")
+            .modified()
+            .expect("mtime");
+        std::thread::sleep(std::time::Duration::from_millis(50));
+
+        // Вторая загрузка: отметка стоит, переносить нечего, файл не трогаем.
+        let restarted = SettingsState::load(&path).expect("second load");
+        assert_eq!(restarted.get().spellcheck.language, "ru");
+
+        let mtime_after_second = fs::metadata(&path)
+            .expect("metadata")
+            .modified()
+            .expect("mtime");
+        assert_eq!(
+            mtime_after_first, mtime_after_second,
+            "перенесённый файл настроек не должен переписываться при следующем запуске"
+        );
+    }
+
+    #[test]
+    fn empty_or_unsupported_spellcheck_list_migrates_to_the_default_language() {
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let path = directory.path().join("settings.json");
+        fs::write(&path, br#"{"spellcheck":{"languages":[]}}"#).expect("write empty list");
+
+        let state = SettingsState::load(&path).expect("load settings");
+        assert_eq!(state.get().spellcheck.language, "en");
+
+        let written: Value =
+            serde_json::from_slice(&fs::read(&path).expect("read file")).expect("parse JSON");
+        assert!(written["spellcheck"].get("languages").is_none());
+        assert_eq!(written["migrations"]["spellcheckSingleLanguage"], true);
+    }
+
+    #[test]
+    fn conscious_spellcheck_language_is_persisted_and_survives_restart() {
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let path = directory.path().join("settings.json");
+        fs::write(&path, br#"{"spellcheck":{"languages":["ru","en"]}}"#)
+            .expect("write old settings");
+
+        // 1. Перенос оставляет первый язык списка.
+        let state = SettingsState::load(&path).expect("initial load");
+        assert_eq!(state.get().spellcheck.language, "ru");
+
+        // 2. Человек осознанно выбирает другой язык.
+        let mut settings = state.get();
+        settings.spellcheck.language = "de".to_owned();
+        state.save(settings).expect("save user choice");
+
+        let saved: Value =
+            serde_json::from_slice(&fs::read(&path).expect("read saved file")).expect("parse JSON");
+        assert_eq!(saved["spellcheck"]["language"], "de");
+        assert_eq!(saved["migrations"]["spellcheckSingleLanguage"], true);
+
+        let mtime_saved = fs::metadata(&path)
+            .expect("metadata")
+            .modified()
+            .expect("mtime");
+        std::thread::sleep(std::time::Duration::from_millis(50));
+
+        // 3. Следующий запуск не сбрасывает выбор и не трогает файл.
+        let restarted = SettingsState::load(&path).expect("load restarted");
+        assert_eq!(restarted.get().spellcheck.language, "de");
+
+        let mtime_restarted = fs::metadata(&path)
+            .expect("metadata")
+            .modified()
+            .expect("mtime");
+        assert_eq!(
+            mtime_saved, mtime_restarted,
+            "осознанно выбранный язык проверки не должен вызывать перезапись"
         );
     }
 

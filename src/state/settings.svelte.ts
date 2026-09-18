@@ -10,7 +10,7 @@ export type StartupAction = "startScreen" | "recentFiles";
 
 export type Settings = {
   language: string;
-  spellcheck: { enabled: boolean; languages: string[]; skipCodeFormulaLinks: boolean };
+  spellcheck: { enabled: boolean; language: string; skipCodeFormulaLinks: boolean };
   autoCorrect: {
     smartQuotes: boolean;
     doubleHyphenToEmDash: boolean;
@@ -72,7 +72,7 @@ export type SettingsState = {
 
 export const defaultSettings: Settings = {
   language: "en",
-  spellcheck: { enabled: true, languages: ["en"], skipCodeFormulaLinks: true },
+  spellcheck: { enabled: true, language: "en", skipCodeFormulaLinks: true },
   autoCorrect: {
     smartQuotes: false,
     doubleHyphenToEmDash: false,
@@ -137,7 +137,7 @@ let languagePreferenceRevision = 0;
 function cloneSettings(settings: Settings): Settings {
   return {
     ...settings,
-    spellcheck: { ...settings.spellcheck, languages: [...settings.spellcheck.languages] },
+    spellcheck: { ...settings.spellcheck },
     autoCorrect: { ...settings.autoCorrect },
     editor: { ...settings.editor },
     livePreview: { ...settings.livePreview },

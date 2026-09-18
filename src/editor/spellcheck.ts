@@ -112,7 +112,7 @@ const skipCodeFormulaPlugin = ViewPlugin.fromClass(
 
 export type SpellcheckOptions = {
   enabled: boolean;
-  languages: string[];
+  language: string;
   skipCodeFormulaLinks: boolean;
 };
 
@@ -122,14 +122,14 @@ export function spellcheckExtension(options: SpellcheckOptions): Extension[] {
   const attrs: Record<string, string> = {
     spellcheck: options.enabled ? "true" : "false",
   };
-  // Только первый язык, и это ограничение, а не упрощение. Атрибут lang по
-  // спецификации HTML принимает одну метку BCP 47; значение вида "en ru"
+  // Ровно одна метка языка, и это ограничение, а не упрощение. Атрибут lang
+  // по спецификации HTML принимает одну метку BCP 47; значение вида "en ru"
   // считается недопустимым, язык элемента становится «invalid», и словарь
   // движок не выберет вообще. Проверку на нескольких языках сразу Chromium
   // настраивает у себя в профиле, со страницы до неё не дотянуться.
-  const primaryLanguage = options.languages?.find((code) => code.trim().length > 0);
-  if (primaryLanguage) {
-    attrs.lang = primaryLanguage.trim();
+  const language = options.language?.trim();
+  if (language) {
+    attrs.lang = language;
   }
   extensions.push(EditorView.contentAttributes.of(attrs));
 

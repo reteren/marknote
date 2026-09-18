@@ -1,11 +1,11 @@
 import "@testing-library/jest-dom/vitest";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/svelte";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/svelte";
 
 const mocks = vi.hoisted(() => {
   const base = {
     language: "en",
-    spellcheck: { enabled: true, languages: ["en"], skipCodeFormulaLinks: true },
+    spellcheck: { enabled: true, language: "en", skipCodeFormulaLinks: true },
     autoCorrect: { smartQuotes: false, doubleHyphenToEmDash: false, capitalizeAfterPeriod: false, threeDotsToEllipsis: false },
     editor: { fontFamily: "system-serif", fontSize: 15, zoomPercent: 100, columnWidth: "normal", tabWidth: 4, insertSpaces: true, softWrap: true, showInvisibles: false, lineNumbers: false },
     livePreview: { enabled: true, revealMarkup: "cursor", renderFormulas: true, renderImages: true, maxImageWidth: "column", disableAboveBytes: 5 * 1024 * 1024 },
@@ -38,8 +38,8 @@ const labels: Record<string, string> = {
   "settings.editor.lineNumbers": "Line numbers",
   "settings.editor.tabWidth": "Tab width",
   "settings.editor.tabWidthDescription": "Number of spaces per indentation level",
-  "settings.spelling.languages": "Spellcheck languages",
-  "settings.spelling.languagesDescription": "Select dictionaries installed in Windows.",
+  "settings.spelling.language": "Spellcheck language",
+  "settings.spelling.languageDescription": "Only one language is checked at a time.",
   "settings.spelling.dictionaryUnavailable": "Windows language dictionary is not installed",
   "settings.language.name.en": "English",
   "settings.language.name.ru": "Russian",
@@ -173,12 +173,24 @@ describe("SettingsWindow", () => {
     await waitFor(() => expect(mocks.invoke).toHaveBeenCalledWith("reset_settings"));
   });
 
-  it("shows languages without an installed dictionary as unavailable", async () => {
+  it("offers one spellcheck language and names the ones Windows has no dictionary for", async () => {
     mount();
     await selectSection("Spellcheck");
-    await waitFor(() => expect(screen.getByLabelText("Russian — Windows language dictionary is not installed")).toBeDisabled());
-    expect(screen.getAllByText("Windows language dictionary is not installed").length).toBeGreaterThan(0);
-    expect(screen.getByLabelText("English")).toBeEnabled();
+
+    const select = screen.getByRole("combobox", { name: "Spellcheck language" });
+    await waitFor(() =>
+      expect(
+        within(select).getByRole("option", { name: "Russian — Windows language dictionary is not installed" }),
+      ).toBeInTheDocument(),
+    );
+    expect(within(select).getByRole("option", { name: "English" })).toBeInTheDocument();
+    expect(within(select).queryByRole("option", { name: "System" })).not.toBeInTheDocument();
+    expect(select).toHaveValue("en");
+    expect(screen.queryByText("Windows language dictionary is not installed")).not.toBeInTheDocument();
+
+    await fireEvent.change(select, { target: { value: "ru" } });
+    expect(settingsState.settings.spellcheck.language).toBe("ru");
+    expect(screen.getByText("Windows language dictionary is not installed")).toBeInTheDocument();
   });
 
   it("marks a changed value and removes the marker when restored", async () => {

@@ -5,7 +5,7 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/svelte";
 const mocks = vi.hoisted(() => {
   const base = {
     language: "en",
-    spellcheck: { enabled: true, languages: ["en"], skipCodeFormulaLinks: true },
+    spellcheck: { enabled: true, language: "en", skipCodeFormulaLinks: true },
     autoCorrect: { smartQuotes: false, doubleHyphenToEmDash: false, capitalizeAfterPeriod: false, threeDotsToEllipsis: false },
     editor: { fontFamily: "system-serif", fontSize: 15, zoomPercent: 170, columnWidth: "normal", tabWidth: 4, insertSpaces: true, softWrap: true, showInvisibles: false, lineNumbers: false },
     livePreview: { enabled: true, revealMarkup: "cursor", renderFormulas: true, renderImages: true, maxImageWidth: "column", disableAboveBytes: 5 * 1024 * 1024 },

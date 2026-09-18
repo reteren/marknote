@@ -47,6 +47,10 @@
     { value: "ar", labelKey: "settings.language.name.ar" },
   ];
 
+  // Языки проверки — те же коды, что и у интерфейса, но без `system`:
+  // словарь выбирается явно, а не вслед за языком меню.
+  const spellLanguageOptions: Option[] = languageOptions.filter((option) => option.value !== "system");
+
   const descriptors: Descriptor[] = [
     { path: "language", type: "select", titleKey: "settings.language.interface", descriptionKey: "settings.language.interfaceDescription", options: languageOptions },
     { path: "editor.fontFamily", type: "select", titleKey: "settings.editor.fontFamily", descriptionKey: "settings.editor.fontFamilyDescription", options: [
@@ -78,6 +82,7 @@
     { path: "livePreview.maxImageWidth", type: "fixed", titleKey: "settings.preview.maxImageWidth", display: "settings.preview.maxImageWidthColumn" },
     { path: "livePreview.disableAboveBytes", type: "number", titleKey: "settings.preview.disableAbove", descriptionKey: "settings.preview.disableAboveDescription", min: 1, max: 100, step: 1, unit: "settings.unit.megabytes" },
     { path: "spellcheck.enabled", type: "toggle", titleKey: "settings.spelling.enabled", descriptionKey: "settings.spelling.enabledDescription" },
+    { path: "spellcheck.language", type: "select", titleKey: "settings.spelling.language", descriptionKey: "settings.spelling.languageDescription", options: spellLanguageOptions },
     { path: "spellcheck.skipCodeFormulaLinks", type: "toggle", titleKey: "settings.spelling.skipCodeFormulaLinks", descriptionKey: "settings.spelling.skipCodeFormulaLinksDescription" },
     { path: "autoCorrect.smartQuotes", type: "toggle", titleKey: "settings.spelling.smartQuotes" },
     { path: "autoCorrect.doubleHyphenToEmDash", type: "toggle", titleKey: "settings.spelling.doubleHyphenToEmDash" },
@@ -107,13 +112,12 @@
     { id: "language", labelKey: "settings.section.language", rowPaths: ["language"] },
     { id: "editor", labelKey: "settings.section.editor", rowPaths: descriptors.filter((item) => item.path.startsWith("editor.")).map((item) => item.path) },
     { id: "preview", labelKey: "settings.section.preview", rowPaths: descriptors.filter((item) => item.path.startsWith("livePreview.")).map((item) => item.path) },
-    { id: "spelling", labelKey: "settings.section.spelling", rowPaths: descriptors.filter((item) => item.path.startsWith("spellcheck.") || item.path.startsWith("autoCorrect.")).map((item) => item.path).concat("spellcheck.languages") },
+    { id: "spelling", labelKey: "settings.section.spelling", rowPaths: descriptors.filter((item) => item.path.startsWith("spellcheck.") || item.path.startsWith("autoCorrect.")).map((item) => item.path) },
     { id: "files", labelKey: "settings.section.files", rowPaths: descriptors.filter((item) => item.path.startsWith("files.")).map((item) => item.path) },
     { id: "windows", labelKey: "settings.section.windows", rowPaths: descriptors.filter((item) => item.path.startsWith("windows.")).map((item) => item.path) },
     { id: "other", labelKey: "settings.section.other", rowPaths: [] },
   ];
 
-  const localeNames = ["en", "ru", "de", "es", "pt", "it", "fr", "zh", "ja", "ar"];
   const version = packageInfo.version;
 
   type Props = {
@@ -160,7 +164,7 @@
   function resetPath(path: string): void {
     const value = defaultValue(path);
     if (path === "editor.zoomPercent" && editorView) applyZoomValue(Number(value));
-    else updatePath(path, Array.isArray(value) ? [...value] : value);
+    else updatePath(path, value);
   }
 
   function updateDescriptor(descriptor: Descriptor, rawValue: string | boolean): void {
@@ -195,17 +199,21 @@
     setZoomPercent(editorView, target);
   }
 
-  function toggleSpellLanguage(language: string, checked: boolean): void {
-    const selected = new Set(settingsState.settings.spellcheck.languages);
-    if (checked) selected.add(language);
-    else selected.delete(language);
-    updatePath("spellcheck.languages", [...selected]);
+  // Пока список словарей не пришёл, ни один язык не объявляется недоступным:
+  // пустой ответ команды означает «неизвестно», а не «ничего не установлено».
+  function dictionaryMissing(language: string): boolean {
+    return availableSpellLanguages.length > 0 && !availableSpellLanguages.includes(language);
+  }
+
+  function spellLanguageLabel(option: Option): string {
+    const name = t(option.labelKey);
+    return dictionaryMissing(option.value) ? `${name} — ${t("settings.spelling.dictionaryUnavailable")}` : name;
   }
 
   function matches(path: string, query = searchQuery): boolean {
     const descriptor = descriptors.find((item) => item.path === path);
-    const titleKey = descriptor?.titleKey ?? "settings.spelling.languages";
-    const text = `${t(titleKey)} ${descriptor?.descriptionKey ? t(descriptor.descriptionKey) : ""}`.toLocaleLowerCase();
+    if (!descriptor) return false;
+    const text = `${t(descriptor.titleKey)} ${descriptor.descriptionKey ? t(descriptor.descriptionKey) : ""}`.toLocaleLowerCase();
     return !query.trim() || text.includes(query.trim().toLocaleLowerCase());
   }
 
@@ -213,8 +221,7 @@
     if (!query.trim()) return true;
     const section = sections.find((item) => item.id === id);
     if (!section) return false;
-    if (section.rowPaths.some((path) => matches(path, query))) return true;
-    return id === "spelling" && matches("spellcheck.languages", query);
+    return section.rowPaths.some((path) => matches(path, query));
   }
 
   function setSearchQuery(value: string): void {
@@ -464,45 +471,22 @@
                     {#if creatableFormats.length === 0}<option value="markdown">{formatLabel("markdown", "Markdown")}</option>{/if}
                   {:else}
                     {#each descriptor.options ?? [] as option (option.value)}
-                      <option value={option.value}>{t(option.labelKey)}</option>
+                      <option value={option.value}>
+                        {descriptor.path === "spellcheck.language" ? spellLanguageLabel(option) : t(option.labelKey)}
+                      </option>
                     {/each}
                   {/if}
                 </select>
+                {#if descriptor.path === "spellcheck.language" && dictionaryMissing(settingsState.settings.spellcheck.language)}
+                  <p class="dictionary-note">{t("settings.spelling.dictionaryUnavailable")}</p>
+                {/if}
               {:else}
                 <span class="fixed-value">{t(descriptor.display ?? "settings.value.fixed")}</span>
               {/if}
             </SettingRow>
           {/each}
 
-          {#if activeSection === "spelling" && matches("spellcheck.languages")}
-            <SettingRow
-              id="settings-spellcheck-languages"
-              title={t("settings.spelling.languages")}
-              description={t("settings.spelling.languagesDescription")}
-              changed={isModified("spellcheck.languages")}
-              modifiedLabel={t("settings.modified")}
-              resetLabel={t("settings.resetValue")}
-              onReset={() => resetPath("spellcheck.languages")}
-            >
-              <div class="language-list" role="group" aria-label={t("settings.spelling.languages")}>
-                {#each localeNames as language (language)}
-                  {@const available = availableSpellLanguages.includes(language)}
-                  <label class="language-option" class:unavailable={!available} title={!available ? t("settings.spelling.dictionaryUnavailable") : undefined}>
-                    <input
-                      type="checkbox"
-                      checked={settingsState.settings.spellcheck.languages.includes(language)}
-                      disabled={!available}
-                      aria-label={`${t(`settings.language.name.${language}`)}${available ? "" : ` — ${t("settings.spelling.dictionaryUnavailable")}`}`}
-                      onchange={(event) => toggleSpellLanguage(language, event.currentTarget.checked)}
-                    />
-                    <span>{t(`settings.language.name.${language}`)}</span>
-                    {#if !available}<span class="dictionary-note">{t("settings.spelling.dictionaryUnavailable")}</span>{/if}
-                  </label>
-                {/each}
-              </div>
-            </SettingRow>
-          {/if}
-          {#if rows.length === 0 && !(activeSection === "spelling" && matches("spellcheck.languages"))}
+          {#if rows.length === 0}
             <p class="empty-search">{t("settings.noResults")}</p>
           {/if}
         {/if}
@@ -619,10 +603,7 @@
   .numeric-control input { width: 90px; }
   .numeric-control span, .fixed-value { color: var(--text-muted); white-space: nowrap; }
   .settings-content select { width: 100%; max-width: 260px; }
-  .language-list { display: grid; gap: 7px; max-height: 245px; overflow: auto; }
-  .language-option { display: flex; align-items: center; gap: 8px; }
-  .language-option.unavailable { color: var(--text-faint); }
-  .dictionary-note { color: var(--text-muted); font-size: 11px; }
+  .dictionary-note { margin: 5px 0 0; color: var(--text-muted); font-size: 11px; }
 
   .settings-footer {
     display: flex;
