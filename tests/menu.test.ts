@@ -82,4 +82,14 @@ describe("menu model", () => {
     expect(createContextFormatGroups({ editable: false })[0].items.find((item) => item.id === "format.bold")?.disabled).toBe(true);
     expect(items.find((item) => item.id === "file.new.markdown")?.disabled).toBe(false);
   });
+
+  it("removes Markdown groups for code/data formats but keeps JSON tools", () => {
+    expect(createContextFormatGroups({ formatId: "javascript" })).toEqual([]);
+
+    const jsonGroups = createContextFormatGroups({ formatId: "json" });
+    expect(jsonGroups.flatMap((group) => group.items).map((item) => item.id)).toEqual([
+      "format.jsonValidate",
+      "format.jsonFormat",
+    ]);
+  });
 });

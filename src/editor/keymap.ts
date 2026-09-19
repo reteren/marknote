@@ -12,6 +12,7 @@ import {
 import { ChangeSet, EditorSelection, EditorState, Transaction, type Extension } from "@codemirror/state";
 import { keymap, EditorView, type Command, type KeyBinding } from "@codemirror/view";
 import { insertNewlineContinueMarkup } from "@codemirror/lang-markdown";
+import { editorMarkdownCommandsStateField } from "./settings";
 
 type Pair = { open: string; close: string };
 
@@ -45,6 +46,8 @@ export interface MarknoteKeymapOptions {
   handlers?: MarknoteKeymapHandlers;
   /** Lets the table extension own Tab/Shift-Tab while the cursor is in a table. */
   isInTable?: (state: EditorState, position: number) => boolean;
+  /** Whether Markdown-only commands should handle a key in this editor state. */
+  isMarkdownCommands?: (state: EditorState) => boolean;
 }
 
 function currentLine(state: EditorState, position: number): string {
@@ -778,26 +781,30 @@ function codeAwareKeyHandler(bindings: KeyBinding[], view: EditorView, event: Ke
 
 function createBindings(options: MarknoteKeymapOptions): KeyBinding[] {
   const isInTable = options.isInTable ?? isTableContext;
+  const isMarkdownCommands = options.isMarkdownCommands ?? ((state: EditorState) =>
+    state.field(editorMarkdownCommandsStateField, false) ?? true);
+  const markdownCommand = (run: Command): Command => (view) =>
+    isMarkdownCommands(view.state) ? run(view) : false;
   const local: KeyBinding[] = [
     commandBinding("Mod-z", undo),
     commandBinding("Mod-Shift-z", redo),
     commandBinding("Mod-y", redo),
     commandBinding("Tab", (view) => indent(view, isInTable)),
     commandBinding("Shift-Tab", (view) => outdent(view, isInTable)),
-    commandBinding("Shift-Enter", softBreak),
-    commandBinding("Enter", continueMarkdownList),
-    commandBinding("Mod-b", (view) => toggleWrapper(view, "**", "**")),
-    commandBinding("Mod-i", (view) => toggleWrapper(view, "*", "*")),
-    commandBinding("Mod-e", (view) => toggleWrapper(view, "`", "`")),
+    commandBinding("Shift-Enter", markdownCommand(softBreak)),
+    commandBinding("Enter", markdownCommand(continueMarkdownList)),
+    commandBinding("Mod-b", markdownCommand((view) => toggleWrapper(view, "**", "**"))),
+    commandBinding("Mod-i", markdownCommand((view) => toggleWrapper(view, "*", "*"))),
+    commandBinding("Mod-e", markdownCommand((view) => toggleWrapper(view, "`", "`"))),
     commandBinding("Mod-d", deleteLine),
     commandBinding("Alt-ArrowUp", moveLineUp),
     commandBinding("Alt-ArrowDown", moveLineDown),
-    commandBinding("Mod-k", toggleLink),
-    commandBinding("Mod-Shift-k", toggleCodeBlock),
+    commandBinding("Mod-k", markdownCommand(toggleLink)),
+    commandBinding("Mod-Shift-k", markdownCommand(toggleCodeBlock)),
     commandBinding("Mod-Shift-v", pastePlainText),
   ];
-  for (let level = 1; level <= 6; level += 1) local.push(commandBinding(`Mod-${level}`, headingCommand(level)));
-  local.push(commandBinding("Mod-0", headingCommand(0)));
+  for (let level = 1; level <= 6; level += 1) local.push(commandBinding(`Mod-${level}`, markdownCommand(headingCommand(level))));
+  local.push(commandBinding("Mod-0", markdownCommand(headingCommand(0))));
 
   const external = externalBindings(options.handlers ?? {});
   const all = [...local, ...external];

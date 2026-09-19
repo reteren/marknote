@@ -18,7 +18,7 @@ import {
 } from "./document.svelte";
 import { saveAs as saveAsFile, type AutosaveController } from "./autosave";
 import type { FormatCapabilities } from "./formats.svelte";
-import { markdownFormat } from "./formats.svelte";
+import { markdownFormat, supportsMarkdownCommands } from "./formats.svelte";
 import { settingsState, type Settings } from "./settings.svelte";
 import type { MarknoteKeymapHandlers } from "../editor/keymap";
 
@@ -191,6 +191,40 @@ const contextActionIds = new Set([
   "insert-math-block",
   "insert-hr",
 ]);
+
+const markdownCommandIds = new Set([
+  "bold",
+  "italic",
+  "code",
+  "strikethrough",
+  "highlight",
+  "link",
+  "insert-table",
+  "insert-callout",
+  "insert-code-block",
+  "insert-math-block",
+  "insert-hr",
+  "format.bold",
+  "format.italic",
+  "format.strikethrough",
+  "format.highlight",
+  "format.code",
+  "format.link",
+  "format.clearFormatting",
+  "format.clearHeading",
+  "format.list",
+  "format.orderedList",
+  "format.taskList",
+  "format.table",
+  "format.callout",
+  "format.codeBlock",
+  "format.mathBlock",
+  "format.horizontalRule",
+]);
+
+function isMarkdownCommand(id: string): boolean {
+  return markdownCommandIds.has(id) || id.startsWith("format.heading");
+}
 
 function command(view: EditorView | null | undefined, run: Command): ActionResult {
   return view ? run(view) : false;
@@ -990,6 +1024,7 @@ export function createActions(dependencies: ActionsDependencies = {}): AppAction
     if (id === "open-image" || id === "copy-image") return Boolean(payload);
     if (id === "file.close") return Boolean(dependencies.closeWindow);
     if (id === "file.settings") return Boolean(dependencies.openSettings);
+    if (isMarkdownCommand(id) && !supportsMarkdownCommands(state.format)) return false;
     if (id === "format.jsonValidate") return state.format.id === "json";
     if (id === "format.jsonFormat") return state.format.id === "json" && canEdit();
     if (id === "help.shortcuts" || id === "help.markdownReference" || id === "help.about") return Boolean(dialogs.showHelp);
@@ -1004,6 +1039,7 @@ export function createActions(dependencies: ActionsDependencies = {}): AppAction
   };
 
   const run = async (id: string, payload?: string): Promise<ActionResult> => {
+    if (isMarkdownCommand(id) && !supportsMarkdownCommands(state.format)) return false;
     if (id.startsWith("file.new.")) return newDocument(id.slice("file.new.".length));
     if (id === "file.open") return openFile(payload);
     if (id === "file.newWindow") return newDocument();

@@ -1,0 +1,13 @@
+[
+  {"init":"qa/browser/tauri-mock.js"},
+  {"reload":true},
+  {"wait":700},
+  {"clickText":"JavaScript"},
+  {"wait":700},
+  {"clickSelector":".cm-content"},
+  {"type":"word"},
+  {"key":"b","code":"KeyB","vk":66,"mods":2},
+  {"wait":400},
+  {"eval":"JSON.stringify({text:document.querySelector('.cm-content')?.textContent,format:document.querySelector('.format-info button')?.textContent,errors:window.__ERR})"},
+  {"shot":"qa/shots/w137-javascript-bold.png"}
+]

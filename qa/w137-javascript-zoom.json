@@ -1,0 +1,17 @@
+[
+  {"init":"qa/browser/tauri-mock.js"},
+  {"reload":true},
+  {"wait":700},
+  {"clickText":"JavaScript"},
+  {"wait":700},
+  {"clickSelector":".cm-content"},
+  {"eval":"JSON.stringify({before:getComputedStyle(document.querySelector('.cm-content')).fontSize,errors:window.__ERR})"},
+  {"key":"+","code":"Equal","vk":187,"mods":10,"text":"+"},
+  {"wait":300},
+  {"eval":"JSON.stringify({zoomed:getComputedStyle(document.querySelector('.cm-content')).fontSize})"},
+  {"shot":"qa/shots/w137-javascript-zoomed.png"},
+  {"key":"0","code":"Digit0","vk":48,"mods":2},
+  {"wait":400},
+  {"eval":"JSON.stringify({afterReset:getComputedStyle(document.querySelector('.cm-content')).fontSize,errors:window.__ERR})"},
+  {"shot":"qa/shots/w137-javascript-zoom-reset.png"}
+]

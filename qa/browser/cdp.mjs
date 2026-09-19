@@ -39,6 +39,17 @@ for (const s of steps) {
       await new Promise((res) => setTimeout(res, 150));
       if (!s.hover) for (const type of ["mousePressed", "mouseReleased"]) await send("Input.dispatchMouseEvent", { type, x: pt[0], y: pt[1], button: "left", clickCount: 1 });
     }
+  } else if (s.scrollIntoView) {
+    await send("Runtime.evaluate", { expression: `document.querySelector(${JSON.stringify(s.scrollIntoView)})?.scrollIntoView({ block: "center", inline: "nearest" })` });
+    await new Promise((res) => setTimeout(res, 100));
+  } else if (s.clickSelector) {
+    const r = await send("Runtime.evaluate", { returnByValue: true, expression: `(() => { const e = document.querySelectorAll(${JSON.stringify(s.clickSelector)})[${Number.isInteger(s.index) ? s.index : 0}]; if (!e) return null; const r = e.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; })()` });
+    const pt = r.result?.result?.value;
+    console.log("clickSelector>", s.clickSelector, pt);
+    if (pt) {
+      await send("Input.dispatchMouseEvent", { type: "mouseMoved", x: pt[0], y: pt[1] });
+      for (const type of ["mousePressed", "mouseReleased"]) await send("Input.dispatchMouseEvent", { type, x: pt[0], y: pt[1], button: "left", clickCount: 1 });
+    }
   } else if (s.move) {
     await send("Input.dispatchMouseEvent", { type: "mouseMoved", x: s.move[0], y: s.move[1] });
   } else if (s.wait) {

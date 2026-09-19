@@ -147,6 +147,16 @@ describe("application actions", () => {
     expect(blockView.state.doc.toString()).toBe("```\nword\n```");
   });
 
+  it("rejects Markdown actions for non-Markdown formats", async () => {
+    resetDocument(plainFormat, "word");
+    const view = viewFor("word");
+    const actions = createActions({ state: documentState, getEditorView: () => view });
+
+    expect(actions.isAvailable("format.bold")).toBe(false);
+    expect(await actions.run("format.bold")).toBe(false);
+    expect(view.state.doc.toString()).toBe("word");
+  });
+
   it("connects Ctrl+G to the shell go-to-line dialog and exposes JSON context actions", async () => {
     const goToLine = vi.fn();
     const actions = createActions({ goToLine, state: documentState });

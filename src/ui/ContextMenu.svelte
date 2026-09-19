@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount, tick } from "svelte";
   import { interfaceLanguage, translate as t } from "../i18n";
+  import { formatsState, supportsMarkdownCommands } from "../state/formats.svelte";
   import { createContextFormatGroups, type MenuItem as ModelMenuItem } from "./menuModel";
 
   export type ContextMenuTarget = "selection" | "empty" | "link" | "image";
@@ -82,6 +83,12 @@
   let returnFocusElement: HTMLElement | null = null;
   const rtl = $derived(interfaceLanguage.locale === "ar");
 
+  const markdownCommands = $derived.by(() => {
+    if (!formatId) return true;
+    const format = formatsState.items.find((candidate) => candidate.id === formatId);
+    return format ? supportsMarkdownCommands(format) : formatId === "markdown";
+  });
+
   function toOption(item: ModelMenuItem): MenuOption {
     if (item.separator) return { separator: true };
     return {
@@ -93,7 +100,7 @@
   }
 
   const formatSubmenus = $derived.by<SubmenuEntry[]>(() =>
-    createContextFormatGroups({ editable, formatId }).map((group) => ({
+    createContextFormatGroups({ editable, formatId, markdownCommands }).map((group) => ({
       kind: "submenu",
       label: group.label,
       items: group.items.map(toOption),
@@ -125,7 +132,7 @@
     const selectionExists = targetType === "selection" || hasSelection;
     return [
       ...formatSubmenus,
-      { separator: true },
+      ...(formatSubmenus.length > 0 ? [{ separator: true }] : []),
       { id: "cut", label: t("menu.cut"), shortcut: "Ctrl+X", disabled: !selectionExists || !editable },
       { id: "copy", label: t("menu.copy"), shortcut: "Ctrl+C", disabled: !selectionExists },
       { id: "paste", label: t("menu.paste"), shortcut: "Ctrl+V", disabled: !canPaste || !editable },

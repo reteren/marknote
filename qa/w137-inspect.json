@@ -1,0 +1,7 @@
+[
+  {"init":"qa/browser/tauri-mock.js"},
+  {"reload":true},
+  {"wait":900},
+  {"eval":"JSON.stringify({title:document.title,buttons:Array.from(document.querySelectorAll('button')).filter((b)=>b.offsetParent).map((b)=>b.textContent.trim()),content:document.querySelector('.cm-content')?.textContent,format:document.querySelector('.format-info button')?.textContent,errors:window.__ERR})"},
+  {"shot":"qa/shots/w137-inspect.png"}
+]

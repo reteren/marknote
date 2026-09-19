@@ -35,6 +35,8 @@ export type MenuState = {
   canRedo?: boolean;
   canSave?: boolean;
   formatId?: string;
+  /** Whether this document accepts Markdown editing commands. */
+  markdownCommands?: boolean;
   zoomPercent?: number;
 };
 
@@ -171,7 +173,10 @@ export function createMenuModel(
 /** Formatting commands shared with the context-menu submenus (not a top-level section). */
 export function createContextFormatGroups(state: MenuState = {}): MenuGroup[] {
   const notEditable = state.editable === false || state.readOnly === true;
-  return [
+  const markdownCommands = state.markdownCommands ?? (state.formatId === undefined || state.formatId === "markdown");
+  const groups: MenuGroup[] = [];
+
+  if (markdownCommands) groups.push(
     {
       label: t("contextMenu.formatting"),
       items: [
@@ -186,6 +191,9 @@ export function createContextFormatGroups(state: MenuState = {}): MenuGroup[] {
         item("format.clearFormatting", t("format.clearFormatting"), "", notEditable),
       ],
     },
+  );
+
+  if (markdownCommands) groups.push(
     {
       label: t("contextMenu.paragraph"),
       items: [
@@ -201,22 +209,30 @@ export function createContextFormatGroups(state: MenuState = {}): MenuGroup[] {
         item("format.clearHeading", t("format.removeHeading"), "Ctrl+0", notEditable),
       ],
     },
-    {
-      label: t("contextMenu.insert"),
-      items: [
+  );
+
+  const insertItems: MenuItem[] = markdownCommands
+    ? [
         item("format.table", t("format.table"), "", notEditable),
         item("format.callout", t("format.callout"), "", notEditable),
         item("format.codeBlock", t("format.codeBlock"), "Ctrl+Shift+K", notEditable),
         item("format.mathBlock", t("format.mathBlock"), "", notEditable),
         item("format.horizontalRule", t("format.horizontalRule"), "", notEditable),
-        ...(state.formatId === "json"
-          ? [
-              separator("format.separator.json"),
-              item("format.jsonValidate", "Validate JSON"),
-              item("format.jsonFormat", "Format JSON", "", notEditable),
-            ]
-          : []),
-      ],
+      ]
+    : [];
+  if (state.formatId === "json") {
+    if (insertItems.length > 0) insertItems.push(separator("format.separator.json"));
+    insertItems.push(
+      item("format.jsonValidate", "Validate JSON"),
+      item("format.jsonFormat", "Format JSON", "", notEditable),
+    );
+  }
+  if (insertItems.length > 0) groups.push(
+    {
+      label: t("contextMenu.insert"),
+      items: insertItems,
     },
-  ];
+  );
+
+  return groups;
 }

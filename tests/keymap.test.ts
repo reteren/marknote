@@ -12,6 +12,7 @@ import {
   marknoteKeyBindings,
   physicalShortcutName,
 } from "../src/editor/keymap";
+import { editorMarkdownCommandsStateField, setEditorMarkdownCommandsEffect } from "../src/editor/settings";
 
 type TestView = Pick<EditorView, "state" | "dispatch">;
 
@@ -275,6 +276,38 @@ describe("MarkNote editor keymap", () => {
     expect(run("Mod-0", heading, getMarknoteKeyBindings({ handlers }))).toBe(true);
     expect(heading.state.doc.toString()).toBe("title");
     expect(resetZoom).toHaveBeenCalledOnce();
+  });
+
+  it("lets Markdown shortcuts decline non-Markdown states and preserves Ctrl+0 zoom", () => {
+    const isMarkdownCommands = () => false;
+    const resetZoom = vi.fn(() => true);
+    const bindings = getMarknoteKeyBindings({ handlers: { resetZoom }, isMarkdownCommands });
+    const view = makeView("**word**", 2);
+
+    expect(run("Mod-b", view, bindings)).toBe(false);
+    expect(view.state.doc.toString()).toBe("**word**");
+    expect(run("Mod-1", view, bindings)).toBe(false);
+
+    const zoomBindings = bindings.filter((item) => item.key === "Mod-0");
+    expect(zoomBindings[0]?.run?.(view as EditorView)).toBe(false);
+    expect(zoomBindings[1]?.run?.(view as EditorView)).toBe(true);
+    expect(resetZoom).toHaveBeenCalledOnce();
+  });
+
+  it("reads the Markdown-command capability from the editor state", () => {
+    const view = makeView("**word**", 2, 2, [editorMarkdownCommandsStateField]);
+    view.dispatch({ effects: setEditorMarkdownCommandsEffect.of(false) });
+
+    expect(run("Mod-b", view)).toBe(false);
+    expect(view.state.doc.toString()).toBe("**word**");
+  });
+
+  it("runs Markdown shortcuts when the editor state supports them", () => {
+    const bindings = getMarknoteKeyBindings({ isMarkdownCommands: () => true });
+    const view = makeView("word", 4);
+
+    expect(run("Mod-b", view, bindings)).toBe(true);
+    expect(view.state.doc.toString()).toBe("**word**");
   });
 
   it("retains CodeMirror base editing and document navigation bindings", () => {
