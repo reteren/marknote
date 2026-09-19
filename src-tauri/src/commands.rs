@@ -109,6 +109,20 @@ pub struct NewDocument {
     pub format: FormatCapabilities,
 }
 
+fn validate_open_file(path: &str) -> Result<(), CommandError> {
+    let input_path = PathBuf::from(path);
+    let canonical = windows::canonical_path(&input_path).map_err(CommandError::InvalidPath)?;
+    let bytes = fs::read(&canonical)?;
+    let adapter = formats::adapter_for_path(&canonical);
+    if adapter.caps().id == "plain" && binary::is_binary_sample(&bytes) {
+        return Err(CommandError::BinaryFile(
+            canonical.to_string_lossy().into_owned(),
+        ));
+    }
+    adapter.decode(&bytes).map_err(CommandError::Format)?;
+    Ok(())
+}
+
 #[tauri::command]
 pub fn open_file(
     window: WebviewWindow,
@@ -402,10 +416,12 @@ pub fn read_image(docPath: Option<String>, src: String) -> Result<String, Comman
 
 #[tauri::command]
 pub async fn open_in_new_window(app: AppHandle, path: String) -> Result<(), CommandError> {
-    tauri::async_runtime::spawn_blocking(move || windows::route_file(&app, path))
-        .await
-        .map_err(|error| CommandError::WindowRouting(error.to_string()))?
-        .map_err(CommandError::WindowRouting)
+    tauri::async_runtime::spawn_blocking(move || {
+        validate_open_file(&path)?;
+        windows::route_file_in_new_window(&app, path).map_err(CommandError::WindowRouting)
+    })
+    .await
+    .map_err(|error| CommandError::WindowRouting(error.to_string()))?
 }
 
 #[allow(non_snake_case)]
@@ -784,6 +800,22 @@ mod tests {
             formats::for_path(Path::new("note.unknown-extension")).id,
             "plain"
         );
+    }
+
+    #[test]
+    fn new_window_drop_validation_reuses_open_file_errors_without_creating_a_window() {
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let text_path = directory.path().join("note.md");
+        fs::write(&text_path, "# Note\n").expect("write text file");
+        validate_open_file(text_path.to_str().expect("utf-8 path"))
+            .expect("supported text file should be accepted");
+
+        let binary_path = directory.path().join("payload.bin");
+        fs::write(&binary_path, b"header\0payload").expect("write binary file");
+        assert!(matches!(
+            validate_open_file(binary_path.to_str().expect("utf-8 path")),
+            Err(CommandError::BinaryFile(path)) if path.ends_with("payload.bin")
+        ));
     }
 
     #[test]

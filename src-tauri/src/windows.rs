@@ -333,6 +333,23 @@ pub fn handle_single_instance(app: &tauri::AppHandle, argv: Vec<String>) {
 /// Если свободного стартового окна нет, создаёт новое окно из конфигурации
 /// `main`, сохраняя те же размеры, тему и политики webview.
 pub fn route_file(app: &tauri::AppHandle, path: impl AsRef<Path>) -> Result<(), String> {
+    route_file_with_policy(app, path, true)
+}
+
+/// Routes a user-requested document to a dedicated window. An already-open
+/// document is still reused, but an unrelated empty startup window is not.
+pub fn route_file_in_new_window(
+    app: &tauri::AppHandle,
+    path: impl AsRef<Path>,
+) -> Result<(), String> {
+    route_file_with_policy(app, path, false)
+}
+
+fn route_file_with_policy(
+    app: &tauri::AppHandle,
+    path: impl AsRef<Path>,
+    reuse_empty_window: bool,
+) -> Result<(), String> {
     let canonical = canonical_path(path.as_ref())?;
     let key = registry_key(&canonical);
     let settings = app.state::<SettingsState>().get();
@@ -355,10 +372,17 @@ pub fn route_file(app: &tauri::AppHandle, path: impl AsRef<Path>) -> Result<(), 
         if let Some(label) = existing {
             state.set_pending_file(&label, canonical.clone());
             RouteTarget::Existing(label)
-        } else if let Some(label) = state.take_empty() {
-            state.reserve_file(key.clone(), &label);
-            state.set_pending_file(&label, canonical.clone());
-            RouteTarget::Existing(label)
+        } else if reuse_empty_window {
+            if let Some(label) = state.take_empty() {
+                state.reserve_file(key.clone(), &label);
+                state.set_pending_file(&label, canonical.clone());
+                RouteTarget::Existing(label)
+            } else {
+                let label = state.allocate_window_label();
+                state.reserve_file(key.clone(), &label);
+                state.set_pending_file(&label, canonical.clone());
+                RouteTarget::New(label)
+            }
         } else {
             let label = state.allocate_window_label();
             state.reserve_file(key.clone(), &label);
@@ -374,7 +398,7 @@ pub fn route_file(app: &tauri::AppHandle, path: impl AsRef<Path>) -> Result<(), 
                 // Окно могло закрыться между чтением реестра и маршрутизацией.
                 app.state::<AppState>().forget_file(&key, &label);
                 app.state::<AppState>().forget_pending_file(&label);
-                return route_file(app, canonical);
+                return route_file_with_policy(app, canonical, reuse_empty_window);
             }
         },
         RouteTarget::New(label) => match create_window(app, &label) {

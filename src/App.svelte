@@ -927,14 +927,31 @@ import { EditorView, type EditorView as EditorViewType } from "@codemirror/view"
     lastDropKey = batchKey;
     lastDropAt = now;
 
-    const reuseCurrent = documentState.path === null && documentState.text.length === 0 && !documentState.dirty;
-    normalized.forEach((path, index) => {
-      if (index === 0 && reuseCurrent) {
-        void openFile(path);
-      } else {
-        void invoke("open_in_new_window", { path }).catch(reportError);
-      }
-    });
+    // Брошенный файл открывается вкладкой в этом же окне: окно человек уже
+    // открыл, и плодить рядом ещё одно — не то, чего он ждёт. Файлы
+    // открываются по очереди: каждая вкладка забирает состояние редактора.
+    void normalized.reduce(
+      (chain, path) => chain.then(() => openFileInTab(path)),
+      Promise.resolve(),
+    );
+  }
+
+  /** Открывает файл вкладкой: уже открытый — просто показывает. */
+  async function openFileInTab(path: string): Promise<void> {
+    const key = pathKey(path);
+    const existing = workspace.tabs.find(
+      (tab) => tab.document.path !== null && pathKey(tab.document.path) === key,
+    );
+    if (existing) {
+      handleSelectTab(existing.id);
+      editorView?.focus();
+      return;
+    }
+
+    const current = activeTab().document;
+    const currentIsEmpty = current.path === null && current.text.length === 0 && !current.dirty;
+    if (!currentIsEmpty) handleOpenNewTab();
+    await openFile(path);
   }
 
   function handleDrop(event: DragEvent): void {
