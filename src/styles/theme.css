@@ -126,9 +126,10 @@ body {
   background: var(--text-selection);
 }
 
-/* Полосы прокрутки в тон теме */
+/* Полосы прокрутки: виден только ползунок. Подложка своего цвета выглядела
+   тёмной лентой вдоль края документа и спорила с фоном редактора. */
 * {
-  scrollbar-color: var(--bg-modifier-border) var(--bg-secondary-alt);
+  scrollbar-color: var(--bg-modifier-border) transparent;
 }
 
 ::-webkit-scrollbar {
@@ -137,7 +138,7 @@ body {
 }
 
 ::-webkit-scrollbar-track {
-  background: var(--bg-secondary-alt);
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
@@ -154,7 +155,7 @@ body {
 }
 
 ::-webkit-scrollbar-corner {
-  background: var(--bg-secondary-alt);
+  background: transparent;
 }
 
 /* Чекбоксы в стиле тёмной темы */
