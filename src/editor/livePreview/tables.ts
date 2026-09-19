@@ -219,6 +219,69 @@ function findEnclosingTable(view: EditorView, position: number): SyntaxNode | nu
   return node;
 }
 
+export type TableEdge = "bottom" | "right";
+
+export interface TableEdgeRect {
+  left: number;
+  right: number;
+  top: number;
+  bottom: number;
+}
+
+/** Returns true while a pointer is within the narrow hit band around a table edge. */
+export function isNearTableEdge(
+  point: { x: number; y: number },
+  rect: TableEdgeRect,
+  edge: TableEdge,
+  tolerance = 9,
+): boolean {
+  if (!Number.isFinite(tolerance) || tolerance < 0) return false;
+  if (edge === "bottom") {
+    return (
+      point.x >= rect.left &&
+      point.x <= rect.right &&
+      point.y >= rect.bottom - tolerance &&
+      point.y <= rect.bottom + tolerance
+    );
+  }
+  return (
+    point.y >= rect.top &&
+    point.y <= rect.bottom &&
+    point.x >= rect.right - tolerance &&
+    point.x <= rect.right + tolerance
+  );
+}
+
+/** Keep an add control visible only while the pointer is in its edge band. */
+function trackTableEdgeProximity(container: HTMLElement, edge: TableEdge): void {
+  const update = (event: MouseEvent) => {
+    const bounds = container.getBoundingClientRect();
+    const edgeRect: TableEdgeRect =
+      edge === "bottom"
+        ? {
+            left: bounds.left,
+            right: bounds.right,
+            top: bounds.top - 8,
+            bottom: bounds.top + 8,
+          }
+        : {
+            left: bounds.left - 8,
+            right: bounds.left + 8,
+            top: bounds.top,
+            bottom: bounds.bottom,
+          };
+    container.classList.toggle(
+      "cm-marknote-edge-near",
+      isNearTableEdge({ x: event.clientX, y: event.clientY }, edgeRect, edge),
+    );
+  };
+  container.addEventListener("mouseenter", update);
+  container.addEventListener("mousemove", update);
+  container.addEventListener("mouseleave", () => {
+    container.classList.remove("cm-marknote-edge-near");
+  });
+}
+
 function initColDrag(
   e: MouseEvent,
   view: EditorView,
@@ -411,6 +474,7 @@ export class TableAddRowWidget extends WidgetType {
   toDOM(view: EditorView): HTMLElement {
     const container = document.createElement("div");
     container.className = "cm-marknote-table-add-row-bar";
+    trackTableEdgeProximity(container, "bottom");
     if (this.totalWidthEm > 0) {
       container.style.width = `${this.totalWidthEm}em`;
     }
@@ -469,10 +533,11 @@ export class TableAddColWidget extends WidgetType {
   toDOM(view: EditorView): HTMLElement {
     const container = document.createElement("div");
     container.className = "cm-marknote-table-add-col-bar";
+    trackTableEdgeProximity(container, "right");
     container.title = "Добавить столбец справа";
     container.setAttribute("aria-label", "Добавить столбец справа");
     if (this.totalWidthEm > 0) {
-      container.style.left = `${this.totalWidthEm}em`;
+      container.style.left = `calc(${this.totalWidthEm}em - 8px)`;
     }
 
     const line = document.createElement("div");
@@ -561,7 +626,7 @@ export class TableRowControlWidget extends WidgetType {
     handle.title = "Переместить строку";
     handle.setAttribute("aria-label", "Переместить строку");
 
-    handle.addEventListener("mousedown", (e) => {
+    container.addEventListener("mousedown", (e) => {
       initRowDrag(e, view, this.tableFrom, this.rowIndex, this.totalRows, handle);
     });
 
@@ -619,7 +684,7 @@ export class TableColControlWidget extends WidgetType {
     handle.title = "Переместить столбец";
     handle.setAttribute("aria-label", "Переместить столбец");
 
-    handle.addEventListener("mousedown", (e) => {
+    hitarea.addEventListener("mousedown", (e) => {
       initColDrag(e, view, this.tableFrom, this.colIndex, this.totalCols, handle);
     });
 
@@ -835,6 +900,7 @@ export const tableTheme = EditorView.theme({
     display: "flex",
     alignItems: "stretch",
     position: "relative",
+    overflow: "visible",
   },
   ".cm-line.cm-marknote-table-last-row": {
     flexWrap: "wrap",
@@ -884,7 +950,7 @@ export const tableTheme = EditorView.theme({
   // Стили кнопок добавления строк и столбцов (тонкие полоски во всю длину/высоту с плюсом по центру)
   ".cm-marknote-table-add-row-bar": {
     position: "absolute",
-    top: "100%",
+    top: "calc(100% - 8px)",
     left: "0",
     width: "100%",
     height: "16px",
@@ -892,13 +958,12 @@ export const tableTheme = EditorView.theme({
     alignItems: "center",
     justifyContent: "center",
     opacity: "0",
-    pointerEvents: "none",
+    pointerEvents: "auto",
     transition: "opacity 0.15s ease-in-out",
     zIndex: "10",
   },
-  ".cm-line.cm-marknote-table-last-row:hover .cm-marknote-table-add-row-bar, .cm-marknote-table-add-row-bar:hover, .cm-line.cm-marknote-table-preview-controls .cm-marknote-table-add-row-bar": {
+  ".cm-marknote-table-add-row-bar.cm-marknote-edge-near": {
     opacity: "1",
-    pointerEvents: "auto",
   },
   ".cm-marknote-table-add-row-line": {
     position: "absolute",
@@ -906,7 +971,7 @@ export const tableTheme = EditorView.theme({
     right: "0",
     top: "50%",
     height: "2px",
-    background: "var(--accent, #5EACC7)",
+    background: "var(--bg-modifier-border)",
     borderRadius: "1px",
     pointerEvents: "none",
   },
@@ -948,19 +1013,18 @@ export const tableTheme = EditorView.theme({
   ".cm-marknote-table-add-col-bar": {
     position: "absolute",
     top: "0",
-    left: "100%",
+    left: "calc(100% - 8px)",
     width: "16px",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
     opacity: "0",
-    pointerEvents: "none",
+    pointerEvents: "auto",
     transition: "opacity 0.15s ease-in-out",
     zIndex: "10",
   },
-  ".cm-line.cm-marknote-table-header-row:hover .cm-marknote-table-add-col-bar, .cm-marknote-table-add-col-bar:hover, .cm-marknote-table-add-col-bar.cm-marknote-add-col-active, .cm-line.cm-marknote-table-preview-controls .cm-marknote-table-add-col-bar": {
+  ".cm-marknote-table-add-col-bar.cm-marknote-edge-near": {
     opacity: "1",
-    pointerEvents: "auto",
   },
   ".cm-marknote-table-add-col-line": {
     position: "absolute",
@@ -969,7 +1033,7 @@ export const tableTheme = EditorView.theme({
     left: "50%",
     width: "2px",
     transform: "translateX(-50%)",
-    background: "var(--accent, #5EACC7)",
+    background: "var(--bg-modifier-border)",
     borderRadius: "1px",
     pointerEvents: "none",
   },
@@ -1004,26 +1068,30 @@ export const tableTheme = EditorView.theme({
   // Стили ручек перемещения строк и столбцов (толстые линии, HOVER ONLY)
   ".cm-marknote-table-row-controls": {
     position: "absolute",
-    left: "-24px",
+    // Keep the hit area inside CodeMirror's horizontally clipped scroller;
+    // a negative left offset would make the handle visible but impossible to
+    // target with the mouse.
+    left: "-4px",
     top: "50%",
     transform: "translateY(-50%)",
-    width: "20px",
+    width: "24px",
+    height: "20px",
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
     opacity: "0",
-    pointerEvents: "none",
+    pointerEvents: "auto",
     transition: "opacity 0.15s ease-in-out",
     userSelect: "none",
+    cursor: "grab",
     zIndex: "10",
   },
-  ".cm-line.cm-marknote-table-row:hover .cm-marknote-table-row-controls, .cm-marknote-table-row-controls:hover, .cm-line.cm-marknote-table-preview-controls .cm-marknote-table-row-controls": {
+  ".cm-line.cm-marknote-table-row:hover .cm-marknote-table-row-controls, .cm-marknote-table-row-controls:hover": {
     opacity: "1",
-    pointerEvents: "auto",
   },
   ".cm-marknote-table-row-handle": {
-    width: "18px",
-    height: "4px",
+    width: "4px",
+    height: "18px",
     borderRadius: "2px",
     background: "var(--text-faint, #666)",
     cursor: "grab",
@@ -1035,7 +1103,7 @@ export const tableTheme = EditorView.theme({
   ".cm-marknote-table-row-handle.cm-marknote-handle-active": {
     background: "var(--accent, #5EACC7) !important",
     cursor: "grabbing !important",
-    transform: "scaleX(1.2)",
+    transform: "scaleY(1.2)",
     boxShadow: "0 0 6px rgba(94, 172, 199, 0.6)",
   },
 
@@ -1064,10 +1132,10 @@ export const tableTheme = EditorView.theme({
   },
   ".cm-marknote-table-col-hitarea": {
     position: "absolute",
-    top: "-12px",
-    left: "0",
-    width: "var(--marknote-col-ctrl-width, 8em)",
-    height: "18px",
+    top: "-10px",
+    left: "-4px",
+    width: "calc(var(--marknote-col-ctrl-width, 8em) + 8px)",
+    height: "20px",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
@@ -1109,7 +1177,7 @@ export const tableTheme = EditorView.theme({
   // Подсветка перетаскиваемого столбца и строки акцентным цветом (#5EACC7)
   ".cm-marknote-table-cell.cm-marknote-col-dragging": {
     backgroundColor: "rgba(94, 172, 199, 0.16) !important",
-    borderColor: "var(--accent, #5EACC7) !important",
+    boxShadow: "inset 0 0 0 1px var(--accent, #5EACC7)",
   },
   ".cm-marknote-table-cell.cm-marknote-col-drop-target-left": {
     borderLeft: "3px solid var(--accent, #5EACC7) !important",
@@ -1121,6 +1189,7 @@ export const tableTheme = EditorView.theme({
     backgroundColor: "rgba(94, 172, 199, 0.16) !important",
     borderTop: "2px solid var(--accent, #5EACC7) !important",
     borderBottom: "2px solid var(--accent, #5EACC7) !important",
+    boxShadow: "inset 0 0 0 1px var(--accent, #5EACC7)",
   },
   ".cm-line.cm-marknote-table-row.cm-marknote-row-drop-target .cm-marknote-table-cell": {
     borderTop: "3px solid var(--accent, #5EACC7) !important",

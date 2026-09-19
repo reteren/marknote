@@ -5,7 +5,14 @@ import { markdown } from "@codemirror/lang-markdown";
 import { Decoration, EditorView } from "@codemirror/view";
 import { GFM } from "@lezer/markdown";
 import { describe, expect, it } from "vitest";
-import { tableBuilder, tableKeymap, moveTableColumn, moveTableRow, parseMarkdownTable } from "../src/editor/livePreview/tables";
+import {
+  isNearTableEdge,
+  tableBuilder,
+  tableKeymap,
+  moveTableColumn,
+  moveTableRow,
+  parseMarkdownTable,
+} from "../src/editor/livePreview/tables";
 import type { BuilderContext } from "../src/editor/livePreview/types";
 
 function tableState(doc: string): EditorState {
@@ -256,3 +263,22 @@ describe("tableBuilder", () => {
   });
 });
 
+describe("isNearTableEdge", () => {
+  const rect = { left: 100, right: 300, top: 50, bottom: 150 };
+
+  it("accepts only the narrow band around the bottom edge", () => {
+    expect(isNearTableEdge({ x: 200, y: 142 }, rect, "bottom")).toBe(true);
+    expect(isNearTableEdge({ x: 200, y: 158 }, rect, "bottom")).toBe(true);
+    expect(isNearTableEdge({ x: 200, y: 140 }, rect, "bottom")).toBe(false);
+    expect(isNearTableEdge({ x: 200, y: 161 }, rect, "bottom")).toBe(false);
+    expect(isNearTableEdge({ x: 90, y: 150 }, rect, "bottom")).toBe(false);
+  });
+
+  it("accepts only the narrow band around the right edge", () => {
+    expect(isNearTableEdge({ x: 292, y: 100 }, rect, "right")).toBe(true);
+    expect(isNearTableEdge({ x: 308, y: 100 }, rect, "right")).toBe(true);
+    expect(isNearTableEdge({ x: 290, y: 100 }, rect, "right")).toBe(false);
+    expect(isNearTableEdge({ x: 311, y: 100 }, rect, "right")).toBe(false);
+    expect(isNearTableEdge({ x: 300, y: 40 }, rect, "right")).toBe(false);
+  });
+});

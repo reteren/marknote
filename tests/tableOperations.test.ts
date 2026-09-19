@@ -78,6 +78,17 @@ describe("tableOperations", () => {
     expect(parsed?.alignments).toEqual(["left", "center", "right"]);
   });
 
+  it("moves a later body row to the first position", () => {
+    const threeRows = `${sampleTable}\n| A3   | B3     | C3    |`;
+    const updated = moveTableRow(threeRows, 2, 0);
+    const parsed = parseMarkdownTable(updated);
+    expect(parsed?.rows).toEqual([
+      ["A3", "B3", "C3"],
+      ["A1", "B1", "C1"],
+      ["A2", "B2", "C2"],
+    ]);
+  });
+
   it("moves columns and preserves their alignment across all rows", () => {
     // Move column 0 (Left, align left) to index 2 (at the end)
     const updated = moveTableColumn(sampleTable, 0, 2);
