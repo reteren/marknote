@@ -47,6 +47,8 @@
     autoAttach?: boolean;
     onSelect?: (action: ContextMenuAction, payload?: string) => void;
     onClose?: () => void;
+    /** Returns focus to the editor through CodeMirror, keeping its selection. */
+    onFocusEditor?: () => void;
   };
 
   let {
@@ -64,6 +66,7 @@
     autoAttach = true,
     onSelect,
     onClose,
+    onFocusEditor,
   }: Props = $props();
 
   let layerRef: HTMLDivElement | undefined = $state();
@@ -238,7 +241,12 @@
     onClose?.();
     if (restoreFocus) {
       const focusTarget = returnFocusElement ?? targetElement;
-      void tick().then(() => focusTarget?.focus());
+      // A raw focus() on .cm-content makes the browser put the caret at the
+      // start of the document, and CodeMirror adopts that as its selection:
+      // Bold or a heading from this menu then left the cursor at line 1.
+      // The editor's own focus() restores the selection the command set.
+      const editorTarget = focusTarget?.closest(".cm-editor") && onFocusEditor;
+      void tick().then(() => (editorTarget ? onFocusEditor?.() : focusTarget?.focus()));
     }
   }
 

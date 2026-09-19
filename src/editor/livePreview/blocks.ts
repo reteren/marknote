@@ -6,6 +6,7 @@ import type { LivePreviewConfig } from "./settings";
 import { CheckboxWidget } from "./widgets/Checkbox";
 import { HrWidget } from "./widgets/Hr";
 import { MathWidget } from "./widgets/Math";
+import { mathBlockSource, spansSeveralLines } from "./mathBlockSource";
 
 const hide = (from: number, to: number): DecorationSpec => ({
   from,
@@ -164,15 +165,15 @@ export function decorationsForBlockNode(
     if (config?.renderFormulas === false) {
       return [mark(node.from, node.to, "cm-marknote-math-source")];
     }
-    const marks = children(node, "MathMark");
-    const sourceFrom = marks[0]?.to ?? node.from + 2;
-    const sourceTo = marks.length > 1 ? marks[marks.length - 1].from : node.to;
-    const source = state.doc.sliceString(sourceFrom, sourceTo).replace(/^\r?\n|\r?\n$/g, "");
     if (active) return [mark(node.from, node.to, "cm-marknote-math-source")];
+    // Блок из нескольких строк рисует поле состояния (blockMath.ts): замена,
+    // перекрывающая перевод строки, из плагина вида запрещена и роняет
+    // обновление редактора.
+    if (spansSeveralLines(state, node)) return [];
     return [{
       from: node.from,
       to: node.to,
-      decoration: Decoration.replace({ widget: new MathWidget(source, true) }),
+      decoration: Decoration.replace({ widget: new MathWidget(mathBlockSource(state, node), true) }),
       atomic: true,
     }];
   }

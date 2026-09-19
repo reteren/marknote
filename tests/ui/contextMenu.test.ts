@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { cleanup, fireEvent, render } from "@testing-library/svelte";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -253,6 +255,43 @@ describe("ContextMenu user interactions", () => {
       .find((button) => button.textContent?.includes(t("format.table")))!);
     // Пустая строка после таблицы: иначе набранный под ней текст стал бы её строкой.
     expect(documentState.text).toBe("|  |  |\n| --- | --- |\n|  |  |\n\n");
+  });
+
+  it("возвращает фокус через редактор, а не сырым focus() по элементу", async () => {
+    // Сырой focus() на contenteditable ставит курсор в начало документа, и
+    // CodeMirror принимает это за новое выделение: жирный или заголовок из
+    // меню оставляли курсор на первой строке. Через EditorView.focus()
+    // редактор восстанавливает то выделение, которое поставила команда.
+    const editor = document.createElement("div");
+    editor.className = "cm-editor";
+    const content = document.createElement("div");
+    content.className = "cm-content";
+    editor.appendChild(content);
+    document.body.appendChild(editor);
+    content.focus();
+
+    const onFocusEditor = vi.fn();
+    const onSelect = vi.fn();
+    const { unmount } = render(ContextMenu, {
+      props: { open: true, x: 10, y: 10, targetElement: content, autoAttach: false, onSelect, onFocusEditor },
+    });
+    await settle();
+
+    const selectAll = Array.from(document.querySelectorAll<HTMLButtonElement>("button"))
+      .find((button) => button.textContent?.includes(t("menu.selectAll")))!;
+    await fireEvent.click(selectAll);
+    await settle();
+
+    expect(onFocusEditor).toHaveBeenCalled();
+    unmount();
+    editor.remove();
+  });
+
+  it("приложение передаёт меню возврат фокуса через редактор", () => {
+    // Без этого свойства меню снова начнёт звать focus() по элементу.
+    const source = readFileSync(resolve(process.cwd(), "src/App.svelte"), "utf8");
+    const usage = source.slice(source.indexOf("<ContextMenu"));
+    expect(usage.slice(0, usage.indexOf("/>"))).toContain("onFocusEditor={() => editorView?.focus()}");
   });
 
   it("routes horizontal rule action into the document with proper separation and renders hr widget", async () => {

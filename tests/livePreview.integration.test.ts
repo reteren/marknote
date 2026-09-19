@@ -70,7 +70,9 @@ describe("livePreview full builder integration", () => {
     expect(renderedClasses.filter((name) => name === "cm-marknote-code-block")).toHaveLength(2);
     expect(renderedClasses.filter((name) => name === "cm-marknote-footnote-definition")).toHaveLength(2);
     expect(widgets.filter((name) => name === "FootnoteRefWidget")).toHaveLength(2);
-    expect(widgets.filter((name) => name === "MathWidget")).toHaveLength(2);
+    // Плагин отдаёт только строчную формулу: блок `$$ … $$` занимает
+    // несколько строк и рисуется полем состояния blockMathField.
+    expect(widgets.filter((name) => name === "MathWidget")).toHaveLength(1);
     expect(widgets.filter((name) => name === "CheckboxWidget")).toHaveLength(3);
     expect(widgets.filter((name) => name === "HrWidget")).toHaveLength(1);
   });

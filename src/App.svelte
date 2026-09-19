@@ -739,20 +739,6 @@ import { EditorView, type EditorView as EditorViewType } from "@codemirror/view"
     }
   }
 
-  function applyHeading(level: number): void {
-    if (!editorView || isReadOnly) return;
-    const view = editorView;
-    const ranges = view.state.selection.ranges;
-    const changes = ranges.map((range) => {
-      const line = view.state.doc.lineAt(range.from);
-      const body = line.text.replace(/^\s*#{1,6}\s*/, "").replace(/^\s+/u, "");
-      const indent = line.text.match(/^\s*/u)?.[0] ?? "";
-      const text = level === 0 ? indent + body : `${indent}${"#".repeat(level)} ${body}`;
-      return { from: line.from, to: line.to, insert: text };
-    });
-    view.dispatch({ changes });
-  }
-
   function applyList(): void {
     if (!editorView || isReadOnly) return;
     const view = editorView;
@@ -875,13 +861,13 @@ import { EditorView, type EditorView as EditorViewType } from "@codemirror/view"
         void actions.run(id);
         break;
       case "format.link": insertLink(); break;
-      case "format.heading1": applyHeading(1); break;
-      case "format.heading2": applyHeading(2); break;
-      case "format.heading3": applyHeading(3); break;
-      case "format.heading4": applyHeading(4); break;
-      case "format.heading5": applyHeading(5); break;
-      case "format.heading6": applyHeading(6); break;
-      case "format.clearHeading": applyHeading(0); break;
+      case "format.heading1": void actions.run("format.heading1"); break;
+      case "format.heading2": void actions.run("format.heading2"); break;
+      case "format.heading3": void actions.run("format.heading3"); break;
+      case "format.heading4": void actions.run("format.heading4"); break;
+      case "format.heading5": void actions.run("format.heading5"); break;
+      case "format.heading6": void actions.run("format.heading6"); break;
+      case "format.clearHeading": void actions.run("format.clearHeading"); break;
       case "view.zoomIn": void actions.run("view.zoomIn"); break;
       case "view.zoomOut": void actions.run("view.zoomOut"); break;
       case "view.resetZoom": void actions.run("view.resetZoom"); break;
@@ -1191,7 +1177,12 @@ import { EditorView, type EditorView as EditorViewType } from "@codemirror/view"
     {/if}
   </div>
 
-  <ContextMenu editable={!isReadOnly} formatId={documentState.format.id} onSelect={handleContextMenuAction} />
+  <ContextMenu
+    editable={!isReadOnly}
+    formatId={documentState.format.id}
+    onSelect={handleContextMenuAction}
+    onFocusEditor={() => editorView?.focus()}
+  />
 
   {#if helpMode}
     <HelpDialog mode={helpMode} onClose={() => (helpMode = null)} />

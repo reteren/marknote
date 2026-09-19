@@ -308,4 +308,42 @@ describe("MarkNote editor keymap", () => {
     const keyBindings = keymapPlugin.value as KeyBinding[];
     expect(keyBindings.some((item) => item.key === "Mod-Enter")).toBe(false);
   });
+  it("печатает одиночный = и закрывает пару только на втором знаке подряд", () => {
+    // Раньше каждое нажатие «=» вставляло сразу «====»: знак равенства было
+    // физически не набрать.
+    const extensions = createMarknoteKeymap() as any[];
+    const inputHandler = extensions[2].value as (
+      view: EditorView,
+      from: number,
+      to: number,
+      text: string,
+      insert: (from: number, to: number, text: string) => void,
+    ) => boolean;
+    const noop = () => {};
+
+    const first = makeView("a", 1);
+    expect(inputHandler(first as EditorView, 1, 1, "=", noop)).toBe(false);
+
+    const second = makeView("a=", 2);
+    expect(inputHandler(second as EditorView, 2, 2, "=", noop)).toBe(true);
+    expect(second.state.doc.toString()).toBe("a====");
+    expect(second.state.selection.main.head).toBe(3);
+
+    // С выделением «=» по-прежнему оборачивает текст в ==…==.
+    const wrapped = makeView("word", 0, 4);
+    expect(inputHandler(wrapped as EditorView, 0, 4, "=", noop)).toBe(true);
+    expect(wrapped.state.doc.toString()).toBe("==word==");
+  });
+
+  it("ставит курсор за решётками заголовка, в том числе на пустой строке", () => {
+    const empty = makeView("", 0);
+    expect(run("Mod-2", empty)).toBe(true);
+    expect(empty.state.doc.toString()).toBe("## ");
+    expect(empty.state.selection.main.head).toBe(3);
+
+    const withText = makeView("title", 5);
+    expect(run("Mod-2", withText)).toBe(true);
+    expect(withText.state.doc.toString()).toBe("## title");
+    expect(withText.state.selection.main.head).toBe(8);
+  });
 });

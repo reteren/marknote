@@ -484,6 +484,18 @@ function pairInputHandler(
 
   if (!openingPair) return false;
 
+  // Двойные маркеры (==, ~~) закрываются только на втором нажатии подряд:
+  // одиночные «=» и «~» встречаются в тексте постоянно, и раньше каждое
+  // нажатие «=» вставляло сразу «====».
+  if (pair.open.length === 2) {
+    if (state.sliceDoc(Math.max(0, from - 1), from) !== text) return false;
+    view.dispatch({
+      changes: { from, to, insert: text + pair.close },
+      selection: { anchor: from + 1 },
+    });
+    return true;
+  }
+
   view.dispatch({
     changes: { from, to, insert: pair.open + pair.close },
     selection: { anchor: from + pair.open.length },
@@ -624,6 +636,21 @@ function applyToSelectedLines(view: EditorView, change: (text: string) => string
   return true;
 }
 
+/**
+ * Replacing a whole line keeps the caret where it was: on an empty line that
+ * is before the inserted `## `, and typing then went in front of the marker.
+ * The caret belongs where the heading text is written.
+ */
+function caretAfterHeadingMarker(view: EditorView): void {
+  const main = view.state.selection.main;
+  if (!main.empty) return;
+  const line = view.state.doc.lineAt(main.head);
+  const marker = /^\s*#{1,6}(?:\s|$)/u.exec(line.text);
+  if (!marker) return;
+  const bodyStart = line.from + marker[0].length;
+  if (main.head < bodyStart) view.dispatch({ selection: { anchor: bodyStart } });
+}
+
 function headingCommand(level: number): Command {
   return (view) => {
     let changed = false;
@@ -634,6 +661,7 @@ function headingCommand(level: number): Command {
       if (next !== text) changed = true;
       return next;
     });
+    if (changed && level > 0) caretAfterHeadingMarker(view);
     // This lets an injected Reset Zoom handler receive Ctrl+0 outside a
     // heading, while removing a heading retains priority on heading lines.
     return level === 0 ? changed : handled;

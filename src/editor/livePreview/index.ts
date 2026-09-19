@@ -1,5 +1,6 @@
 import type { Extension } from "@codemirror/state";
 import { livePreviewPlugin } from "./plugin";
+import { blockMathField } from "./blockMath";
 import { livePreviewTheme } from "./blocks";
 import { codeBlockTheme } from "./codeBlocks";
 import { tableTheme } from "./tables";
@@ -19,6 +20,7 @@ export function livePreview(opts?: {
   return [
     orderedListNormalization,
     livePreviewPlugin.of(opts ?? {}),
+    blockMathField,
     livePreviewTheme,
     codeBlockTheme,
     tableTheme,
@@ -29,5 +31,6 @@ export function livePreview(opts?: {
 }
 
 export { livePreviewPlugin } from "./plugin";
+export { blockMathField, blockMathDecorations } from "./blockMath";
 export { isNodeActive } from "./isNodeActive";
 export { livePreviewSettings } from "./settings";

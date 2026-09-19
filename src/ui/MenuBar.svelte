@@ -119,8 +119,10 @@
     activeItemIndex = 0;
     activeSubmenuIndex = 0;
     if (restoreFocus) {
-      onFocusEditor?.();
-      queueMicrotask(() => menuRoot?.closest(".app-shell")?.querySelector<HTMLElement>(".cm-content")?.focus());
+      // Only the editor's own focus(): a raw focus() on .cm-content would
+      // move the caret to the start of the document.
+      if (onFocusEditor) onFocusEditor();
+      else queueMicrotask(() => menuRoot?.closest(".app-shell")?.querySelector<HTMLElement>(".cm-content")?.focus());
     }
   }
 

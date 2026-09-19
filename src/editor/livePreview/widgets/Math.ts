@@ -59,6 +59,15 @@ export class MathWidget extends WidgetType {
     return widget instanceof MathWidget && widget.source === this.source && widget.displayMode === this.displayMode;
   }
 
+  /**
+   * Щелчок по отрисованной формуле должен ставить курсор в неё, иначе формулу
+   * нельзя исправить — только удалить целиком. Курсор внутри блока раскрывает
+   * его в разметку `$$ … $$`.
+   */
+  ignoreEvent(): boolean {
+    return false;
+  }
+
   toDOM(_view: EditorView): HTMLElement {
     const element = document.createElement(this.displayMode ? "div" : "span");
     element.className = `cm-marknote-math${this.displayMode ? " cm-marknote-math-display" : ""}`;

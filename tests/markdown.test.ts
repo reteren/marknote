@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import { marknoteMarkdown } from "../src/editor/markdownExtensions";
 import { isNodeActive } from "../src/editor/livePreview/isNodeActive";
 import { buildDecorationSets, decorationRanges } from "../src/editor/livePreview/plugin";
+import { blockMathDecorations } from "../src/editor/livePreview/blockMath";
 
 const language = new Language(defineLanguageFacet(), parser.configure(marknoteMarkdown));
 
@@ -73,17 +74,28 @@ describe("MarkNote Markdown extensions", () => {
   });
 
   it("рендерит MathBlock вне блока и раскрывает его под курсором", () => {
-    for (const doc of ["$$\nx^2\n$$\n", "$$\nx^2\n$$", "before\n$$\nx^2\n$$\n", "before\n$$\nx^2\n$$\nafter"]) {
+    for (const doc of ["$$\nx^2\n$$\n", "before\n$$\nx^2\n$$", "before\n$$\nx^2\n$$\n", "before\n$$\nx^2\n$$\nafter"]) {
       const math = nodes(doc, "MathBlock")[0];
       expect(math, doc).toBeTruthy();
       if (!math) continue;
-      const outsideAnchor = math.to < doc.length ? math.to + 1 : math.to;
-      const outside = buildDecorationSets(state(doc, outsideAnchor), [{ from: 0, to: doc.length }]);
-      expect(hasWidget(outside.decorations, math.from, math.to, "MathWidget"), doc).toBe(true);
+      // «Снаружи» — это другая строка: курсор на строке с `$$` раскрывает
+      // блок, иначе только что набранные знаки сразу прятались бы под виджет.
+      const outsideAnchor = math.to < doc.length ? math.to + 1 : math.from - 1;
+      if (outsideAnchor < 0) continue;
+      // Многострочный блок рисует поле состояния: замена, перекрывающая
+      // перевод строки, из плагина вида роняет редактор (см. blockMath.ts).
+      const outsideState = state(doc, outsideAnchor);
+      const outsideField: Array<{ from: number; to: number }> = [];
+      blockMathDecorations(outsideState).between(0, doc.length, (from, to) => outsideField.push({ from, to }));
+      expect(outsideField, doc).toEqual([{ from: math.from, to: math.to }]);
 
-      const inside = buildDecorationSets(state(doc, math.from + 3), [{ from: 0, to: doc.length }]);
+      const insideState = state(doc, math.from + 3);
+      const inside = buildDecorationSets(insideState, [{ from: 0, to: doc.length }]);
       expect(hasRange(inside.decorations, math.from, math.to, "cm-marknote-math-source"), doc).toBe(true);
       expect(hasWidget(inside.decorations, math.from, math.to, "MathWidget"), doc).toBe(false);
+      const insideField: Array<{ from: number; to: number }> = [];
+      blockMathDecorations(insideState).between(0, doc.length, (from, to) => insideField.push({ from, to }));
+      expect(insideField, doc).toEqual([]);
     }
   });
 
