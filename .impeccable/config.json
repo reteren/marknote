@@ -1,0 +1,17 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "side-tab",
+        "value": "*",
+        "files": [
+          "src/editor/livePreview/blocks.ts"
+        ],
+        "createdAt": "2026-09-19T19:16:48.415Z",
+        "reason": "Coordinator: left accent bar is the standard callout rendering in Markdown (Obsidian, GitHub), not a card side-tab; line predates this session"
+      }
+    ]
+  }
+}

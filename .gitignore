@@ -36,3 +36,6 @@ qa/shots/
 /qa/*.reg
 /qa/shots/
 /fixtures/
+
+# Кэш проверки оформления: перестраивается сам, в репозитории не нужен
+/.impeccable/hook.cache.json
