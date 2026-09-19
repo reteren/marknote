@@ -219,6 +219,72 @@ function findEnclosingTable(view: EditorView, position: number): SyntaxNode | nu
   return node;
 }
 
+function tableLinesInView(view: EditorView, tableFrom: number): HTMLElement[] {
+  return Array.from(
+    view.dom.querySelectorAll(`[data-marknote-table-start="${tableFrom}"]`),
+  ) as HTMLElement[];
+}
+
+function updateTableSelectionOutline(view: EditorView, tableFrom: number): void {
+  const outline = view.dom.querySelector(
+    `.cm-marknote-table-selection-outline[data-marknote-table-start="${tableFrom}"]`,
+  ) as HTMLElement | null;
+  if (!outline) return;
+
+  const lines = tableLinesInView(view, tableFrom);
+  const selectedColumnCells = lines.flatMap((line) =>
+    Array.from(line.querySelectorAll<HTMLElement>('.cm-marknote-table-cell.cm-marknote-col-dragging')),
+  );
+  const selectedRowCells = lines
+    .filter((line) => line.classList.contains("cm-marknote-row-dragging"))
+    .flatMap((line) => Array.from(line.querySelectorAll<HTMLElement>('.cm-marknote-table-cell')));
+  const cells = selectedColumnCells.length > 0 ? selectedColumnCells : selectedRowCells;
+  if (cells.length === 0) {
+    outline.hidden = true;
+    return;
+  }
+
+  let left = Number.POSITIVE_INFINITY;
+  let top = Number.POSITIVE_INFINITY;
+  let right = Number.NEGATIVE_INFINITY;
+  let bottom = Number.NEGATIVE_INFINITY;
+  for (const cell of cells) {
+    const rect = cell.getBoundingClientRect();
+    left = Math.min(left, rect.left);
+    top = Math.min(top, rect.top);
+    right = Math.max(right, rect.right);
+    bottom = Math.max(bottom, rect.bottom);
+  }
+  if (![left, top, right, bottom].every(Number.isFinite)) {
+    outline.hidden = true;
+    return;
+  }
+
+  outline.hidden = false;
+  outline.style.left = `${left}px`;
+  outline.style.top = `${top}px`;
+  outline.style.width = `${right - left}px`;
+  outline.style.height = `${bottom - top}px`;
+}
+
+class TableSelectionOutlineWidget extends WidgetType {
+  constructor(readonly tableFrom: number) {
+    super();
+  }
+
+  eq(other: WidgetType): boolean {
+    return other instanceof TableSelectionOutlineWidget && other.tableFrom === this.tableFrom;
+  }
+
+  toDOM(): HTMLElement {
+    const outline = document.createElement("div");
+    outline.className = "cm-marknote-table-selection-outline";
+    outline.dataset.marknoteTableStart = `${this.tableFrom}`;
+    outline.hidden = true;
+    return outline;
+  }
+}
+
 export type TableEdge = "bottom" | "right";
 
 export interface TableEdgeRect {
@@ -310,6 +376,7 @@ function initColDrag(
       const dropClass = targetCol > dragCol ? "cm-marknote-col-drop-target-right" : "cm-marknote-col-drop-target-left";
       targetCells.forEach((el) => el.classList.add(dropClass));
     }
+    updateTableSelectionOutline(view, tableFrom);
   };
 
   const clearHighlights = () => {
@@ -317,6 +384,7 @@ function initColDrag(
     view.dom.querySelectorAll(".cm-marknote-col-drop-target-left").forEach((el) => el.classList.remove("cm-marknote-col-drop-target-left"));
     view.dom.querySelectorAll(".cm-marknote-col-drop-target-right").forEach((el) => el.classList.remove("cm-marknote-col-drop-target-right"));
     handleEl.classList.remove("cm-marknote-handle-active");
+    updateTableSelectionOutline(view, tableFrom);
     if (typeof document !== "undefined" && document.body) {
       document.body.style.cursor = "";
       document.body.classList.remove("cm-marknote-table-dragging");
@@ -396,12 +464,14 @@ function initRowDrag(
       el.classList.toggle("cm-marknote-row-dragging", idx === dragRow);
       el.classList.toggle("cm-marknote-row-drop-target", idx === targetRow && targetRow !== dragRow);
     });
+    updateTableSelectionOutline(view, tableFrom);
   };
 
   const clearHighlights = () => {
     view.dom.querySelectorAll(".cm-marknote-row-dragging").forEach((el) => el.classList.remove("cm-marknote-row-dragging"));
     view.dom.querySelectorAll(".cm-marknote-row-drop-target").forEach((el) => el.classList.remove("cm-marknote-row-drop-target"));
     handleEl.classList.remove("cm-marknote-handle-active");
+    updateTableSelectionOutline(view, tableFrom);
     if (typeof document !== "undefined" && document.body) {
       document.body.style.cursor = "";
       document.body.classList.remove("cm-marknote-table-dragging");
@@ -568,10 +638,19 @@ export class TableAddColWidget extends WidgetType {
       const table = findEnclosingTable(view, this.tableFrom);
       if (!table) return;
       try {
+        const rows = tableLinesInView(view, this.tableFrom);
+        if (rows.length > 0) {
+          const top = rows[0].getBoundingClientRect().top;
+          const bottom = rows[rows.length - 1].getBoundingClientRect().bottom;
+          if (bottom > top) {
+            container.style.height = `${bottom - top}px`;
+            return;
+          }
+        }
         const topCoords = view.coordsAtPos(table.from);
         const bottomCoords = view.coordsAtPos(table.to);
         if (topCoords && bottomCoords && bottomCoords.bottom > topCoords.top) {
-          container.style.height = `${bottomCoords.bottom - topCoords.top}px`;
+          container.style.height = `${bottomCoords.bottom - topCoords.top - 8}px`;
           return;
         }
       } catch {
@@ -799,6 +878,7 @@ export const tableBuilder: BlockBuilder = (ctx) => {
           : isLastRow
           ? "cm-marknote-table-row cm-marknote-table-last-row"
           : "cm-marknote-table-row") + (isPreview ? " cm-marknote-table-preview-controls" : ""),
+        attributes: { "data-marknote-table-start": `${ctx.node.from}` },
       }),
     });
   }
@@ -816,6 +896,15 @@ export const tableBuilder: BlockBuilder = (ctx) => {
       value: Decoration.line({ class: "cm-marknote-table-delimiter-row" }),
     });
   }
+
+  ctx.add({
+    from: ctx.node.to,
+    to: ctx.node.to,
+    value: Decoration.widget({
+      widget: new TableSelectionOutlineWidget(ctx.node.from),
+      side: -1,
+    }),
+  });
 
   // Внизу таблицы добавляем кнопку добавления строки снизу
   const lastRow = rows[rows.length - 1];
@@ -1090,12 +1179,13 @@ export const tableTheme = EditorView.theme({
     opacity: "1",
   },
   ".cm-marknote-table-row-handle": {
-    width: "4px",
+    width: "5px",
     height: "18px",
     borderRadius: "2px",
-    background: "var(--text-faint, #666)",
+    background: "var(--text-muted, #888)",
     cursor: "grab",
     transition: "background 0.15s ease, transform 0.1s ease",
+    transform: "translateX(-5px)",
   },
   ".cm-marknote-table-row-handle:hover": {
     background: "var(--text-muted, #888)",
@@ -1103,7 +1193,7 @@ export const tableTheme = EditorView.theme({
   ".cm-marknote-table-row-handle.cm-marknote-handle-active": {
     background: "var(--accent, #5EACC7) !important",
     cursor: "grabbing !important",
-    transform: "scaleY(1.2)",
+    transform: "translateX(-5px) scaleY(1.2)",
     boxShadow: "0 0 6px rgba(94, 172, 199, 0.6)",
   },
 
@@ -1177,7 +1267,6 @@ export const tableTheme = EditorView.theme({
   // Подсветка перетаскиваемого столбца и строки акцентным цветом (#5EACC7)
   ".cm-marknote-table-cell.cm-marknote-col-dragging": {
     backgroundColor: "rgba(94, 172, 199, 0.16) !important",
-    boxShadow: "inset 0 0 0 1px var(--accent, #5EACC7)",
   },
   ".cm-marknote-table-cell.cm-marknote-col-drop-target-left": {
     borderLeft: "3px solid var(--accent, #5EACC7) !important",
@@ -1187,11 +1276,16 @@ export const tableTheme = EditorView.theme({
   },
   ".cm-line.cm-marknote-table-row.cm-marknote-row-dragging .cm-marknote-table-cell": {
     backgroundColor: "rgba(94, 172, 199, 0.16) !important",
-    borderTop: "2px solid var(--accent, #5EACC7) !important",
-    borderBottom: "2px solid var(--accent, #5EACC7) !important",
-    boxShadow: "inset 0 0 0 1px var(--accent, #5EACC7)",
   },
   ".cm-line.cm-marknote-table-row.cm-marknote-row-drop-target .cm-marknote-table-cell": {
     borderTop: "3px solid var(--accent, #5EACC7) !important",
+  },
+  ".cm-marknote-table-selection-outline": {
+    position: "fixed",
+    boxSizing: "border-box",
+    border: "1px solid var(--accent, #5EACC7)",
+    background: "transparent",
+    pointerEvents: "none",
+    zIndex: "50",
   },
 });
