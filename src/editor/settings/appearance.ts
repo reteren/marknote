@@ -46,20 +46,22 @@ function resolveColumnWidth(columnWidth?: ColumnWidth): string {
   }
 }
 
-export function editorAppearanceExtensions(settings: Settings | null): Extension[] {
+export function editorAppearanceExtensions(settings: Settings | null, formatHasSyntaxMode = false): Extension[] {
   const editor = settings?.editor;
   const extensions: Extension[] = [];
+
+  // Code formats always show their gutter; the setting extends that choice to
+  // Markdown and plain text. Keep the extension here so the OR expression
+  // produces exactly one line-number gutter in every combination.
+  if (formatHasSyntaxMode || editor?.lineNumbers === true) {
+    extensions.push(lineNumbers());
+  }
 
   // Мягкий перенос: без него появляется горизонтальная прокрутка. Раньше
   // EditorView.lineWrapping стоял в createEditor безусловно, поэтому
   // отсутствие настройки означает «включён».
   if (editor?.softWrap !== false) {
     extensions.push(EditorView.lineWrapping);
-  }
-
-  // Нумерация строк: по умолчанию выключена, включается явно.
-  if (editor?.lineNumbers === true) {
-    extensions.push(lineNumbers());
   }
 
   // Невидимые символы: пробелы и хвостовые пробелы при редактировании.

@@ -15,6 +15,17 @@ export type FormatCapabilities = {
   template: string;
 };
 
+/**
+ * Markdown commands are available only while the editor is using its
+ * Markdown/live-preview language.  `livePreview` is a capability rather than
+ * an extension-name convention, so formats that intentionally expose the
+ * same Markdown editing surface (such as the lossy rich-text adapter) keep
+ * their commands, while code/data formats do not.
+ */
+export function supportsMarkdownCommands(format: Pick<FormatCapabilities, "editable" | "livePreview" | "syntaxMode"> | null | undefined): boolean {
+  return Boolean(format?.editable && format.livePreview && format.syntaxMode === null);
+}
+
 export const markdownFormat: FormatCapabilities = {
   id: "markdown",
   label: "Markdown",
@@ -75,4 +86,3 @@ export async function loadCreatableFormats(): Promise<FormatCapabilities[]> {
     formatsState.loading = false;
   }
 }
-

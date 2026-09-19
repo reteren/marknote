@@ -119,7 +119,7 @@ describe("editor appearance settings", () => {
     expect(view.dom.querySelector(".cm-activeLine")).toBeNull();
   });
 
-  it("applies lineNumbers to gutters", () => {
+  it("applies lineNumbers to plain text from appearance settings", () => {
     const view = createTestEditor({
       ...defaultSettings,
       editor: { ...defaultSettings.editor, lineNumbers: true },

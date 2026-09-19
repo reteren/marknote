@@ -64,6 +64,18 @@ export const marknoteTheme: Extension = [
     ".cm-gutterElement": {
       color: "var(--text-faint)",
     },
+    ".cm-lineNumbers": {
+      // Keep the gutter stable through four-digit documents; `ch` follows the
+      // editor font and therefore scales with Ctrl + '+'.
+      minWidth: "4ch",
+      fontVariantNumeric: "tabular-nums",
+    },
+    ".cm-lineNumbers .cm-gutterElement": {
+      color: "var(--text-faint)",
+      minWidth: "4ch",
+      padding: "0 0.5ch",
+      textAlign: "right",
+    },
     ".cm-tooltip": {
       backgroundColor: "var(--bg-secondary)",
       color: "var(--text-normal)",

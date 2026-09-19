@@ -27,6 +27,40 @@ export const settingsCompartment = new Compartment();
  * активного состояния, а не возвращается к устаревшему снимку вкладки. */
 export const setEditorSettingsEffect = StateEffect.define<Settings | null>();
 
+/** Tracks the active format for the settings compartment without importing
+ * createEditor back into this module. */
+export const setEditorFormatSyntaxEffect = StateEffect.define<boolean>();
+
+export const editorFormatSyntaxStateField = StateField.define<boolean>({
+  create: () => false,
+  update(value, transaction) {
+    for (const effect of transaction.effects) {
+      if (effect.is(setEditorFormatSyntaxEffect)) return effect.value;
+    }
+    return value;
+  },
+});
+
+/**
+ * Поддерживает ли открытый формат разметку Markdown. Команды разметки
+ * (жирный, заголовки, вставки) читают это поле и молчат там, где разметки
+ * нет: в .py или .json оборачивать текст звёздочками бессмысленно.
+ * Признак приходит из состояния формата, а не из списка расширений.
+ */
+export const setEditorMarkdownCommandsEffect = StateEffect.define<boolean>();
+
+export const editorMarkdownCommandsStateField = StateField.define<boolean>({
+  // По умолчанию разрешено: редактор вне приложения (в тестах и в браузере)
+  // работает с Markdown, и команды там должны действовать.
+  create: () => true,
+  update(value, transaction) {
+    for (const effect of transaction.effects) {
+      if (effect.is(setEditorMarkdownCommandsEffect)) return effect.value;
+    }
+    return value;
+  },
+});
+
 export const editorSettingsStateField = StateField.define<Settings | null>({
   create: () => null,
   update(value, transaction) {
@@ -43,9 +77,9 @@ export const editorSettingsStateField = StateField.define<Settings | null>({
  *  успевает отдать settings.json, и до этого момента работают умолчания.
  *  Поэтому каждая проверка написана так, чтобы отсутствие значения давало то
  *  же поведение, что было зашито в createEditor до появления настроек. */
-export function editorSettingsExtensions(settings: Settings | null): Extension[] {
+export function editorSettingsExtensions(settings: Settings | null, formatHasSyntaxMode = false): Extension[] {
   return [
-    ...editorAppearanceExtensions(settings),
+    ...editorAppearanceExtensions(settings, formatHasSyntaxMode),
     ...livePreviewSettingsExtensions(settings),
     ...spellcheckSettingsExtensions(settings),
   ];
@@ -53,9 +87,10 @@ export function editorSettingsExtensions(settings: Settings | null): Extension[]
 
 /** Применить настройки к живому редактору, не пересоздавая его. */
 export function applyEditorSettings(view: EditorView, settings: Settings | null): void {
+  const formatHasSyntaxMode = view.state.field(editorFormatSyntaxStateField, false) ?? false;
   view.dispatch({
     effects: [
-      settingsCompartment.reconfigure(editorSettingsExtensions(settings)),
+      settingsCompartment.reconfigure(editorSettingsExtensions(settings, formatHasSyntaxMode)),
       setEditorSettingsEffect.of(settings),
     ],
     selection: view.state.selection,

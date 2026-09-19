@@ -16,11 +16,15 @@ import { tableKeymap } from "./livePreview/tables";
 import { keymap } from "@codemirror/view";
 import { marknoteTheme } from "./theme";
 import { createImageResolver } from "./imageResolver";
-import type { FormatCapabilities } from "../state/formats.svelte";
+import { supportsMarkdownCommands, type FormatCapabilities } from "../state/formats.svelte";
 import type { Settings } from "../state/settings.svelte";
 import {
   editorSettingsExtensions,
+  editorFormatSyntaxStateField,
+  editorMarkdownCommandsStateField,
   editorSettingsStateField,
+  setEditorFormatSyntaxEffect,
+  setEditorMarkdownCommandsEffect,
   setEditorSettingsEffect,
   settingsCompartment,
 } from "./settings";
@@ -306,7 +310,13 @@ export function setEditorFormat(view: EditorView, format: FormatCapabilities): P
   view.dispatch({
     effects: [
       setEditorDocumentFormatEffect.of(format),
+      setEditorFormatSyntaxEffect.of(Boolean(format.syntaxMode)),
+      setEditorMarkdownCommandsEffect.of(supportsMarkdownCommands(format)),
       runtime.formatCompartment.reconfigure(formatExtensions(format, runtime.imageResolver)),
+      settingsCompartment.reconfigure(editorSettingsExtensions(
+        view.state.field(editorSettingsStateField, false) ?? null,
+        Boolean(format.syntaxMode),
+      )),
     ],
     selection: view.state.selection,
   });
@@ -320,6 +330,7 @@ function buildEditorState(runtime: EditorRuntime, opts: EditorStateOptions): Edi
   const extensions: Extension[] = [
     runtime.documentPathField,
     runtime.formatField,
+    editorMarkdownCommandsStateField,
     // Таблица обрабатывает Tab раньше общего keymap, иначе сработает
     // отступ списка вместо перехода к следующей ячейке.
     keymap.of(tableKeymap),
@@ -327,7 +338,8 @@ function buildEditorState(runtime: EditorRuntime, opts: EditorStateOptions): Edi
     marknoteSearch(),
     // Всё, что зависит от настроек, — в одном отсеке: смена настройки
     // перенастраивает его, а не пересоздаёт редактор.
-    settingsCompartment.of(editorSettingsExtensions(opts.settings ?? null)),
+    settingsCompartment.of(editorSettingsExtensions(opts.settings ?? null, Boolean(opts.format.syntaxMode))),
+    editorFormatSyntaxStateField,
     editorSettingsStateField,
     syntaxHighlighting(classHighlighter),
     syntaxTokenTheme,
@@ -350,7 +362,13 @@ function buildEditorState(runtime: EditorRuntime, opts: EditorStateOptions): Edi
   const state = EditorState.create({ doc: opts.doc, extensions });
   // StateField хранит последний применённый снимок настроек, чтобы после
   // setState восстановить тот же отсек и не откатить настройки вкладки.
-  return state.update({ effects: setEditorSettingsEffect.of(opts.settings ?? null) }).state;
+  return state.update({
+    effects: [
+      setEditorSettingsEffect.of(opts.settings ?? null),
+      setEditorFormatSyntaxEffect.of(Boolean(opts.format.syntaxMode)),
+      setEditorMarkdownCommandsEffect.of(supportsMarkdownCommands(opts.format)),
+    ],
+  }).state;
 }
 
 /**
@@ -404,8 +422,9 @@ export function setEditorState(view: EditorView, nextState: EditorState): Editor
   // каждом состоянии. Перенастраиваем оба отсека после подключения нового.
   view.dispatch({
     effects: [
-      settingsCompartment.reconfigure(editorSettingsExtensions(settings)),
+      settingsCompartment.reconfigure(editorSettingsExtensions(settings, Boolean(nextFormat?.syntaxMode))),
       setEditorSettingsEffect.of(settings),
+      setEditorFormatSyntaxEffect.of(Boolean(nextFormat?.syntaxMode)),
     ],
     selection: view.state.selection,
   });

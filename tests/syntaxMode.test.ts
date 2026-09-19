@@ -11,6 +11,8 @@ import {
   findLanguageDescription,
   SYNTAX_MODE_MAP,
 } from "../src/editor/createEditor";
+import { applyEditorSettings } from "../src/editor/settings";
+import { defaultSettings } from "../src/state/settings.svelte";
 import type { FormatCapabilities } from "../src/state/formats.svelte";
 
 /** Все 14 syntaxMode из src-tauri/src/formats/code.rs */
@@ -150,6 +152,45 @@ describe("createEditor with syntax modes", () => {
     }));
 
     expect(view.state.facet(language)?.name).toBe("markdown");
+  });
+
+  it("shows line numbers only for syntax-mode formats", async () => {
+    const view = editor("const value = 1;\n", format({ id: "javascript", syntaxMode: "javascript" }));
+    expect(view.dom.querySelectorAll(".cm-lineNumbers")).toHaveLength(1);
+    await waitForLanguage(view, "javascript");
+
+    await setEditorFormat(view, format({ id: "markdown", livePreview: true }));
+    expect(view.dom.querySelector(".cm-lineNumbers")).toBeNull();
+
+    setEditorFormat(view, format({ id: "python", syntaxMode: "python" }));
+    expect(view.dom.querySelector(".cm-lineNumbers")).not.toBeNull();
+    await waitForLanguage(view, "python");
+  });
+
+  it("uses the setting for Markdown and never duplicates the code gutter", async () => {
+    const markdown = editor("# note\n", format({ id: "markdown", livePreview: true }));
+    expect(markdown.dom.querySelectorAll(".cm-lineNumbers")).toHaveLength(0);
+
+    applyEditorSettings(markdown, {
+      ...defaultSettings,
+      editor: { ...defaultSettings.editor, lineNumbers: true },
+    });
+    expect(markdown.dom.querySelectorAll(".cm-lineNumbers")).toHaveLength(1);
+
+    applyEditorSettings(markdown, {
+      ...defaultSettings,
+      editor: { ...defaultSettings.editor, lineNumbers: false },
+    });
+    expect(markdown.dom.querySelectorAll(".cm-lineNumbers")).toHaveLength(0);
+
+    const code = editor("const value = 1;\n", format({ id: "javascript", syntaxMode: "javascript" }));
+    expect(code.dom.querySelectorAll(".cm-lineNumbers")).toHaveLength(1);
+    applyEditorSettings(code, {
+      ...defaultSettings,
+      editor: { ...defaultSettings.editor, lineNumbers: true },
+    });
+    expect(code.dom.querySelectorAll(".cm-lineNumbers")).toHaveLength(1);
+    await waitForLanguage(code, "javascript");
   });
 });
 
