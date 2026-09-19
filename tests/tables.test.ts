@@ -3,12 +3,14 @@ import { syntaxTree } from "@codemirror/language";
 import { EditorState, type Range } from "@codemirror/state";
 import { markdown } from "@codemirror/lang-markdown";
 import { Decoration, EditorView } from "@codemirror/view";
+import { history, undo } from "@codemirror/commands";
 import { GFM } from "@lezer/markdown";
 import { describe, expect, it } from "vitest";
 import {
   isNearTableEdge,
   tableBuilder,
   tableKeymap,
+  tableTheme,
   moveTableColumn,
   moveTableRow,
   parseMarkdownTable,
@@ -148,6 +150,38 @@ describe("tableBuilder", () => {
     expect(atomic.length).toBeGreaterThan(0);
   });
 
+  it("inserts a portable separator when typing on the empty line below a table", () => {
+    const original = [
+      "| A | B |",
+      "| --- | --- |",
+      "| 1 | 2 |",
+      "",
+    ].join("\n");
+    let currentState = EditorState.create({
+      doc: original,
+      extensions: [history(), markdown({ extensions: GFM, addKeymap: false }), tableTheme],
+    });
+    const view = {
+      get state() {
+        return currentState;
+      },
+      dispatch(spec: Parameters<EditorView["dispatch"]>[0]) {
+        currentState = currentState.update(spec).state;
+      },
+    } as unknown as EditorView;
+
+    const line = currentState.doc.line(4);
+    const handled = currentState.facet(EditorView.inputHandler).some((handler) =>
+      handler(view, line.from, line.from, "123123", () => currentState.update({}).transactions[0]),
+    );
+    expect(handled).toBe(true);
+    expect(currentState.doc.toString()).toBe(`${original}\n123123`);
+    expect(currentState.selection.main.anchor).toBe(currentState.doc.length);
+
+    expect(undo(view)).toBe(true);
+    expect(currentState.doc.toString()).toBe(original);
+  });
+
   it("attaches add row and add col widgets with correct tooltips", () => {
     const state = tableState(doc);
     const { decorations } = buildTable(state);
@@ -206,6 +240,42 @@ describe("tableBuilder", () => {
     // Each column control has a hitarea and a single thick drag handle line
     expect(firstColDom.querySelector(".cm-marknote-table-col-handle")?.getAttribute("title")).toBe("Переместить столбец");
     expect(lastColDom.querySelector(".cm-marknote-table-col-handle")?.getAttribute("title")).toBe("Переместить столбец");
+  });
+
+  it("marks only the dragged control while the table drag mode is active", () => {
+    const multiRowDoc = [
+      "| A | B |",
+      "| --- | --- |",
+      "| 1 | 2 |",
+      "| 3 | 4 |",
+    ].join("\n");
+    const state = tableState(multiRowDoc);
+    const { decorations } = buildTable(state);
+    const rowControls = decorations
+      .map(({ value }) => value.spec.widget)
+      .filter((widget) => widget?.constructor?.name === "TableRowControlWidget");
+    const root = document.createElement("div");
+    document.body.appendChild(root);
+    const view = {
+      state,
+      dom: root,
+      dispatch: () => undefined,
+    } as unknown as EditorView;
+    const first = rowControls[0].toDOM(view);
+    const second = rowControls[1].toDOM(view);
+    root.append(first, second);
+
+    first.querySelector<HTMLElement>(".cm-marknote-table-row-handle")?.dispatchEvent(
+      new MouseEvent("mousedown", { bubbles: true, clientX: 10, clientY: 10 }),
+    );
+    expect(root.classList.contains("cm-marknote-table-dragging")).toBe(true);
+    expect(first.classList.contains("cm-marknote-table-drag-source")).toBe(true);
+    expect(second.classList.contains("cm-marknote-table-drag-source")).toBe(false);
+
+    window.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
+    expect(root.classList.contains("cm-marknote-table-dragging")).toBe(false);
+    expect(first.classList.contains("cm-marknote-table-drag-source")).toBe(false);
+    root.remove();
   });
 
   it("preserves markdown structure and alignments when moving columns and rows", () => {

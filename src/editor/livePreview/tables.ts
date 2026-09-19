@@ -219,6 +219,45 @@ function findEnclosingTable(view: EditorView, position: number): SyntaxNode | nu
   return node;
 }
 
+/**
+ * Keep text typed on the line immediately following a table out of that
+ * table.  GFM deliberately treats a non-empty line there as another table
+ * row, so the document needs a real empty line separator rather than a
+ * parser-only exception.
+ */
+export function insertTableSeparatorOnInput(
+  view: EditorView,
+  from: number,
+  to: number,
+  text: string,
+): boolean {
+  if (from !== to || text.length === 0) return false;
+
+  const line = view.state.doc.lineAt(from);
+  if (line.from !== from || line.text.length !== 0 || line.number === 1) return false;
+
+  const previousLine = view.state.doc.line(line.number - 1);
+  const table = findEnclosingTable(view, Math.max(previousLine.from, previousLine.to - 1));
+  if (!table || table.to < previousLine.from || table.to > previousLine.to) {
+    return false;
+  }
+  const tableTail = view.state.sliceDoc(table.to, previousLine.to);
+  if (tableTail.trim().length > 0) return false;
+
+  // One transaction keeps the separator and the typed text in the same
+  // history event, so a single Ctrl+Z restores the original empty line.
+  view.dispatch({
+    changes: { from, to, insert: `\n${text}` },
+    selection: { anchor: from + text.length + 1 },
+    userEvent: "input.type",
+  });
+  return true;
+}
+
+const tableInputHandler = EditorView.inputHandler.of((view, from, to, text) =>
+  insertTableSeparatorOnInput(view, from, to, text),
+);
+
 function tableLinesInView(view: EditorView, tableFrom: number): HTMLElement[] {
   return Array.from(
     view.dom.querySelectorAll(`[data-marknote-table-start="${tableFrom}"]`),
@@ -362,6 +401,9 @@ function initColDrag(
   const startX = e.clientX;
   let hasMoved = false;
   let currentTargetCol = srcCol;
+  const sourceControl = handleEl.closest<HTMLElement>(
+    ".cm-marknote-table-row-controls, .cm-marknote-table-col-controls",
+  );
 
   const updateHighlights = (dragCol: number, targetCol: number) => {
     const dragCells = view.dom.querySelectorAll(`.cm-marknote-table-column-${dragCol + 1}`);
@@ -384,18 +426,22 @@ function initColDrag(
     view.dom.querySelectorAll(".cm-marknote-col-drop-target-left").forEach((el) => el.classList.remove("cm-marknote-col-drop-target-left"));
     view.dom.querySelectorAll(".cm-marknote-col-drop-target-right").forEach((el) => el.classList.remove("cm-marknote-col-drop-target-right"));
     handleEl.classList.remove("cm-marknote-handle-active");
+    sourceControl?.classList.remove("cm-marknote-table-drag-source");
     updateTableSelectionOutline(view, tableFrom);
     if (typeof document !== "undefined" && document.body) {
       document.body.style.cursor = "";
       document.body.classList.remove("cm-marknote-table-dragging");
     }
+    view.dom.classList.remove("cm-marknote-table-dragging");
   };
 
   handleEl.classList.add("cm-marknote-handle-active");
+  sourceControl?.classList.add("cm-marknote-table-drag-source");
   if (typeof document !== "undefined" && document.body) {
     document.body.style.cursor = "grabbing";
     document.body.classList.add("cm-marknote-table-dragging");
   }
+  view.dom.classList.add("cm-marknote-table-dragging");
 
   const onMouseMove = (moveEvent: MouseEvent) => {
     const deltaX = moveEvent.clientX - startX;
@@ -457,6 +503,9 @@ function initRowDrag(
   const startY = e.clientY;
   let hasMoved = false;
   let currentTargetRow = srcBodyRowIdx;
+  const sourceControl = handleEl.closest<HTMLElement>(
+    ".cm-marknote-table-row-controls, .cm-marknote-table-col-controls",
+  );
 
   const updateHighlights = (dragRow: number, targetRow: number) => {
     const rowLines = Array.from(view.dom.querySelectorAll(".cm-line.cm-marknote-table-row:not(.cm-marknote-table-header-row)")) as HTMLElement[];
@@ -471,18 +520,22 @@ function initRowDrag(
     view.dom.querySelectorAll(".cm-marknote-row-dragging").forEach((el) => el.classList.remove("cm-marknote-row-dragging"));
     view.dom.querySelectorAll(".cm-marknote-row-drop-target").forEach((el) => el.classList.remove("cm-marknote-row-drop-target"));
     handleEl.classList.remove("cm-marknote-handle-active");
+    sourceControl?.classList.remove("cm-marknote-table-drag-source");
     updateTableSelectionOutline(view, tableFrom);
     if (typeof document !== "undefined" && document.body) {
       document.body.style.cursor = "";
       document.body.classList.remove("cm-marknote-table-dragging");
     }
+    view.dom.classList.remove("cm-marknote-table-dragging");
   };
 
   handleEl.classList.add("cm-marknote-handle-active");
+  sourceControl?.classList.add("cm-marknote-table-drag-source");
   if (typeof document !== "undefined" && document.body) {
     document.body.style.cursor = "grabbing";
     document.body.classList.add("cm-marknote-table-dragging");
   }
+  view.dom.classList.add("cm-marknote-table-dragging");
 
   const onMouseMove = (moveEvent: MouseEvent) => {
     const deltaY = moveEvent.clientY - startY;
@@ -983,7 +1036,9 @@ export const tableKeymap: KeyBinding[] = [
 ];
 
 /** CSS для ячеек, разделителей, ручек и кнопок таблицы. */
-export const tableTheme = EditorView.theme({
+export const tableTheme = [
+  tableInputHandler,
+  EditorView.theme({
   ".cm-line.cm-marknote-table-row": {
     whiteSpace: "nowrap",
     display: "flex",
@@ -1154,6 +1209,19 @@ export const tableTheme = EditorView.theme({
     transform: "translate(-50%, -50%) scale(1.1)",
   },
 
+  // Во время перетаскивания чужие ручки и кнопки не должны всплывать под
+  // курсором. Исходная ручка остаётся видимой для обратной связи.
+  "&.cm-marknote-table-dragging .cm-marknote-table-add-row-bar, &.cm-marknote-table-dragging .cm-marknote-table-add-col-bar": {
+    opacity: "0 !important",
+    visibility: "hidden !important",
+    pointerEvents: "none !important",
+  },
+  "&.cm-marknote-table-dragging .cm-marknote-table-row-controls:not(.cm-marknote-table-drag-source), &.cm-marknote-table-dragging .cm-marknote-table-col-controls:not(.cm-marknote-table-drag-source)": {
+    opacity: "0 !important",
+    visibility: "hidden !important",
+    pointerEvents: "none !important",
+  },
+
   // Стили ручек перемещения строк и столбцов (толстые линии, HOVER ONLY)
   ".cm-marknote-table-row-controls": {
     position: "absolute",
@@ -1288,4 +1356,5 @@ export const tableTheme = EditorView.theme({
     pointerEvents: "none",
     zIndex: "50",
   },
-});
+  }),
+];

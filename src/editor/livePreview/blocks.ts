@@ -48,6 +48,12 @@ function children(node: SyntaxNode, name: string) {
   return node.getChildren(name).sort((a, b) => a.from - b.from);
 }
 
+function isShortSetextUnderline(node: SyntaxNode, state: EditorState): boolean {
+  if (node.name !== "SetextHeading2") return false;
+  const marker = children(node, "HeaderMark")[0];
+  return Boolean(marker && /^-{1,2}$/u.test(state.doc.sliceString(marker.from, marker.to).trim()));
+}
+
 function isTaskChecked(node: SyntaxNode, state: EditorState) {
   const marker = node.getChild("TaskMarker");
   return Boolean(marker && /^\[[xX]\]$/.test(state.doc.sliceString(marker.from, marker.to)));
@@ -95,6 +101,7 @@ export function decorationsForBlockNode(
   }
 
   if (node.name === "SetextHeading1" || node.name === "SetextHeading2") {
+    if (isShortSetextUnderline(node, state)) return [];
     const level = node.name.endsWith("1") ? 1 : 2;
     const specs: DecorationSpec[] = [mark(node.from, node.to, `cm-marknote-heading cm-marknote-heading-${level}`)];
     if (!active) specs.push(...children(node, "HeaderMark").map((child) => hide(child.from, child.to)));
@@ -106,7 +113,6 @@ export function decorationsForBlockNode(
   }
 
   if (node.name === "ListMark") {
-    if (active) return [];
     const parent = node.parent;
     const list = parent?.parent;
     if (list?.name === "BulletList") {
@@ -117,6 +123,7 @@ export function decorationsForBlockNode(
         atomic: true,
       }];
     }
+    if (active) return [];
     if (list?.name === "OrderedList") return [mark(node.from, node.to, "cm-marknote-ordered-marker")];
     return [];
   }

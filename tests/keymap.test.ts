@@ -166,16 +166,28 @@ describe("MarkNote editor keymap", () => {
     const view = makeView("word", 0, 4);
     expect(run(key, view)).toBe(true);
     expect(view.state.doc.toString()).toBe(`${open}word${close}`);
+    expect(view.state.selection.main.from).toBe(open.length + 4 + close.length);
+    expect(view.state.selection.main.empty).toBe(true);
     expect(run(key, view)).toBe(true);
     expect(view.state.doc.toString()).toBe("word");
+    expect(view.state.selection.main.from).toBe(4);
+    expect(view.state.selection.main.empty).toBe(true);
+  });
+
+  it("keeps the old word-under-cursor behavior when no text is selected", () => {
+    const view = makeView("word", 2);
+    expect(run("Mod-b", view)).toBe(true);
+    expect(view.state.doc.toString()).toBe("**word**");
+    expect(view.state.selection.main.from).toBe(2);
+    expect(view.state.selection.main.to).toBe(6);
   });
 
   it("removes bold markers when the selection includes both markers", () => {
     const view = makeView("**word**", 0, 8);
     expect(run("Mod-b", view)).toBe(true);
     expect(view.state.doc.toString()).toBe("word");
-    expect(view.state.selection.main.from).toBe(0);
-    expect(view.state.selection.main.to).toBe(4);
+    expect(view.state.selection.main.from).toBe(4);
+    expect(view.state.selection.main.empty).toBe(true);
   });
 
   it("supports the remaining local formatting shortcuts", () => {

@@ -56,6 +56,43 @@ describe("MarkNote Markdown extensions", () => {
     expect(nodes(doc, "FootnoteDefinition")).toEqual([{ from: 43, to: 65 }]);
   });
 
+  it("не превращает одну-две черты Setext в заголовок предпросмотра", () => {
+    for (const underline of ["-", "--", " - ", " -- "]) {
+      const doc = `plain\n${underline}`;
+      const heading = syntaxTree(state(doc)).topNode.getChild("SetextHeading2")!;
+      const result = buildDecorationSets(state(doc, 0), [{ from: 0, to: doc.length }]);
+      expect(hasRange(result.decorations, heading.from, heading.to, "cm-marknote-heading cm-marknote-heading-2")).toBe(false);
+    }
+
+    for (const underline of ["---", "===="]) {
+      const doc = `plain\n${underline}`;
+      const heading = syntaxTree(state(doc)).topNode.getChild(/^=/.test(underline) ? "SetextHeading1" : "SetextHeading2")!;
+      const result = buildDecorationSets(state(doc, 0), [{ from: 0, to: doc.length }]);
+      expect(hasRange(result.decorations, heading.from, heading.to, `cm-marknote-heading cm-marknote-heading-${/^=/.test(underline) ? 1 : 2}`)).toBe(true);
+    }
+  });
+
+  it("рендерит MathBlock вне блока и раскрывает его под курсором", () => {
+    for (const doc of ["$$\nx^2\n$$\n", "$$\nx^2\n$$", "before\n$$\nx^2\n$$\n", "before\n$$\nx^2\n$$\nafter"]) {
+      const math = nodes(doc, "MathBlock")[0];
+      expect(math, doc).toBeTruthy();
+      if (!math) continue;
+      const outsideAnchor = math.to < doc.length ? math.to + 1 : math.to;
+      const outside = buildDecorationSets(state(doc, outsideAnchor), [{ from: 0, to: doc.length }]);
+      expect(hasWidget(outside.decorations, math.from, math.to, "MathWidget"), doc).toBe(true);
+
+      const inside = buildDecorationSets(state(doc, math.from + 3), [{ from: 0, to: doc.length }]);
+      expect(hasRange(inside.decorations, math.from, math.to, "cm-marknote-math-source"), doc).toBe(true);
+      expect(hasWidget(inside.decorations, math.from, math.to, "MathWidget"), doc).toBe(false);
+    }
+  });
+
+  it("рендерит строчную формулу вне неё", () => {
+    const doc = "before $x^2$ after";
+    const math = nodes(doc, "InlineMath")[0];
+    expect(hasWidget(buildDecorationSets(state(doc, 0), [{ from: 0, to: doc.length }]).decorations, math.from, math.to, "MathWidget")).toBe(true);
+  });
+
   it("распознаёт все типы Obsidian callout", () => {
     for (const type of ["note", "tip", "warning", "danger", "info", "success", "question", "quote", "example"]) {
       expect(nodes(`> [!${type.toUpperCase()}] Title`, "Callout"), type).toHaveLength(1);
@@ -110,7 +147,11 @@ describe("MarkNote Markdown extensions", () => {
     const list = "x\n- item";
     const listMark = nodes(list, "ListMark")[0];
     expect(hasWidget(buildDecorationSets(state(list, 0), [{ from: 0, to: list.length }]).decorations, listMark.from, listMark.to, "TextWidget")).toBe(true);
-    expect(hasWidget(buildDecorationSets(state(list, listMark.from + 2), [{ from: 0, to: list.length }]).decorations, listMark.from, listMark.to, "TextWidget")).toBe(false);
+    expect(hasWidget(buildDecorationSets(state(list, listMark.from + 2), [{ from: 0, to: list.length }]).decorations, listMark.from, listMark.to, "TextWidget")).toBe(true);
+
+    const emptyList = "- ";
+    const emptyListMark = nodes(emptyList, "ListMark")[0];
+    expect(hasWidget(buildDecorationSets(state(emptyList, emptyList.length), [{ from: 0, to: emptyList.length }]).decorations, emptyListMark.from, emptyListMark.to, "TextWidget")).toBe(true);
 
     const quote = "x\n> quote";
     const quoteMark = nodes(quote, "QuoteMark")[0];

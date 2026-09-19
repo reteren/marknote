@@ -251,7 +251,8 @@ describe("ContextMenu user interactions", () => {
     await fireEvent.mouseEnter(insertTrigger);
     await fireEvent.click(Array.from(document.querySelectorAll<HTMLButtonElement>(`[role="menu"][aria-label="${t("contextMenu.insert")}"] button`))
       .find((button) => button.textContent?.includes(t("format.table")))!);
-    expect(documentState.text).toBe("|  |  |\n| --- | --- |\n|  |  |\n");
+    // Пустая строка после таблицы: иначе набранный под ней текст стал бы её строкой.
+    expect(documentState.text).toBe("|  |  |\n| --- | --- |\n|  |  |\n\n");
   });
 
   it("routes horizontal rule action into the document with proper separation and renders hr widget", async () => {
@@ -292,7 +293,8 @@ describe("ContextMenu user interactions", () => {
       .find((button) => button.textContent?.includes(t("format.horizontalRule")))!);
     await settle();
 
-    expect(documentState.text).toBe("\n---\n\nSome preceding paragraph");
+    // Линия в начале документа: ни пустой строки перед ней, ни лишней после.
+    expect(documentState.text).toBe("---\nSome preceding paragraph");
     const hrElement = document.querySelector<HTMLElement>(".cm-marknote-hr");
     expect(hrElement).not.toBeNull();
   });

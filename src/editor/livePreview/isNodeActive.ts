@@ -21,6 +21,11 @@ const lineScopedNames = new Set([
 
 /** Возвращает зону, которую нужно считать раскрытой для конкретного узла. */
 export function nodeActivationRange(node: SyntaxNode, doc?: Text): { from: number; to: number } {
+  // The position immediately after a display-math block is outside the
+  // block, including when the block is the final document node.  Keeping the
+  // end exclusive here lets the preview render at EOF instead of requiring a
+  // trailing newline solely to place the cursor outside the widget.
+  if (node.name === "MathBlock") return { from: node.from, to: Math.max(node.from, node.to - 1) };
   if (!doc || !lineScopedNames.has(node.name)) return { from: node.from, to: node.to };
   const fromLine = doc.lineAt(Math.min(node.from, doc.length));
   const toLine = doc.lineAt(Math.min(node.to, doc.length));

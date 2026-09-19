@@ -324,6 +324,46 @@ describe("application actions", () => {
     expect(view.state.doc.toString()).toBe("- [ ] First\n- [ ] Second\n- [ ] Third");
   });
 
+  it("puts the cursor after wrappers inserted by the formatting panel", async () => {
+    for (const [action, wrapper] of [
+      ["format.bold", "**"],
+      ["format.italic", "*"],
+      ["format.strikethrough", "~~"],
+      ["format.highlight", "=="],
+    ] as const) {
+      const view = viewFor("word", { anchor: 0, head: 4 });
+      const actions = makeActions(view);
+      await actions.run(action);
+      expect(view.state.doc.toString()).toBe(`${wrapper}word${wrapper}`);
+      expect(view.state.selection.main.empty).toBe(true);
+      expect(view.state.selection.main.from).toBe(wrapper.length + 4 + wrapper.length);
+    }
+
+    const view = viewFor("**word**", { anchor: 2, head: 6 });
+    await makeActions(view).run("format.bold");
+    expect(view.state.doc.toString()).toBe("word");
+    expect(view.state.selection.main.empty).toBe(true);
+    expect(view.state.selection.main.from).toBe(4);
+  });
+
+  it("places heading text cursor after the inserted hashes", async () => {
+    const empty = viewFor("", { anchor: 0 });
+    await makeActions(empty).run("format.heading2");
+    expect(empty.state.doc.toString()).toBe("## ");
+    expect(empty.state.selection.main.from).toBe(3);
+    expect(empty.state.selection.main.empty).toBe(true);
+
+    const text = viewFor("title", { anchor: 0 });
+    await makeActions(text).run("format.heading2");
+    expect(text.state.doc.toString()).toBe("## title");
+    expect(text.state.selection.main.from).toBe(3);
+
+    const existing = viewFor("# title", { anchor: 0 });
+    await makeActions(existing).run("format.heading3");
+    expect(existing.state.doc.toString()).toBe("### title");
+    expect(existing.state.selection.main.from).toBe(4);
+  });
+
   it("clears formatting on selection without stripping headings or list markers", async () => {
     const doc = [
       "# Heading with **bold** and *italic*",
@@ -389,22 +429,37 @@ describe("application actions", () => {
     const actions = makeActions(view);
 
     await actions.run("format.horizontalRule");
-    expect(view.state.doc.toString()).toBe("\n---\n");
+    expect(view.state.doc.toString()).toBe("---\n");
+    expect(view.state.selection.main.from).toBe(4);
 
     const hrView = viewFor("");
     const hrActions = makeActions(hrView);
     await hrActions.run("insert-hr");
-    expect(hrView.state.doc.toString()).toBe("\n---\n");
+    expect(hrView.state.doc.toString()).toBe("---\n");
+    expect(hrView.state.selection.main.from).toBe(4);
 
     const textHrView = viewFor("Some text", { anchor: 9 });
     const textHrActions = makeActions(textHrView);
     await textHrActions.run("format.horizontalRule");
     expect(textHrView.state.doc.toString()).toBe("Some text\n\n---\n");
+    expect(textHrView.state.selection.main.from).toBe(15);
+
+    const endOfLine = viewFor("Some text\n", { anchor: 10 });
+    await makeActions(endOfLine).run("format.horizontalRule");
+    expect(endOfLine.state.doc.toString()).toBe("Some text\n\n---\n");
+
+    const beforeText = viewFor("Some text\nnext", { anchor: 10 });
+    await makeActions(beforeText).run("format.horizontalRule");
+    expect(beforeText.state.doc.toString()).toBe("Some text\n\n---\nnext");
 
     const tableView = viewFor("");
     const tableActions = makeActions(tableView);
     await tableActions.run("format.table");
-    expect(tableView.state.doc.toString()).toBe("|  |  |\n| --- | --- |\n|  |  |\n");
+    expect(tableView.state.doc.toString()).toBe("|  |  |\n| --- | --- |\n|  |  |\n\n");
+
+    const tableBeforeText = viewFor("after", { anchor: 0 });
+    await makeActions(tableBeforeText).run("format.table");
+    expect(tableBeforeText.state.doc.toString()).toBe("|  |  |\n| --- | --- |\n|  |  |\n\nafter");
 
     const calloutView = viewFor("");
     const calloutActions = makeActions(calloutView);
@@ -415,6 +470,23 @@ describe("application actions", () => {
     const mathActions = makeActions(mathView);
     await mathActions.run("format.mathBlock");
     expect(mathView.state.doc.toString()).toContain("$$");
+  });
+
+  it("inserts a horizontal rule with exactly one following newline", async () => {
+    const cases = [
+      ["", 0, "---\n"],
+      ["Some text", 9, "Some text\n\n---\n"],
+      ["Some text\n", 10, "Some text\n\n---\n"],
+      ["Some text\n\n", 11, "Some text\n\n---\n"],
+      ["Some text\nnext", 10, "Some text\n\n---\nnext"],
+    ] as const;
+    for (const [doc, cursor, expected] of cases) {
+      const view = viewFor(doc, { anchor: cursor });
+      await makeActions(view).run("format.horizontalRule");
+      expect(view.state.doc.toString()).toBe(expected);
+      expect(view.state.selection.main.empty).toBe(true);
+      expect(view.state.selection.main.from).toBe(cursor + expected.length - doc.length);
+    }
   });
 
   it("positions cursor immediately after marker when inserting task, bullet, and ordered lists", async () => {

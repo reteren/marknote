@@ -214,29 +214,12 @@ function insertAtSelection(view: EditorView, text: string, selection?: { anchor:
   view.dispatch({ changes: { from: range.from, to: range.to, insert: text }, selection });
 }
 
-function applyLines(view: EditorView, update: (text: string) => string): ActionResult {
-  const changes: { from: number; to: number; insert: string }[] = [];
-  const seen = new Set<number>();
-  for (const range of view.state.selection.ranges) {
-    const first = view.state.doc.lineAt(range.from).number;
-    const last = view.state.doc.lineAt(range.to).number;
-    for (let number = first; number <= last; number += 1) {
-      if (seen.has(number)) continue;
-      seen.add(number);
-      const line = view.state.doc.line(number);
-      const next = update(line.text);
-      if (next !== line.text) changes.push({ from: line.from, to: line.to, insert: next });
-    }
-  }
-  if (changes.length) view.dispatch({ changes });
-  return true;
-}
-
 function formatHeading(view: EditorView, level: number): ActionResult {
-  return applyLines(view, (text) => {
+  return applyNumberedLines(view, (text) => {
     const indent = text.match(/^\s*/)?.[0] ?? "";
     const body = text.slice(indent.length).replace(/^#{1,6}(?:\s+|$)/, "").replace(/^\s+/, "");
-    return level === 0 ? indent + body : `${indent}${"#".repeat(level)} ${body}`;
+    const prefix = level === 0 ? indent : `${indent}${"#".repeat(level)} `;
+    return { text: prefix + body, prefixLength: prefix.length };
   });
 }
 
@@ -279,7 +262,7 @@ function applyNumberedLines(
     const res = update(line.text, lineIndex);
     const nextText = typeof res === "string" ? res : res.text;
 
-    const listMatch = line.text.match(/^(\s*)(?:[-+*]\s+\[[ xX]\]\s+|[-+*]\s+|\d+[.)]\s+)/u);
+    const listMatch = line.text.match(/^(\s*)(?:#{1,6}(?:\s+|$)|[-+*]\s+\[[ xX]\]\s+|[-+*]\s+|\d+[.)]\s+)/u);
     const indentMatch = line.text.match(/^\s*/)?.[0] ?? "";
     const oldPrefixLength = listMatch ? listMatch[0].length : indentMatch.length;
     const newPrefixLength = typeof res === "string" ? oldPrefixLength : res.prefixLength;
@@ -792,7 +775,12 @@ export function createActions(dependencies: ActionsDependencies = {}): AppAction
   const taskList = editCommand(formatTaskList);
   const clearFormatting = editCommand(clearFormattingInView);
   const table = editCommand((view) => {
-    insertAtSelection(view, "|  |  |\n| --- | --- |\n|  |  |\n", { anchor: view.state.selection.main.from + 2 });
+    const afterSelection = view.state.sliceDoc(view.state.selection.main.to);
+    const tableText = "|  |  |\n| --- | --- |\n|  |  |\n";
+    // The final newline ends the last table row. Add one more only when the
+    // existing suffix does not already start a blank separator line.
+    const separator = afterSelection.startsWith("\n") ? "" : "\n";
+    insertAtSelection(view, tableText + separator, { anchor: view.state.selection.main.from + 2 });
     return true;
   });
   const callout = editCommand((view) => {
@@ -808,31 +796,19 @@ export function createActions(dependencies: ActionsDependencies = {}): AppAction
     const range = view.state.selection.main;
     const doc = view.state.doc;
     const before = doc.sliceString(0, range.from);
-    const after = doc.sliceString(range.to);
 
-    let prefix = "\n";
-    if (before.length > 0) {
-      if (before.endsWith("\n\n")) {
-        prefix = "";
-      } else if (before.endsWith("\n")) {
+    let prefix = "";
+    if (before.length > 0 && !before.endsWith("\n\n")) {
+      if (before.endsWith("\n")) {
+        // A line of text immediately above the rule would otherwise become
+        // a Setext heading, so keep the separating blank line before `---`.
         prefix = "\n";
       } else {
         prefix = "\n\n";
       }
     }
 
-    let suffix = "\n";
-    if (after.length > 0) {
-      if (after.startsWith("\n\n")) {
-        suffix = "\n";
-      } else if (after.startsWith("\n")) {
-        suffix = "\n\n";
-      } else {
-        suffix = "\n\n";
-      }
-    }
-
-    const insert = `${prefix}---${suffix}`;
+    const insert = `${prefix}---\n`;
     const insertPos = range.from + insert.length;
     view.dispatch({
       changes: { from: range.from, to: range.to, insert },

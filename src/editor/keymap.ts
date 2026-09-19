@@ -507,8 +507,28 @@ function wordOrSelection(state: EditorState): { from: number; to: number } {
   return { from, to };
 }
 
+function wrappedContentBeforeCursor(state: EditorState, open: string, close: string): { from: number; to: number } | null {
+  const cursor = state.selection.main.from;
+  if (cursor < open.length + close.length || state.sliceDoc(cursor - close.length, cursor) !== close) return null;
+
+  const contentTo = cursor - close.length;
+  const openFrom = state.sliceDoc(0, contentTo).lastIndexOf(open);
+  if (openFrom < 0) return null;
+  const contentFrom = openFrom + open.length;
+  const content = state.sliceDoc(contentFrom, contentTo);
+  if (!content || content.includes("\n")) return null;
+  return { from: contentFrom, to: contentTo };
+}
+
 /** Remove wrappers around either the selected content or a selection containing the markers. */
-function unwrapWrapper(view: EditorView, open: string, close: string, from: number, to: number): boolean {
+function unwrapWrapper(
+  view: EditorView,
+  open: string,
+  close: string,
+  from: number,
+  to: number,
+  collapseSelection: boolean,
+): boolean {
   const state = view.state;
   const selected = state.sliceDoc(from, to);
   let wrapperFrom = -1;
@@ -548,19 +568,24 @@ function unwrapWrapper(view: EditorView, open: string, close: string, from: numb
   }
 
   if (wrapperFrom < 0 || wrapperTo < 0) return false;
+  const contentEnd = wrapperTo - open.length - close.length;
   view.dispatch({
     changes: [
       { from: wrapperFrom, to: wrapperFrom + open.length },
       { from: wrapperTo - close.length, to: wrapperTo },
     ],
-    selection: { anchor: selectionFrom, head: selectionTo },
+    selection: collapseSelection
+      ? { anchor: contentEnd }
+      : { anchor: selectionFrom, head: selectionTo },
   });
   return true;
 }
 
 function toggleWrapper(view: EditorView, open: string, close: string): boolean {
   const state = view.state;
-  const range = wordOrSelection(state);
+  const hadSelection = !state.selection.main.empty;
+  const wrappedAtCursor = hadSelection ? null : wrappedContentBeforeCursor(state, open, close);
+  const range = wrappedAtCursor ?? wordOrSelection(state);
   const { from, to } = range;
 
   if (from === to) {
@@ -569,10 +594,12 @@ function toggleWrapper(view: EditorView, open: string, close: string): boolean {
     return true;
   }
 
-  if (unwrapWrapper(view, open, close, from, to)) return true;
+  if (unwrapWrapper(view, open, close, from, to, hadSelection || wrappedAtCursor !== null)) return true;
   view.dispatch({
     changes: { from, to, insert: open + state.sliceDoc(from, to) + close },
-    selection: { anchor: from + open.length, head: to + open.length },
+    selection: hadSelection
+      ? { anchor: to + open.length + close.length }
+      : { anchor: from + open.length, head: to + open.length },
   });
   return true;
 }

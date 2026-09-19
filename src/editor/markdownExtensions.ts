@@ -110,6 +110,13 @@ function endOfLine(cx: BlockContext, line: Line) {
 const MathBlockParser: BlockParser = {
   name: "MarknoteMathBlock",
   before: "FencedCode",
+  // A display-math opener is allowed to interrupt a paragraph.  Without
+  // this hook the default paragraph leaf consumes `$$` when it follows text
+  // without a blank line, so the block parser never gets a chance to see it.
+  endLeaf(_cx: BlockContext, line: Line, _leaf) {
+    const text = line.text.slice(line.pos);
+    return /^\$\$(?!\$)/.test(text);
+  },
   parse(cx: BlockContext, line: Line) {
     const text = line.text.slice(line.pos);
     if (!/^\$\$/.test(text) || /^\$\$\$/.test(text)) return false;
@@ -122,8 +129,8 @@ const MathBlockParser: BlockParser = {
       const close = from + 2 + sameLine.index!;
       children.push(cx.elt("MathMark", close, close + 2));
       to = close + 2;
-      cx.nextLine();
       cx.addElement(cx.elt("MathBlock", from, to, children));
+      cx.nextLine();
       return true;
     }
 
@@ -133,16 +140,16 @@ const MathBlockParser: BlockParser = {
         const closeStart = cx.lineStart + next.search(/\$\$/);
         children.push(cx.elt("MathMark", closeStart, closeStart + 2));
         to = endOfLine(cx, line);
-        cx.nextLine();
         cx.addElement(cx.elt("MathBlock", from, to, children));
+        cx.nextLine();
         return true;
       }
       to = endOfLine(cx, line);
     }
 
     // Незакрытая формула всё равно получает узел и остаётся редактируемой.
-    cx.nextLine();
     cx.addElement(cx.elt("MathBlock", from, to, children));
+    cx.nextLine();
     return true;
   },
 };
@@ -267,4 +274,3 @@ export const marknoteMarkdown: MarkdownExtension[] = [
   FootnoteReference,
   MarknoteBlocks,
 ];
-
