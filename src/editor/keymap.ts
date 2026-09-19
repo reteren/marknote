@@ -477,24 +477,18 @@ function pairInputHandler(
     return true;
   }
 
+  // Двойные маркеры (==, ~~) при наборе не подставляются вовсе: «=» и «~»
+  // встречаются в тексте постоянно, и человек, набравший «==», ожидает
+  // увидеть ровно два знака, а не четыре с курсором посередине. Выделенный
+  // текст эти знаки по-прежнему оборачивают (ветка выше).
+  if (pair.open.length === 2) return false;
+
   if (next === pair.close && text === pair.close[0]) {
     view.dispatch({ selection: { anchor: from + pair.close.length } });
     return true;
   }
 
   if (!openingPair) return false;
-
-  // Двойные маркеры (==, ~~) закрываются только на втором нажатии подряд:
-  // одиночные «=» и «~» встречаются в тексте постоянно, и раньше каждое
-  // нажатие «=» вставляло сразу «====».
-  if (pair.open.length === 2) {
-    if (state.sliceDoc(Math.max(0, from - 1), from) !== text) return false;
-    view.dispatch({
-      changes: { from, to, insert: text + pair.close },
-      selection: { anchor: from + 1 },
-    });
-    return true;
-  }
 
   view.dispatch({
     changes: { from, to, insert: pair.open + pair.close },

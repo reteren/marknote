@@ -308,7 +308,7 @@ describe("MarkNote editor keymap", () => {
     const keyBindings = keymapPlugin.value as KeyBinding[];
     expect(keyBindings.some((item) => item.key === "Mod-Enter")).toBe(false);
   });
-  it("печатает одиночный = и закрывает пару только на втором знаке подряд", () => {
+  it("печатает знаки = как набраны и оборачивает ими только выделение", () => {
     // Раньше каждое нажатие «=» вставляло сразу «====»: знак равенства было
     // физически не набрать.
     const extensions = createMarknoteKeymap() as any[];
@@ -324,10 +324,17 @@ describe("MarkNote editor keymap", () => {
     const first = makeView("a", 1);
     expect(inputHandler(first as EditorView, 1, 1, "=", noop)).toBe(false);
 
+    // Второе «=» тоже печатается как есть: «==» — это два знака, а не четыре
+    // с курсором посередине.
     const second = makeView("a=", 2);
-    expect(inputHandler(second as EditorView, 2, 2, "=", noop)).toBe(true);
-    expect(second.state.doc.toString()).toBe("a====");
-    expect(second.state.selection.main.head).toBe(3);
+    expect(inputHandler(second as EditorView, 2, 2, "=", noop)).toBe(false);
+
+    // И третье: рядом с уже набранной парой ничего не проглатывается.
+    const third = makeView("a==", 3);
+    expect(inputHandler(third as EditorView, 3, 3, "=", noop)).toBe(false);
+
+    const tilde = makeView("a~", 2);
+    expect(inputHandler(tilde as EditorView, 2, 2, "~", noop)).toBe(false);
 
     // С выделением «=» по-прежнему оборачивает текст в ==…==.
     const wrapped = makeView("word", 0, 4);
