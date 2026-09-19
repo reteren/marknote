@@ -138,7 +138,6 @@ describe("SettingsWindow Clear recent files button", () => {
     mockInvoke.mockReset();
     mockInvoke.mockImplementation((command: string) => {
       if (command === "get_settings") return Promise.resolve(defaultSettings);
-      if (command === "list_spellcheck_languages") return Promise.resolve(["en"]);
       if (command === "list_creatable_formats") return Promise.resolve([]);
       if (command === "clear_recent_files") return Promise.resolve();
       return Promise.resolve();

@@ -79,63 +79,26 @@ describe("spellcheck and autoCorrect settings", () => {
     expect(view.contentDOM.getAttribute("spellcheck")).toBe("true");
   });
 
-  it("applies spellcheck.language to contentDOM lang attribute", () => {
-    const view = createTestEditor({
-      ...defaultSettings,
-      spellcheck: { ...defaultSettings.spellcheck, language: "ru" },
-    });
-    expect(view.contentDOM.getAttribute("lang")).toBe("ru");
-
-    applyEditorSettings(view, {
-      ...defaultSettings,
-      spellcheck: { ...defaultSettings.spellcheck, language: "de" },
-    });
-    expect(view.contentDOM.getAttribute("lang")).toBe("de");
-  });
-
-  it("puts exactly one language tag into the lang attribute", () => {
-    // Атрибут lang по спецификации HTML принимает одну метку BCP 47: значение
-    // вида "en de" недопустимо, язык элемента становится «invalid», и словарь
-    // движок не выберет вообще — проверка орфографии просто пропадёт. Поэтому
-    // в настройках один язык, и в области правки ровно одна метка.
-    const view = createTestEditor({
-      ...defaultSettings,
-      spellcheck: { ...defaultSettings.spellcheck, language: "de" },
-    });
-
-    const lang = view.contentDOM.getAttribute("lang") ?? "";
-    expect(lang).toBe("de");
-    expect(lang.trim().split(/\s+/)).toHaveLength(1);
-    expect(view.contentDOM.querySelectorAll("[lang]")).toHaveLength(0);
-  });
-
-  it("leaves the editable area without a lang attribute when no language is set", () => {
-    const view = createTestEditor({
-      ...defaultSettings,
-      spellcheck: { ...defaultSettings.spellcheck, language: "" },
-    });
-    expect(view.contentDOM.hasAttribute("lang")).toBe(false);
-  });
-
-  it("applies spellcheck.skipCodeFormulaLinks to mark code, formula, and links with spellcheck=false", () => {
+  it("applies spellcheck.skipCodeFormulaLinks to mark code, formulas, and links with spellcheck=false", () => {
     const doc = "Here is `inline code` and [link](https://example.com) and $$x=1$$";
     const view = createTestEditor(
-      {
-        ...defaultSettings,
-        spellcheck: { ...defaultSettings.spellcheck, enabled: true, skipCodeFormulaLinks: true },
-      },
+      { ...defaultSettings, spellcheck: { enabled: true, skipCodeFormulaLinks: true } },
       doc,
     );
+    expect(view.contentDOM.querySelectorAll('[spellcheck="false"]').length).toBeGreaterThan(0);
 
-    const skipElements = view.contentDOM.querySelectorAll('[spellcheck="false"]');
-    expect(skipElements.length).toBeGreaterThan(0);
+    // Человек может захотеть проверять и код: выключенная настройка снимает пометки.
+    applyEditorSettings(view, {
+      ...defaultSettings,
+      spellcheck: { enabled: true, skipCodeFormulaLinks: false },
+    });
+    expect(view.contentDOM.querySelectorAll('[spellcheck="false"]').length).toBe(0);
 
     applyEditorSettings(view, {
       ...defaultSettings,
-      spellcheck: { ...defaultSettings.spellcheck, enabled: true, skipCodeFormulaLinks: false },
+      spellcheck: { enabled: false, skipCodeFormulaLinks: true },
     });
-    const skipElementsDisabled = view.contentDOM.querySelectorAll('[spellcheck="false"]');
-    expect(skipElementsDisabled.length).toBe(0);
+    expect(view.contentDOM.querySelectorAll('[spellcheck="false"]').length).toBe(0);
   });
 
   it("applies autoCorrect.smartQuotes to convert quotes to typographic smart quotes with one-step undo", () => {

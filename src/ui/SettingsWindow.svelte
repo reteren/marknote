@@ -48,10 +48,6 @@
     { value: "ar", labelKey: "settings.language.name.ar" },
   ];
 
-  // Языки проверки — те же коды, что и у интерфейса, но без `system`:
-  // словарь выбирается явно, а не вслед за языком меню.
-  const spellLanguageOptions: Option[] = languageOptions.filter((option) => option.value !== "system");
-
   const descriptors: Descriptor[] = [
     { path: "language", type: "select", titleKey: "settings.language.interface", descriptionKey: "settings.language.interfaceDescription", options: languageOptions },
     { path: "editor.fontFamily", type: "select", titleKey: "settings.editor.fontFamily", descriptionKey: "settings.editor.fontFamilyDescription", options: [
@@ -83,7 +79,6 @@
     { path: "livePreview.maxImageWidth", type: "fixed", titleKey: "settings.preview.maxImageWidth", display: "settings.preview.maxImageWidthColumn" },
     { path: "livePreview.disableAboveBytes", type: "number", titleKey: "settings.preview.disableAbove", descriptionKey: "settings.preview.disableAboveDescription", min: 1, max: 100, step: 1, unit: "settings.unit.megabytes" },
     { path: "spellcheck.enabled", type: "toggle", titleKey: "settings.spelling.enabled", descriptionKey: "settings.spelling.enabledDescription" },
-    { path: "spellcheck.language", type: "select", titleKey: "settings.spelling.language", descriptionKey: "settings.spelling.languageDescription", options: spellLanguageOptions },
     { path: "spellcheck.skipCodeFormulaLinks", type: "toggle", titleKey: "settings.spelling.skipCodeFormulaLinks", descriptionKey: "settings.spelling.skipCodeFormulaLinksDescription" },
     { path: "autoCorrect.smartQuotes", type: "toggle", titleKey: "settings.spelling.smartQuotes" },
     { path: "autoCorrect.doubleHyphenToEmDash", type: "toggle", titleKey: "settings.spelling.doubleHyphenToEmDash" },
@@ -131,7 +126,6 @@
   let dialogElement: HTMLDivElement | undefined = $state();
   let activeSection = $state<SectionId>("language");
   let searchQuery = $state("");
-  let availableSpellLanguages = $state<string[]>([]);
   let creatableFormats = $state<FormatCapabilities[]>([]);
   let resetConfirmationOpen = $state(false);
   let resetError = $state(false);
@@ -207,17 +201,6 @@
   function applyZoomValue(target: number): void {
     if (!editorView) return;
     setZoomPercent(editorView, target);
-  }
-
-  // Пока список словарей не пришёл, ни один язык не объявляется недоступным:
-  // пустой ответ команды означает «неизвестно», а не «ничего не установлено».
-  function dictionaryMissing(language: string): boolean {
-    return availableSpellLanguages.length > 0 && !availableSpellLanguages.includes(language);
-  }
-
-  function spellLanguageLabel(option: Option): string {
-    const name = t(option.labelKey);
-    return dictionaryMissing(option.value) ? `${name} — ${t("settings.spelling.dictionaryUnavailable")}` : name;
   }
 
   function matches(path: string, query = searchQuery): boolean {
@@ -344,9 +327,6 @@
 
   onMount(() => {
     void loadSettings();
-    void invoke<string[]>("list_spellcheck_languages")
-      .then((languages) => { availableSpellLanguages = Array.isArray(languages) ? languages.map((item) => item.toLowerCase()) : []; })
-      .catch(() => { availableSpellLanguages = []; });
     void invoke<FormatCapabilities[]>("list_creatable_formats")
       .then((formats) => { creatableFormats = Array.isArray(formats) ? formats.filter((item) => item.creatable) : []; })
       .catch(() => { creatableFormats = []; });
@@ -505,14 +485,11 @@
                     {:else}
                       {#each descriptor.options ?? [] as option (option.value)}
                         <option value={option.value}>
-                          {descriptor.path === "spellcheck.language" ? spellLanguageLabel(option) : t(option.labelKey)}
+                          {t(option.labelKey)}
                         </option>
                       {/each}
                     {/if}
                   </select>
-                  {#if descriptor.path === "spellcheck.language" && dictionaryMissing(settingsState.settings.spellcheck.language)}
-                    <p class="dictionary-note">{t("settings.spelling.dictionaryUnavailable")}</p>
-                  {/if}
                 {/if}
               {:else}
                 <span class="fixed-value">{t(descriptor.display ?? "settings.value.fixed")}</span>
@@ -637,7 +614,6 @@
   .numeric-control input { width: 90px; }
   .numeric-control span, .fixed-value { color: var(--text-muted); white-space: nowrap; }
   .settings-content select { width: 100%; max-width: 260px; }
-  .dictionary-note { margin: 5px 0 0; color: var(--text-muted); font-size: 11px; }
   .startup-action-control { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
   .startup-action-control select { flex: 1 1 140px; min-width: 120px; }
   .clear-recent-button { flex: 0 0 auto; font-size: 12px; white-space: nowrap; }

@@ -10,7 +10,7 @@ export type StartupAction = "startScreen" | "recentFiles";
 
 export type Settings = {
   language: string;
-  spellcheck: { enabled: boolean; language: string; skipCodeFormulaLinks: boolean };
+  spellcheck: { enabled: boolean; skipCodeFormulaLinks: boolean };
   autoCorrect: {
     smartQuotes: boolean;
     doubleHyphenToEmDash: boolean;
@@ -72,7 +72,7 @@ export type SettingsState = {
 
 export const defaultSettings: Settings = {
   language: "en",
-  spellcheck: { enabled: true, language: "en", skipCodeFormulaLinks: true },
+  spellcheck: { enabled: true, skipCodeFormulaLinks: true },
   autoCorrect: {
     smartQuotes: false,
     doubleHyphenToEmDash: false,

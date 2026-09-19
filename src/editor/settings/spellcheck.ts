@@ -16,7 +16,10 @@ export function spellcheckSettingsExtensions(settings: Settings | null): Extensi
   }
 
   return [
-    ...spellcheckExtension(settings.spellcheck),
+    ...spellcheckExtension({
+      enabled: settings.spellcheck.enabled,
+      skipCodeFormulaLinks: settings.spellcheck.skipCodeFormulaLinks,
+    }),
     ...autoCorrectExtension(settings.autoCorrect),
   ];
 }

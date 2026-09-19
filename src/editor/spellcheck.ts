@@ -1,7 +1,8 @@
 // Поддержка проверки орфографии и исключения разметки кода/формул/ссылок.
 //
 // Проверка орфографии выполняется браузерным движком (WebView2 / Chromium)
-// по атрибутам spellcheck и lang на contentDOM редактора.
+// по атрибуту spellcheck на contentDOM редактора. Язык словаря выбирает
+// WebView2 из языка интерфейса Windows; страница не может его переопределить.
 // Разметка (код, формулы, ссылки) помечается spellcheck="false", чтобы
 // словари не подчёркивали синтаксис и идентификаторы.
 
@@ -112,7 +113,6 @@ const skipCodeFormulaPlugin = ViewPlugin.fromClass(
 
 export type SpellcheckOptions = {
   enabled: boolean;
-  language: string;
   skipCodeFormulaLinks: boolean;
 };
 
@@ -122,15 +122,6 @@ export function spellcheckExtension(options: SpellcheckOptions): Extension[] {
   const attrs: Record<string, string> = {
     spellcheck: options.enabled ? "true" : "false",
   };
-  // Ровно одна метка языка, и это ограничение, а не упрощение. Атрибут lang
-  // по спецификации HTML принимает одну метку BCP 47; значение вида "en ru"
-  // считается недопустимым, язык элемента становится «invalid», и словарь
-  // движок не выберет вообще. Проверку на нескольких языках сразу Chromium
-  // настраивает у себя в профиле, со страницы до неё не дотянуться.
-  const language = options.language?.trim();
-  if (language) {
-    attrs.lang = language;
-  }
   extensions.push(EditorView.contentAttributes.of(attrs));
 
   if (options.enabled && options.skipCodeFormulaLinks) {

@@ -1,11 +1,11 @@
 import "@testing-library/jest-dom/vitest";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/svelte";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/svelte";
 
 const mocks = vi.hoisted(() => {
   const base = {
     language: "en",
-    spellcheck: { enabled: true, language: "en", skipCodeFormulaLinks: true },
+    spellcheck: { enabled: true, skipCodeFormulaLinks: true },
     autoCorrect: { smartQuotes: false, doubleHyphenToEmDash: false, capitalizeAfterPeriod: false, threeDotsToEllipsis: false },
     editor: { fontFamily: "system-serif", fontSize: 15, zoomPercent: 100, columnWidth: "normal", tabWidth: 4, insertSpaces: true, softWrap: true, showInvisibles: false, lineNumbers: false },
     livePreview: { enabled: true, revealMarkup: "cursor", renderFormulas: true, renderImages: true, maxImageWidth: "column", disableAboveBytes: 5 * 1024 * 1024 },
@@ -15,7 +15,6 @@ const mocks = vi.hoisted(() => {
   const invoke = vi.fn(async (command: string, args?: { settings?: unknown }) => {
     if (command === "get_settings" || command === "reset_settings") return structuredClone(base);
     if (command === "save_settings") return args?.settings;
-    if (command === "list_spellcheck_languages") return ["en"];
     if (command === "list_creatable_formats") return [{ id: "markdown", label: "Markdown", creatable: true }];
     return undefined;
   });
@@ -38,9 +37,6 @@ const labels: Record<string, string> = {
   "settings.editor.lineNumbers": "Line numbers",
   "settings.editor.tabWidth": "Tab width",
   "settings.editor.tabWidthDescription": "Number of spaces per indentation level",
-  "settings.spelling.language": "Spellcheck language",
-  "settings.spelling.languageDescription": "Only one language is checked at a time.",
-  "settings.spelling.dictionaryUnavailable": "Windows language dictionary is not installed",
   "settings.language.name.en": "English",
   "settings.language.name.ru": "Russian",
   "settings.modified": "Modified",
@@ -98,7 +94,6 @@ describe("SettingsWindow", () => {
     mocks.invoke.mockImplementation(async (command: string, args?: { settings?: unknown }) => {
       if (command === "get_settings" || command === "reset_settings") return structuredClone(mocks.base);
       if (command === "save_settings") return args?.settings;
-      if (command === "list_spellcheck_languages") return ["en"];
       if (command === "list_creatable_formats") return [{ id: "markdown", label: "Markdown", creatable: true }];
       return undefined;
     });
@@ -173,24 +168,13 @@ describe("SettingsWindow", () => {
     await waitFor(() => expect(mocks.invoke).toHaveBeenCalledWith("reset_settings"));
   });
 
-  it("offers one spellcheck language and names the ones Windows has no dictionary for", async () => {
+  it("offers only the spellcheck toggle and explains the system dictionary", async () => {
     mount();
     await selectSection("Spellcheck");
 
-    const select = screen.getByRole("combobox", { name: "Spellcheck language" });
-    await waitFor(() =>
-      expect(
-        within(select).getByRole("option", { name: "Russian — Windows language dictionary is not installed" }),
-      ).toBeInTheDocument(),
-    );
-    expect(within(select).getByRole("option", { name: "English" })).toBeInTheDocument();
-    expect(within(select).queryByRole("option", { name: "System" })).not.toBeInTheDocument();
-    expect(select).toHaveValue("en");
-    expect(screen.queryByText("Windows language dictionary is not installed")).not.toBeInTheDocument();
-
-    await fireEvent.change(select, { target: { value: "ru" } });
-    expect(settingsState.settings.spellcheck.language).toBe("ru");
-    expect(screen.getByText("Windows language dictionary is not installed")).toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: "settings.spelling.enabled" })).toBeInTheDocument();
+    expect(screen.getByText("settings.spelling.enabledDescription")).toBeInTheDocument();
+    expect(screen.queryByRole("combobox", { name: "settings.spelling.language" })).not.toBeInTheDocument();
   });
 
   it("marks a changed value and removes the marker when restored", async () => {

@@ -7,7 +7,6 @@ mod formats;
 mod messages;
 mod recent_files;
 mod settings;
-mod spellcheck;
 mod watcher;
 mod windows;
 
@@ -57,7 +56,6 @@ pub fn run() {
             commands::reveal_in_explorer,
             commands::get_settings,
             commands::get_resolved_language,
-            commands::list_spellcheck_languages,
             commands::save_settings,
             commands::reset_settings,
             commands::reveal_settings_file,

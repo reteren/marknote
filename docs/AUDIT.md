@@ -150,7 +150,7 @@
 | **9.1** Файлы больше 5 MiB отключают preview и сообщают причину в статусе | **ЧАСТИЧНО** | Порог и отключение декораций: `src/editor/livePreview/plugin.ts:117-156`; StatusBar не получает флаг причины: `src/ui/StatusBar.svelte:10-37`. Настройка порога есть в `src/ui/SettingsWindow.svelte:77-80`. |
 | **9.2** Двоичный файл отклоняется с сообщением | **ЕСТЬ** | Проверка и ошибка при открытии: `src-tauri/src/commands.rs:112-145`, `src-tauri/src/binary.rs`. |
 | **9.3** HTTP/data изображения разрешены, абсолютные и внешние `file://` запрещены | **ЕСТЬ** | `read_image` принимает data/http(s), проверяет абсолютность, URI schemes, каталог документа и размер: `src-tauri/src/commands.rs:346-400`. |
-| **9.4** Проверка орфографии средствами WebView2 для английского | **ЧАСТИЧНО** | Spellcheck attributes и выбранный первый язык: `src/editor/spellcheck.ts:119-140`; список доступных языков и выбор в настройках: `src/ui/SettingsWindow.svelte:65-89`. Проверка WebView2 и многоязычного сценария запуском не выполнена. |
+| **9.4** Проверка орфографии средствами WebView2 для английского | **ЕСТЬ, с ограничением** | `src/editor/spellcheck.ts` оставляет только `spellcheck=true/false`; словарь выбирает Windows по языку интерфейса системы. Wry задаёт язык окружения сам (`src/webview2/mod.rs:331-334` в [wry 0.55.1](https://github.com/tauri-apps/wry/blob/v0.55.1/src/webview2/mod.rs#L331-L334)), что соответствует ограничению WebView2 [#5294](https://github.com/MicrosoftEdge/WebView2Feedback/issues/5294); выбора языка в UI нет. |
 
 ---
 
@@ -160,7 +160,7 @@
 | :--- | :---: | :--- |
 | Хранение, атомарная запись, defaults и quarantine повреждённого файла | **ЕСТЬ** | `src-tauri/src/settings.rs:318-400,555-624`; команды get/save/reset/reveal: `src-tauri/src/commands.rs:437-480`. |
 | Язык интерфейса и RTL для Arabic | **ЕСТЬ** | Дескрипторы выбора: `src/ui/SettingsWindow.svelte:36-48`; локали `src/i18n/locales/`, применение языка — `src/state/settings.svelte.ts:146-220`. |
-| Spellcheck/autocorrect | **ЧАСТИЧНО** | Автозамена подключена: `src/editor/autoCorrect.ts:1-87`; spellcheck проверяет только первый выбранный язык, как честно указано в SETTINGS: `src/editor/spellcheck.ts:119-140`. |
+| Spellcheck/autocorrect | **ЕСТЬ, с ограничением** | Автозамена подключена: `src/editor/autoCorrect.ts:1-87`; spellcheck можно включить или выключить, а словарь выбирает Windows по языку интерфейса системы, как указано в SETTINGS §3. |
 | Editor и live-preview настройки | **ЕСТЬ** | Применение редакторских параметров: `src/editor/settings/appearance.ts:20-112`; preview: `src/editor/livePreview/settings.ts:20-51`; реакция на изменения: `src/App.svelte:675-677`. |
 | Восемь настроек раздела files | **ЧАСТИЧНО** | Autosave/delay/blur и transforms читаются в `src/state/autosave.ts:50-72,153-179`; `newDocumentFormat`, `newDocumentEncoding`, `newDocumentLineEnding` пока не имеют потребителя в `src/` и весь перенос отмечен владельцем как работа. |
 | Размер/позиция и `raiseExistingWindow` | **ЕСТЬ** | Условные flags window-state: `src-tauri/src/lib.rs:63-125`; маршрутизация учитывает setting: `src-tauri/src/windows.rs:303-371`. |
@@ -198,7 +198,7 @@
 
 1. **Настройки.** `README.md:3-4` говорит «без лишних настроек», а в `README.md:78-79` перечисляет отсутствие дополнительных настроек; `docs/SETTINGS.md:3-13` фиксирует полноценное окно настроек и прямо объясняет, что старые утверждения изменены. `docs/SPEC.md:21-27` уже разрешает окно, но называет его узким; его состав теперь шире (см. SETTINGS §2–§8).
 2. **Язык.** `docs/SPEC.md:16-17` обещает только английский, тогда как `docs/SETTINGS.md:35-63` и `src/ui/SettingsWindow.svelte:36-48` предлагают десять локалей.
-3. **Spellcheck.** `docs/SPEC.md:487-493` говорит об английском, а `docs/SETTINGS.md:65-89` разрешает выбирать языки и честно оговаривает проверку только первого; код следует SETTINGS (`src/editor/spellcheck.ts:119-140`).
+3. **Spellcheck.** `docs/SPEC.md:487-493` говорит об английском, а `docs/SETTINGS.md:65-89` теперь оставляет только включение/выключение и честно указывает, что словарь выбирает Windows по языку интерфейса системы; причина — язык окружения WebView2 задаёт Wry (`src/webview2/mod.rs:331-334`, [WebView2 #5294](https://github.com/MicrosoftEdge/WebView2Feedback/issues/5294)).
 4. **Меню Format.** `docs/SPEC.md:352-359` включает верхний пункт `Format`, но `docs/SPEC.md:361-368` утверждает, что он убран; `src/ui/menuModel.ts:91-149,152-198` реализует второй вариант — форматирование в контекстном меню. README и ROADMAP всё ещё пишут `Format` как верхний пункт (`README.md:50-55`, `ROADMAP.md:218-228`).
 5. **Количество и состав форматов.** README называет 20 форматов (`README.md:33-35`), ROADMAP повторяет 20 и говорит, что EPUB не добавлен (`ROADMAP.md:256-258`); текущий реестр содержит 21, включая EPUB (`src-tauri/src/formats/extra.rs:15-20`, `src-tauri/src/formats/mod.rs:105-108`).
 6. **Plain Text.** README считает `.cfg`, `.conf`, `.csv`, `.tsv` отсутствующими (`README.md:69-72`), ROADMAP говорит то же (`ROADMAP.md:261-264`), но `plain.rs:11-21` перечисляет все эти расширения.
