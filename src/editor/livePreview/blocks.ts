@@ -49,10 +49,18 @@ function children(node: SyntaxNode, name: string) {
   return node.getChildren(name).sort((a, b) => a.from - b.from);
 }
 
+/**
+ * Одна-две черты или один-два знака равно под строкой текста — это начало
+ * списка или просто набранный знак, а не подчёркивание заголовка. Предпросмотр
+ * не делает из такой пары заголовок: иначе строка сверху внезапно становится
+ * крупной и жирной, а сам знак прячется под разметку и пропадает с экрана.
+ * Полноценное подчёркивание из трёх и более знаков остаётся заголовком, как в
+ * CommonMark и Obsidian.
+ */
 function isShortSetextUnderline(node: SyntaxNode, state: EditorState): boolean {
-  if (node.name !== "SetextHeading2") return false;
+  if (node.name !== "SetextHeading1" && node.name !== "SetextHeading2") return false;
   const marker = children(node, "HeaderMark")[0];
-  return Boolean(marker && /^-{1,2}$/u.test(state.doc.sliceString(marker.from, marker.to).trim()));
+  return Boolean(marker && /^(?:-{1,2}|={1,2})$/u.test(state.doc.sliceString(marker.from, marker.to).trim()));
 }
 
 function isTaskChecked(node: SyntaxNode, state: EditorState) {

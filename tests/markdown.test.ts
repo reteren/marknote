@@ -57,12 +57,16 @@ describe("MarkNote Markdown extensions", () => {
     expect(nodes(doc, "FootnoteDefinition")).toEqual([{ from: 43, to: 65 }]);
   });
 
-  it("не превращает одну-две черты Setext в заголовок предпросмотра", () => {
-    for (const underline of ["-", "--", " - ", " -- "]) {
+  it("не превращает одну-две черты или знака равно Setext в заголовок предпросмотра", () => {
+    for (const underline of ["-", "--", " - ", " -- ", "=", "==", " = ", " == "]) {
       const doc = `plain\n${underline}`;
-      const heading = syntaxTree(state(doc)).topNode.getChild("SetextHeading2")!;
+      const level = /=/.test(underline) ? 1 : 2;
+      const heading = syntaxTree(state(doc)).topNode.getChild(`SetextHeading${level}`)!;
+      expect(heading, underline).toBeTruthy();
       const result = buildDecorationSets(state(doc, 0), [{ from: 0, to: doc.length }]);
-      expect(hasRange(result.decorations, heading.from, heading.to, "cm-marknote-heading cm-marknote-heading-2")).toBe(false);
+      expect(hasRange(result.decorations, heading.from, heading.to, `cm-marknote-heading cm-marknote-heading-${level}`), underline).toBe(false);
+      // Сам знак остаётся на экране: его не прячут как разметку заголовка.
+      expect(decorationRanges(result.decorations).some((range) => range.from >= heading.from && range.to <= heading.to && range.decoration.spec.widget === undefined && range.decoration.spec.class === undefined), underline).toBe(false);
     }
 
     for (const underline of ["---", "===="]) {
