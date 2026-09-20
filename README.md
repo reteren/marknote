@@ -1,180 +1,63 @@
+<p align="center">
+  <img src="src-tauri/icons/128x128@2x.png" width="128" alt="MarkNote">
+</p>
+
 # MarkNote
 
-Быстрый редактор Markdown для Windows. Двойной щелчок по `.md` — и файл открыт,
-без хранилищ, входа в учётную запись и плагинов. Разметка не мешает читать:
-она скрыта, пока курсор не встанет внутрь, и раскрывается ровно там, где вы
-правите.
+this program is aimed at making it convenient to view different formats: .md,
+.txt, .json, .yaml, .toml, .html, .xml, .css, .js, .ts, .py, .rs, .go, .c,
+.cpp, .sh, .jsonc.
 
-**Obsidian по ощущениям, Блокнот по весу.**
+basically it's a mix of the basic windows notepad and obsidian, there is nice
+drag and drop of files into the window and also a tab system.
 
----
+the program has everything you need for editing md formats:
+formatting — bold, italic, strikethrough, highlight, code, link
+paragraph — headings, bullet list, numbered list, task list
+insert — table, callout, code block, math block, horizontal rule
 
-## Зачем это
+there are extensive settings where you can do basic personalization. changing
+the font, text size, interface language and spellcheck.
 
-Obsidian просит открыть приложение и выбрать хранилище, чтобы прочитать один
-файл. Блокнот открывает файл мгновенно, но показывает сырые звёздочки и
-решётки. MarkNote делает и то и другое: живой предпросмотр как в Obsidian при
-времени запуска как у Блокнота.
+basically i made this because i got tired of opening obsidian and dragging a
+file over just to edit it somehow, and i want to do all of that in one click.
+the program also has lifetime saving of files, so everything you write is
+saved instantly.
 
-Программа не хочет быть вашей второй головой. Она хочет открыть файл.
+in general there is nothing more to say, the program is very convenient, you
+just have to set it in windows settings so that all the formats open through
+the program.
 
-## Установка
+## a few notes from the build side
 
-Скачайте `MarkNote_x.y.z_x64-setup.exe` из [релизов](../../releases) и
-запустите. Права администратора не нужны, установка идёт в папку пользователя.
-Нужен Windows 10 версии 1809 или новее либо Windows 11; WebView2 уже есть в
-системе, а если нет — установщик его доставит.
+- saving is atomic: the file is written next to the original and then swapped
+  in, so a crash mid-save can't leave you with half a file.
+- opening a file that is already open doesn't make a second copy of it — the
+  window or tab that already has it comes up instead.
+- markdown-only commands are hidden in .py or .json. there is nothing to make
+  bold there, so the menu doesn't pretend otherwise.
+- formulas load katex on the first `$$` in a document, not at startup. code
+  highlighting for each language is loaded the same way, on demand.
+- the installer is 3.1 MB and there is no chromium inside: windows already
+  has webview2, and the program uses that.
+- on files over 5 MB live preview turns itself off and the markup goes raw.
+  the status bar doesn't explain why yet.
+- spellcheck follows the windows interface language. webview2 gives no way to
+  pick a different one, so there is no such setting.
 
-Чтобы `.md` открывались по двойному щелчку, откройте «Параметры → Приложения →
-Приложения по умолчанию», найдите MarkNote и назначьте нужные расширения.
-Программа не назначает себя сама: в Windows этот выбор делает человек, и
-подделывать его — вредоносное поведение.
+## license
 
-## Что умеет
+not chosen yet. until there is a `LICENSE` file here, the default applies:
+all rights reserved, so the code can be read but not reused. worth picking one
+before publishing — MIT is the usual choice for this kind of program.
 
-**Живой предпросмотр.** Заголовки, жирный, курсив, зачёркнутый, код,
-`==подсветка==`, `%%комментарий%%`, ссылки и изображения показаны так, как
-выглядят, а не как написаны. Курсор внутри — разметка раскрыта для правки.
-Отдельного режима чтения нет, потому что он не нужен.
+## building
 
-**Всё, что ждёшь от Markdown.** Шесть уровней заголовков, списки маркированные,
-нумерованные и задачи с флажками, вложенность с направляющими линиями, цитаты,
-выноски `> [!NOTE]`, сноски, горизонтальные линии, блоки кода с подсветкой,
-формулы `$…$` и `$$…$$` через KaTeX.
-
-**Таблицы как объект.** Вставленная таблица сразу выглядит сеткой. При
-наведении у нижнего края появляется полоска с плюсом — добавить строку, у
-правого — столбец. Строки и столбцы перетаскиваются за ручки. `Tab` и
-`Shift+Tab` ходят по ячейкам.
-
-**Вкладки и окна.** Документы живут во вкладках; `Ctrl+T` открывает новую.
-Файл из Проводника открывается в отдельном окне, а брошенный в окно мышью —
-вкладкой в нём. Уже открытый файл не открывается дважды: поднимается то окно
-или та вкладка, где он есть.
-
-**21 формат.** Markdown и обычный текст, 14 кодовых форматов с подсветкой
-(JavaScript, TypeScript, Python, Rust, Go, C, C++, C#, Java, HTML, CSS, SQL,
-YAML, XML и другие), JSON с проверкой и форматированием, RTF с потерей части
-оформления, а PDF, DOCX и EPUB открываются на чтение и сохраняются как
-Markdown. Создать можно 17 из них.
-
-**Номера строк** в кодовых форматах, как в редакторах кода. В Markdown их нет —
-это записная книжка; включить их везде можно в настройках.
-
-**Сохранение, которому можно доверять.** Запись атомарная: файл не остаётся
-обрезанным, если питание пропало посреди сохранения. Автосохранение через две
-секунды после правки и при потере фокуса. Если файл изменился на диске снаружи,
-программа это заметит и не затрёт чужие правки молча.
-
-**Поиск и замена** с учётом регистра, целых слов и регулярных выражений,
-счётчиком совпадений и переходом по ним. `Ctrl+G` — переход к строке.
-
-**Настройки, которые действительно работают.** Язык интерфейса (десять языков),
-шрифт и его размер, ширина колонки, перенос строк, номера строк, невидимые
-символы, поведение предпросмотра, автозамена, правила сохранения и окон. Каждая
-настройка в окне настроек что-то делает: за этим следит отдельная проверка,
-которая не даёт добавить переключатель-пустышку.
-
-**Тёмная тема.** Единственная, и это выбор, а не недоделка.
-
-## Горячие клавиши
-
-| Клавиши | Что делают |
-| --- | --- |
-| `Ctrl+N` / `Ctrl+Shift+N` | новый документ / новое окно |
-| `Ctrl+T` / `Ctrl+W` | новая вкладка / закрыть вкладку |
-| `Ctrl+O` / `Ctrl+S` / `Ctrl+Shift+S` | открыть, сохранить, сохранить как |
-| `Ctrl+B` / `Ctrl+I` / `Ctrl+E` | жирный, курсив, код |
-| `Ctrl+K` / `Ctrl+Shift+K` | ссылка / блок кода |
-| `Ctrl+1` … `Ctrl+6` | заголовки, `Ctrl+0` снимает заголовок |
-| `Ctrl+F` / `Ctrl+H` / `Ctrl+G` | поиск, замена, переход к строке |
-| `Ctrl+Z` / `Ctrl+Y` | отменить, вернуть |
-| `Ctrl` + `+` / `-` / `0` | масштаб больше, меньше, обычный |
-| `Alt+↑` / `Alt+↓` | переместить строку |
-| `Tab` / `Shift+Tab` | отступ списка, переход по ячейкам таблицы |
-
-Полный список — в программе: `Help → Keyboard shortcuts`.
-
-В форматах без разметки (`.txt`, `.py`, `.json` и других) команды Markdown не
-показываются в меню и не срабатывают по клавишам: там нечего делать жирным.
-
-## Сколько это стоит машине
-
-Числа измерены на собранной программе, скрипты замеров лежат в `qa/`:
-
-| Что | Сколько |
-| --- | --- |
-| Установщик | 3,1 МБ |
-| Программа на диске | 7,3 МБ |
-| До готового к работе редактора | около 0,5 с |
-| Память: сама программа | 26 МБ |
-| Память: вместе с движком WebView2 | около 376 МБ в семи процессах |
-| Второе окно | +89 МБ, движок общий |
-| Нажатие клавиши в документе 5 МБ | 15 мс |
-
-Почти вся память — встроенный в Windows браузерный движок, на наш код
-приходится меньше десятой её части. Своего Chromium программа не тащит: этим и
-отличается 3-мегабайтный установщик от стомегабайтных.
-
-## Чего нет и не будет
-
-Хранилищ и боковой панели с деревом файлов, графа связей, `[[вики-ссылок]]`,
-плагинов, синхронизации, светлой темы, мобильной версии. Это не список
-сожалений, а граница: всё перечисленное делает Obsidian, и делает лучше.
-
-## Что ещё не доделано
-
-- Предпросмотр отключается на файлах больше 5 МБ, но строка состояния не
-  объясняет, почему разметка вдруг стала сырой.
-- Текст, вставленный через `Ctrl+V` сразу под таблицу, попадает в неё строкой:
-  между таблицей и текстом нужна пустая строка. При наборе с клавиатуры она
-  добавляется сама.
-- Проверка орфографии идёт на языке интерфейса Windows: выбрать язык из
-  программы нельзя, это ограничение WebView2.
-- `Ctrl+0` на строке заголовка снимает заголовок, а не сбрасывает масштаб;
-  масштаб сбрасывается той же клавишей везде, кроме таких строк.
-
-## Сборка из исходников
-
-Нужны [Rust](https://rustup.rs) stable, [Node.js](https://nodejs.org) 20 LTS и
-Windows 10 (1809+) или 11.
+needs [rust](https://rustup.rs) stable and [node](https://nodejs.org) 20+, on
+windows 10 (1809+) or 11.
 
 ```bash
 npm install
-npm run tauri dev     # запуск с горячей перезагрузкой
-npm run tauri build   # установщик в src-tauri/target/release/bundle/nsis
+npm run tauri dev     # run with hot reload
+npm run tauri build   # installer in src-tauri/target/release/bundle/nsis
 ```
-
-Проверки:
-
-```bash
-npx vitest run --poolOptions.threads.maxThreads=3   # фронтенд
-npx tsc --noEmit                                    # типы
-cd src-tauri && cargo test -j 2 && cargo clippy     # бэкенд
-```
-
-Ограничение потоков не прихоть: полный параллельный прогон съедает память
-слабой машины.
-
-## Как устроено
-
-| Слой | Выбор | Почему |
-| --- | --- | --- |
-| Оболочка | Tauri 2 | Нативное окно и системный WebView2 вместо своего Chromium |
-| Бэкенд | Rust | Файлы, кодировки, конвертация форматов, наблюдение за диском |
-| Фронтенд | Svelte 5 + TypeScript + Vite | Тонкая обвязка вокруг редактора, без виртуального DOM |
-| Редактор | CodeMirror 6 | Живой предпросмотр делается штатно: декорации прячут разметку и раскрывают её по курсору |
-| Разбор Markdown | `@lezer/markdown` | Инкрементальный разбор: правится только изменённый кусок дерева |
-| Формулы | KaTeX | Грузится при первой формуле, результаты кэшируются |
-| Установщик | NSIS | Без прав администратора, с ассоциациями файлов |
-
-Подробности и обоснования — в [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md),
-контракты между слоями — в [docs/CONTRACTS.md](docs/CONTRACTS.md), описание
-каждой настройки — в [docs/SETTINGS.md](docs/SETTINGS.md).
-
-## Лицензия
-
-Пока не выбрана. Пока в репозитории нет файла `LICENSE`, действует правило
-по умолчанию: все права сохраняются за автором, и использовать код нельзя.
-Перед публичным выпуском стоит выбрать лицензию — для программы такого рода
-обычно берут MIT.
