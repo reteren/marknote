@@ -46,7 +46,10 @@ function resetWorkspace(): void {
 }
 
 function openedFile(path: string, text: string) {
-  return { path, text, format: markdownFormat, encoding: "UTF-8", lineEnding: "LF", lossy: false };
+  // Rust возвращает канонический путь в длинной форме Windows, а брошенный в
+  // окно приходит обычной: из-за этого один файл когда-то открывался дважды.
+  const canonical = "\\\\?\\" + path.replaceAll("/", "\\");
+  return { path: canonical, text, format: markdownFormat, encoding: "UTF-8", lineEnding: "LF", lossy: false };
 }
 
 async function drop(paths: string[]): Promise<void> {
@@ -98,7 +101,7 @@ describe("перетаскивание файла в окно", () => {
 
     expect(tauri.invoke).toHaveBeenCalledWith("open_file", { path: "C:/docs/note.md" });
     expect(tauri.invoke).not.toHaveBeenCalledWith("open_in_new_window", expect.anything());
-    expect(workspace.tabs.some((tab) => tab.document.path === "C:/docs/note.md")).toBe(true);
+    expect(workspace.tabs.some((tab) => (tab.document.path ?? "").endsWith("note.md"))).toBe(true);
   });
 
   it("на каждый брошенный файл — своя вкладка, пустая вкладка используется первой", async () => {
@@ -107,9 +110,9 @@ describe("перетаскивание файла в окно", () => {
 
     await drop(["C:/docs/one.md", "C:/docs/two.md"]);
 
-    const paths = workspace.tabs.map((tab) => tab.document.path);
-    expect(paths).toContain("C:/docs/one.md");
-    expect(paths).toContain("C:/docs/two.md");
+    const paths = workspace.tabs.map((tab) => tab.document.path ?? "");
+    expect(paths.some((path) => path.endsWith("one.md"))).toBe(true);
+    expect(paths.some((path) => path.endsWith("two.md"))).toBe(true);
     // Пустая вкладка, с которой начали, занята первым файлом, а не брошена.
     expect(workspace.tabs).toHaveLength(2);
   });

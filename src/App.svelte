@@ -143,7 +143,14 @@ import { EditorView, type EditorView as EditorViewType } from "@codemirror/view"
   });
 
   function pathKey(path: string): string {
-    return path.replaceAll("/", "\\").toLowerCase();
+    // Открытый файл возвращается в длинной форме Windows (\\?\C:\…), а
+    // брошенный в окно приходит обычной. Без снятия приставки один и тот же
+    // файл выглядит как два разных, и рядом появлялась вторая вкладка.
+    return path
+      .replaceAll("/", "\\")
+      .replace(/^\\\\\?\\UNC\\/iu, "\\\\")
+      .replace(/^\\\\\?\\/u, "")
+      .toLowerCase();
   }
 
   function snapshotSelection(view: EditorViewType | null): SelectionSnapshot {
