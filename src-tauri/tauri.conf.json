@@ -43,6 +43,8 @@
   "bundle": {
     "active": true,
     "publisher": "MarkNote",
+    "copyright": "Copyright (c) 2026 reteren. MIT License",
+    "licenseFile": "../LICENSE",
     "shortDescription": "Fast Markdown editor",
     "targets": ["nsis"],
     "icon": [

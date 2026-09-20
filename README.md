@@ -47,9 +47,8 @@ the program.
 
 ## license
 
-not chosen yet. until there is a `LICENSE` file here, the default applies:
-all rights reserved, so the code can be read but not reused. worth picking one
-before publishing — MIT is the usual choice for this kind of program.
+MIT — see [LICENSE](LICENSE). take it, change it, ship it, just keep the
+copyright line.
 
 ## building
 

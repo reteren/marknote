@@ -2,6 +2,8 @@
   "name": "marknote",
   "version": "1.0.18",
   "description": "Fast Markdown editor for Windows",
+  "license": "MIT",
+  "author": "reteren",
   "type": "module",
   "private": true,
   "scripts": {
