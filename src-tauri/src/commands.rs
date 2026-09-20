@@ -19,7 +19,8 @@ use crate::{
     messages::UserMessage,
     recent_files::{RecentFileEntry, RecentFilesState},
     settings::{Settings, SettingsError, SettingsState},
-    windows::{self, AppState, FileSnapshot},
+    startup_trace,
+    windows::{self, AppState, FileSnapshot, PendingOpenData},
 };
 
 const MAX_IMAGE_BYTES: u64 = 16 * 1024 * 1024;
@@ -109,18 +110,28 @@ pub struct NewDocument {
     pub format: FormatCapabilities,
 }
 
-fn validate_open_file(path: &str) -> Result<(), CommandError> {
+fn prepare_open_file(path: &str) -> Result<PendingOpenData, CommandError> {
+    startup_trace::mark("validate-open-file-start");
     let input_path = PathBuf::from(path);
     let canonical = windows::canonical_path(&input_path).map_err(CommandError::InvalidPath)?;
+    startup_trace::mark("validate-open-file-canonicalized");
     let bytes = fs::read(&canonical)?;
+    startup_trace::mark("validate-open-file-bytes-read");
     let adapter = formats::adapter_for_path(&canonical);
+    startup_trace::mark("validate-open-file-format-selected");
     if adapter.caps().id == "plain" && binary::is_binary_sample(&bytes) {
         return Err(CommandError::BinaryFile(
             canonical.to_string_lossy().into_owned(),
         ));
     }
-    adapter.decode(&bytes).map_err(CommandError::Format)?;
-    Ok(())
+    let metadata = fs::metadata(&canonical)?;
+    let decoded = adapter.decode(&bytes).map_err(CommandError::Format)?;
+    startup_trace::mark("validate-open-file-done");
+    Ok(PendingOpenData {
+        path: canonical,
+        metadata,
+        decoded,
+    })
 }
 
 #[tauri::command]
@@ -130,24 +141,41 @@ pub fn open_file(
     recent_files: State<'_, RecentFilesState>,
     path: String,
 ) -> Result<OpenedFile, CommandError> {
+    startup_trace::mark("open-file-start");
     let input_path = PathBuf::from(&path);
     let canonical = windows::canonical_path(&input_path).map_err(CommandError::InvalidPath)?;
+    startup_trace::mark("open-file-canonicalized");
     let metadata = fs::metadata(&canonical)?;
-    let bytes = fs::read(&canonical)?;
-    let adapter = formats::adapter_for_path(&canonical);
-    let format = adapter.caps();
-    if format.id == "plain" && binary::is_binary_sample(&bytes) {
-        return Err(CommandError::BinaryFile(
-            canonical.to_string_lossy().into_owned(),
-        ));
-    }
-    let decoded = adapter.decode(&bytes).map_err(CommandError::Format)?;
+    startup_trace::mark("open-file-metadata-read");
+    let pending = state.take_pending_open_data(window.label(), &canonical);
+    let (format, decoded) = if let Some(pending) = pending.filter(|pending| {
+        FileSnapshot::from_metadata(&pending.metadata) == FileSnapshot::from_metadata(&metadata)
+    }) {
+        startup_trace::mark("open-file-prepared-data-reused");
+        let format = formats::adapter_for_path(&canonical).caps();
+        (format, pending.decoded)
+    } else {
+        let bytes = fs::read(&canonical)?;
+        startup_trace::mark("open-file-bytes-read");
+        let adapter = formats::adapter_for_path(&canonical);
+        startup_trace::mark("open-file-format-selected");
+        let format = adapter.caps();
+        if format.id == "plain" && binary::is_binary_sample(&bytes) {
+            return Err(CommandError::BinaryFile(
+                canonical.to_string_lossy().into_owned(),
+            ));
+        }
+        let decoded = adapter.decode(&bytes).map_err(CommandError::Format)?;
+        startup_trace::mark("open-file-decoded");
+        (format, decoded)
+    };
     let readonly = metadata.permissions().readonly() || !format.editable;
 
     state.watcher.watch(window.label(), &canonical);
     state.track_file(&canonical, window.label());
     state.remember_file_snapshot(&canonical, &metadata);
     let _ = recent_files.add(&canonical.to_string_lossy());
+    startup_trace::mark("open-file-done");
 
     Ok(OpenedFile {
         path: canonical.to_string_lossy().into_owned(),
@@ -416,9 +444,11 @@ pub fn read_image(docPath: Option<String>, src: String) -> Result<String, Comman
 
 #[tauri::command]
 pub async fn open_in_new_window(app: AppHandle, path: String) -> Result<(), CommandError> {
+    startup_trace::mark("open-in-new-window-start");
     tauri::async_runtime::spawn_blocking(move || {
-        validate_open_file(&path)?;
-        windows::route_file_in_new_window(&app, path).map_err(CommandError::WindowRouting)
+        let prepared = prepare_open_file(&path)?;
+        windows::route_file_in_new_window_with_data(&app, path, prepared)
+            .map_err(CommandError::WindowRouting)
     })
     .await
     .map_err(|error| CommandError::WindowRouting(error.to_string()))?
@@ -427,6 +457,7 @@ pub async fn open_in_new_window(app: AppHandle, path: String) -> Result<(), Comm
 #[allow(non_snake_case)]
 #[tauri::command]
 pub async fn open_new_window(app: AppHandle, formatId: String) -> Result<(), CommandError> {
+    startup_trace::mark("open-new-window-start");
     let format =
         formats::by_id(&formatId).ok_or_else(|| CommandError::UnknownFormat(formatId.clone()))?;
     if !format.creatable || !format.editable {
@@ -807,13 +838,13 @@ mod tests {
         let directory = tempfile::tempdir().expect("temporary directory");
         let text_path = directory.path().join("note.md");
         fs::write(&text_path, "# Note\n").expect("write text file");
-        validate_open_file(text_path.to_str().expect("utf-8 path"))
+        prepare_open_file(text_path.to_str().expect("utf-8 path"))
             .expect("supported text file should be accepted");
 
         let binary_path = directory.path().join("payload.bin");
         fs::write(&binary_path, b"header\0payload").expect("write binary file");
         assert!(matches!(
-            validate_open_file(binary_path.to_str().expect("utf-8 path")),
+            prepare_open_file(binary_path.to_str().expect("utf-8 path")),
             Err(CommandError::BinaryFile(path)) if path.ends_with("payload.bin")
         ));
     }

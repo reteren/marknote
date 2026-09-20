@@ -7,6 +7,7 @@ mod formats;
 mod messages;
 mod recent_files;
 mod settings;
+mod startup_trace;
 mod watcher;
 mod windows;
 
@@ -18,6 +19,8 @@ use tauri::{
 
 /// Запускает приложение Tauri и регистрирует общий IPC-контракт MarkNote.
 pub fn run() {
+    startup_trace::begin();
+    startup_trace::mark("run-start");
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
@@ -26,16 +29,22 @@ pub fn run() {
         }))
         .plugin(settings_aware_window_state_plugin())
         .setup(|app| {
+            startup_trace::mark("setup-start");
             let config_dir = config_dir::for_app(app.handle())?;
+            startup_trace::mark("config-dir-ready");
             let recent_files_path = config_dir.join("recent-files.json");
             let recent_files = recent_files::RecentFilesState::load(&recent_files_path)
                 .unwrap_or_else(|error| {
                     eprintln!("Could not load recent files; using defaults: {error}");
                     recent_files::RecentFilesState::defaults(recent_files_path)
                 });
+            startup_trace::mark("recent-files-loaded");
             app.manage(recent_files);
             app.manage(windows::AppState::new(app.handle().clone()));
-            Ok(windows::initialize(app)?)
+            startup_trace::mark("app-state-ready");
+            let result = windows::initialize(app);
+            startup_trace::mark("windows-initialized");
+            Ok(result?)
         })
         .invoke_handler(tauri::generate_handler![
             commands::open_file,
@@ -92,12 +101,15 @@ impl<R: Runtime> Plugin<R> for SettingsAwareWindowState<R> {
         app: &tauri::AppHandle<R>,
         config: serde_json::Value,
     ) -> Result<(), Box<dyn std::error::Error>> {
+        startup_trace::mark("window-state-init-start");
         let config_dir = config_dir::for_app(app)?;
+        startup_trace::mark("window-state-config-dir-ready");
         let settings_path = config_dir.join("settings.json");
         let settings = settings::SettingsState::load(&settings_path).unwrap_or_else(|error| {
             eprintln!("Could not load settings; using defaults: {error}");
             settings::SettingsState::defaults(settings_path)
         });
+        startup_trace::mark("settings-loaded");
 
         // The window-state plugin captures its flags when it is built.  SIZE
         // and POSITION are omitted when geometry should not be remembered;
@@ -120,13 +132,16 @@ impl<R: Runtime> Plugin<R> for SettingsAwareWindowState<R> {
             .build();
         inner.initialize(app, config)?;
         self.inner = Some(inner);
+        startup_trace::mark("window-state-init-done");
         Ok(())
     }
 
     fn window_created(&mut self, window: Window<R>) {
+        startup_trace::mark("window-state-window-created-start");
         if let Some(inner) = self.inner.as_mut() {
             inner.window_created(window);
         }
+        startup_trace::mark("window-state-window-created-done");
     }
 
     fn on_event(&mut self, app: &tauri::AppHandle<R>, event: &RunEvent) {

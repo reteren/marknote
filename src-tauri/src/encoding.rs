@@ -14,6 +14,8 @@ pub struct Decoded {
 }
 
 pub fn decode(bytes: &[u8]) -> Decoded {
+    #[cfg(not(test))]
+    crate::startup_trace::mark("encoding-detect-start");
     let (encoding, bom, payload) = if bytes.is_empty() {
         (encoding_rs::UTF_8, false, bytes)
     } else if bytes.starts_with(b"\xEF\xBB\xBF") {
@@ -27,9 +29,13 @@ pub fn decode(bytes: &[u8]) -> Decoded {
         detector.feed(bytes, true);
         (detector.guess(None, true), false, bytes)
     };
+    #[cfg(not(test))]
+    crate::startup_trace::mark("encoding-detected");
 
     let (decoded, _) = encoding.decode_without_bom_handling(payload);
     let text = decoded.into_owned();
+    #[cfg(not(test))]
+    crate::startup_trace::mark("encoding-decoded");
     let line_ending = detect_line_ending(&text);
 
     Decoded {

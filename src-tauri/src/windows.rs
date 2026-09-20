@@ -17,6 +17,7 @@ use tauri::{
 use crate::{
     messages::UserMessage,
     settings::{Settings, SettingsState},
+    startup_trace,
     watcher::FileWatcher,
 };
 
@@ -32,6 +33,7 @@ pub struct AppState {
     pub(crate) open_files: Mutex<HashMap<PathBuf, HashSet<String>>>,
     pub(crate) empty_windows: Mutex<HashSet<String>>,
     pending_files: Mutex<HashMap<String, PathBuf>>,
+    pending_open_data: Mutex<HashMap<String, PendingOpenData>>,
     pending_formats: Mutex<HashMap<String, String>>,
     file_snapshots: Mutex<HashMap<PathBuf, FileSnapshot>>,
     pending_closes: Mutex<HashMap<String, u64>>,
@@ -39,6 +41,16 @@ pub struct AppState {
     pub(crate) next_window_id: AtomicUsize,
     next_close_id: AtomicU64,
     pub(crate) watcher: FileWatcher,
+}
+
+/// Bytes and decoded text prepared while routing a file to a fresh window.
+/// The frontend asks `open_file` for the same path after its webview starts;
+/// keeping this payload in the process avoids validating and decoding a large
+/// file a second time in that handoff.
+pub(crate) struct PendingOpenData {
+    pub(crate) path: PathBuf,
+    pub(crate) metadata: std::fs::Metadata,
+    pub(crate) decoded: crate::encoding::Decoded,
 }
 
 /// The on-disk state observed when a document was opened or last saved.
@@ -64,6 +76,7 @@ impl AppState {
             open_files: Mutex::new(HashMap::new()),
             empty_windows: Mutex::new(HashSet::new()),
             pending_files: Mutex::new(HashMap::new()),
+            pending_open_data: Mutex::new(HashMap::new()),
             pending_formats: Mutex::new(HashMap::new()),
             file_snapshots: Mutex::new(HashMap::new()),
             pending_closes: Mutex::new(HashMap::new()),
@@ -121,6 +134,25 @@ impl AppState {
     pub(crate) fn forget_pending_file(&self, label: &str) {
         if let Ok(mut pending) = self.pending_files.lock() {
             pending.remove(label);
+        }
+    }
+
+    pub(crate) fn set_pending_open_data(&self, label: &str, data: PendingOpenData) {
+        if let Ok(mut pending) = self.pending_open_data.lock() {
+            pending.insert(label.to_owned(), data);
+        }
+    }
+
+    pub(crate) fn take_pending_open_data(
+        &self,
+        label: &str,
+        path: &Path,
+    ) -> Option<PendingOpenData> {
+        let mut pending = self.pending_open_data.lock().ok()?;
+        if pending.get(label).is_some_and(|data| data.path == path) {
+            pending.remove(label)
+        } else {
+            None
         }
     }
 
@@ -232,6 +264,9 @@ impl AppState {
         if let Ok(mut pending) = self.pending_files.lock() {
             pending.remove(label);
         }
+        if let Ok(mut pending) = self.pending_open_data.lock() {
+            pending.remove(label);
+        }
         if let Ok(mut pending) = self.pending_formats.lock() {
             pending.remove(label);
         }
@@ -273,6 +308,7 @@ impl AppState {
 /// Инициализирует главное окно, применяет системные настройки и открывает
 /// файлы, переданные первому запуску.
 pub fn initialize(app: &mut tauri::App) -> tauri::Result<()> {
+    startup_trace::mark("windows-initialize-start");
     let state = app.state::<AppState>();
     state.mark_empty(MAIN_WINDOW_LABEL);
 
@@ -287,6 +323,7 @@ pub fn initialize(app: &mut tauri::App) -> tauri::Result<()> {
         // загрузки Svelte. Показ выполняется сразу после создания webview.
         let _ = main.show();
         let _ = main.set_focus();
+        startup_trace::mark("main-window-shown");
     }
 
     for path in env::args().skip(1).map(PathBuf::from) {
@@ -296,6 +333,8 @@ pub fn initialize(app: &mut tauri::App) -> tauri::Result<()> {
             }
         }
     }
+
+    startup_trace::mark("startup-arguments-routed");
 
     Ok(())
 }
@@ -333,22 +372,25 @@ pub fn handle_single_instance(app: &tauri::AppHandle, argv: Vec<String>) {
 /// Если свободного стартового окна нет, создаёт новое окно из конфигурации
 /// `main`, сохраняя те же размеры, тему и политики webview.
 pub fn route_file(app: &tauri::AppHandle, path: impl AsRef<Path>) -> Result<(), String> {
-    route_file_with_policy(app, path, true)
+    route_file_with_policy(app, path, true, None)
 }
 
-/// Routes a user-requested document to a dedicated window. An already-open
-/// document is still reused, but an unrelated empty startup window is not.
-pub fn route_file_in_new_window(
+/// Routes a file whose bytes were already validated and decoded by the
+/// caller. The payload is consumed by the destination window's first
+/// `open_file` command.
+pub fn route_file_in_new_window_with_data(
     app: &tauri::AppHandle,
     path: impl AsRef<Path>,
+    data: PendingOpenData,
 ) -> Result<(), String> {
-    route_file_with_policy(app, path, false)
+    route_file_with_policy(app, path, false, Some(data))
 }
 
 fn route_file_with_policy(
     app: &tauri::AppHandle,
     path: impl AsRef<Path>,
     reuse_empty_window: bool,
+    pending_open_data: Option<PendingOpenData>,
 ) -> Result<(), String> {
     let canonical = canonical_path(path.as_ref())?;
     let key = registry_key(&canonical);
@@ -398,7 +440,12 @@ fn route_file_with_policy(
                 // Окно могло закрыться между чтением реестра и маршрутизацией.
                 app.state::<AppState>().forget_file(&key, &label);
                 app.state::<AppState>().forget_pending_file(&label);
-                return route_file_with_policy(app, canonical, reuse_empty_window);
+                return route_file_with_policy(
+                    app,
+                    canonical,
+                    reuse_empty_window,
+                    pending_open_data,
+                );
             }
         },
         RouteTarget::New(label) => match create_window(app, &label) {
@@ -411,6 +458,10 @@ fn route_file_with_policy(
         },
     };
 
+    if let Some(data) = pending_open_data {
+        app.state::<AppState>()
+            .set_pending_open_data(window.label(), data);
+    }
     raise_window(&window);
     // Keep the event path for already-live windows (single-instance and
     // subsequent opens). For a window whose webview is still loading this
@@ -434,6 +485,7 @@ fn route_file_with_policy(
 /// frontend during startup. Unlike file routing, this never reuses an empty
 /// window, so the current document remains untouched.
 pub fn open_empty_window(app: &tauri::AppHandle, format_id: String) -> Result<(), String> {
+    startup_trace::mark("open-empty-window-start");
     let label = {
         let state = app.state::<AppState>();
         let label = state.allocate_window_label();
@@ -445,6 +497,7 @@ pub fn open_empty_window(app: &tauri::AppHandle, format_id: String) -> Result<()
     match create_window(app, &label) {
         Ok(window) => {
             raise_window(&window);
+            startup_trace::mark("open-empty-window-ready");
             Ok(())
         }
         Err(error) => {
