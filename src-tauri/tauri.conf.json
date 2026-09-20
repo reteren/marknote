@@ -23,7 +23,8 @@
         "decorations": false,
         "theme": "Dark",
         "dragDropEnabled": true,
-        "visible": false
+        "visible": false,
+        "additionalBrowserArgs": "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --disable-crash-reporter"
       }
     ],
     "security": {

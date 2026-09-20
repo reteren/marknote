@@ -11,7 +11,9 @@
 param(
     [string]$BinaryPath = "C:\marknote\src-tauri\target\release\marknote.exe",
     [string]$FixturePath = "",
-    [int]$SettleSeconds = 6
+    [int]$SettleSeconds = 6,
+    [string]$AdditionalBrowserArgs = "",
+    [string]$OutputPath = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -41,19 +43,31 @@ function Get-ProcessTree {
 function Get-WebViewRole {
     param([string]$CommandLine)
     if ([string]::IsNullOrWhiteSpace($CommandLine)) { return "основной" }
-    if ($CommandLine -match "--type=([a-zA-Z-]+)") { return $Matches[1] }
+    if ($CommandLine -match "--type=([a-zA-Z-]+)") {
+        $type = $Matches[1]
+        if ($type -eq "utility" -and $CommandLine -match "--utility-sub-type=([^\s]+)") {
+            return "${type}:$($Matches[1])"
+        }
+        return $type
+    }
     return "основной"
 }
 
 $configDir = Join-Path ([IO.Path]::GetTempPath()) ("marknote-memory-" + [Guid]::NewGuid().ToString("N"))
 New-Item -ItemType Directory -Path $configDir -Force | Out-Null
 $env:MARKNOTE_CONFIG_DIR = $configDir
+if ([string]::IsNullOrWhiteSpace($AdditionalBrowserArgs)) {
+    Remove-Item Env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS -ErrorAction SilentlyContinue
+} else {
+    $env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = $AdditionalBrowserArgs
+}
 $process = if ([string]::IsNullOrWhiteSpace($FixturePath)) {
     Start-Process -FilePath $BinaryPath -PassThru
 } else {
     Start-Process -FilePath $BinaryPath -ArgumentList ([IO.Path]::GetFullPath($FixturePath)) -PassThru
 }
 Remove-Item Env:MARKNOTE_CONFIG_DIR -ErrorAction SilentlyContinue
+Remove-Item Env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS -ErrorAction SilentlyContinue
 
 Start-Sleep -Seconds $SettleSeconds
 
@@ -66,11 +80,26 @@ $rows = foreach ($item in $tree) {
         Name = $item.Name
         Role = if ($item.Name -like "msedgewebview2*") { Get-WebViewRole -CommandLine $item.CommandLine } else { "-" }
         Mb = [math]::Round($handle.WorkingSet64 / 1MB, 1)
+        CommandLine = $item.CommandLine
     }
 }
 
 $rows | Sort-Object Mb -Descending | Format-Table -AutoSize
 "Всего в поддереве: {0} процессов, {1} МБ" -f @($rows).Count, [math]::Round((@($rows) | Measure-Object -Property Mb -Sum).Sum, 1)
+
+if (-not [string]::IsNullOrWhiteSpace($OutputPath)) {
+    $report = [pscustomobject]@{
+        generatedAt = [DateTime]::UtcNow.ToString("o")
+        binaryPath = [IO.Path]::GetFullPath($BinaryPath)
+        fixturePath = if ([string]::IsNullOrWhiteSpace($FixturePath)) { $null } else { [IO.Path]::GetFullPath($FixturePath) }
+        additionalBrowserArgs = $AdditionalBrowserArgs
+        settleSeconds = $SettleSeconds
+        processCount = @($rows).Count
+        workingSetMb = [math]::Round((@($rows) | Measure-Object -Property Mb -Sum).Sum, 1)
+        processes = @($rows)
+    }
+    $report | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $OutputPath -Encoding UTF8
+}
 
 [void]$process.CloseMainWindow()
 if (-not $process.WaitForExit(8000)) { $process.Kill() }
