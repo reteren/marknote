@@ -249,10 +249,7 @@ fn add_spine_item(
 }
 
 fn resolve_chapter_path(package_path: &str, href: &str) -> anyhow::Result<String> {
-    let href = href
-        .split(|character| character == '#' || character == '?')
-        .next()
-        .ok_or_else(invalid_epub)?;
+    let href = href.split(['#', '?']).next().ok_or_else(invalid_epub)?;
     let href = percent_decode_path(href)?;
     let parent = package_path
         .rsplit_once('/')
@@ -540,9 +537,11 @@ fn append_end_tag(
 }
 
 fn append_text(output: &mut String, text: &str) {
-    if !text.chars().all(char::is_whitespace) {
-        output.push_str(text);
-    } else if !text.contains(['\n', '\r']) {
+    // Пробелы между тегами сохраняем, а переносы строк из разметки — нет:
+    // в HTML они значения не имеют, а в тексте дали бы рваные абзацы.
+    let meaningful = !text.chars().all(char::is_whitespace);
+    let inline_spacing = !text.contains(['\n', '\r']);
+    if meaningful || inline_spacing {
         output.push_str(text);
     }
 }

@@ -29,7 +29,7 @@ pub fn is_binary(bytes: &[u8]) -> bool {
         _ => {}
     }
 
-    if sample.iter().any(|byte| *byte == 0) {
+    if sample.contains(&0) {
         return true;
     }
 
@@ -59,9 +59,11 @@ fn utf16_is_binary(payload: &[u8], little_endian: bool) -> bool {
             u16::from_be_bytes([pair[0], pair[1]])
         };
         units += 1;
-        if unit <= 0x001F && !matches!(unit, 0x0009 | 0x000A | 0x000C | 0x000D) {
-            controls += 1;
-        } else if unit == 0x007F {
+        // Управляющие: всё ниже пробела, кроме табуляции и переводов строк,
+        // плюс DEL. Их обилие и отличает двоичный файл от текста.
+        let is_control = (unit <= 0x001F && !matches!(unit, 0x0009 | 0x000A | 0x000C | 0x000D))
+            || unit == 0x007F;
+        if is_control {
             controls += 1;
         }
     }

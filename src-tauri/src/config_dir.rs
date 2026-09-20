@@ -96,10 +96,7 @@ mod tests {
     fn relative_or_empty_override_keeps_default() {
         let root = tempdir().unwrap();
         let default_dir = root.path().join("default");
-        assert_eq!(
-            resolve_override(default_dir.clone(), Some(OsString::from("relative"))).is_err(),
-            true
-        );
+        assert!(resolve_override(default_dir.clone(), Some(OsString::from("relative"))).is_err());
         assert_eq!(
             resolve_override(default_dir.clone(), Some(OsString::new())).unwrap(),
             default_dir

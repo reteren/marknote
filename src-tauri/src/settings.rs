@@ -91,7 +91,7 @@ impl Default for SpellcheckSettings {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct AutoCorrectSettings {
     #[serde(default)]
@@ -102,17 +102,6 @@ pub struct AutoCorrectSettings {
     pub capitalize_after_period: bool,
     #[serde(default)]
     pub three_dots_to_ellipsis: bool,
-}
-
-impl Default for AutoCorrectSettings {
-    fn default() -> Self {
-        Self {
-            smart_quotes: false,
-            double_hyphen_to_em_dash: false,
-            capitalize_after_period: false,
-            three_dots_to_ellipsis: false,
-        }
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

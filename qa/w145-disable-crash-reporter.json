@@ -1,0 +1,60 @@
+{
+  "generatedAt": "2026-09-20T15:09:11.1279968Z",
+  "binaryPath": "C:\\marknote\\src-tauri\\target\\release\\marknote.exe",
+  "fixturePath": null,
+  "additionalBrowserArgs": "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --disable-crash-reporter",
+  "settleSeconds": 6,
+  "processCount": 7,
+  "workingSetMb": 375.0,
+  "processes": [
+    {
+      "Pid": 43948,
+      "Name": "marknote.exe",
+      "Role": "-",
+      "Mb": 25.5,
+      "CommandLine": "\"C:\\marknote\\src-tauri\\target\\release\\marknote.exe\" "
+    },
+    {
+      "Pid": 42240,
+      "Name": "msedgewebview2.exe",
+      "Role": "основной",
+      "Mb": 121.3,
+      "CommandLine": "\"C:\\WebView2Runtime\\149.0.4022.98\\msedgewebview2.exe\" --embedded-browser-webview=1 --webview-exe-name=marknote.exe --webview-exe-version=1.0.17 --user-data-dir=\"C:\\Users\\reteren\\AppData\\Local\\dev.marknote.app\\EBWebView\" --noerrdialogs --embedded-browser-webview-dpi-awareness=2 --autoplay-policy=no-user-gesture-required --disable-crash-reporter --disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --lang=ru-RU --mojo-named-platform-channel-pipe=43948.41564.9714689813578270260 /pfhostedapp:2017d522a774382594858f492b9e1add59a8b77f"
+    },
+    {
+      "Pid": 39788,
+      "Name": "msedgewebview2.exe",
+      "Role": "crashpad-handler",
+      "Mb": 10.3,
+      "CommandLine": "C:\\WebView2Runtime\\149.0.4022.98\\msedgewebview2.exe --type=crashpad-handler --user-data-dir=C:\\Users\\reteren\\AppData\\Local\\dev.marknote.app\\EBWebView /prefetch:4 /pfhostedapp:2017d522a774382594858f492b9e1add59a8b77f --monitor-self-annotation=ptype=crashpad-handler --database=C:\\Users\\reteren\\AppData\\Local\\dev.marknote.app\\EBWebView\\Crashpad --annotation=IsOfficialBuild=1 --annotation=channel= --annotation=chromium-version=149.0.7827.201 --annotation=exe=C:\\WebView2Runtime\\149.0.4022.98\\msedgewebview2.exe --annotation=plat=Win64 \"--annotation=prod=Edge WebView2\" --annotation=ver=149.0.4022.98 --initial-client-data=0x190,0x194,0x198,0x16c,0x1a0,0x7ffd6ea89c38,0x7ffd6ea89c44,0x7ffd6ea89c50"
+    },
+    {
+      "Pid": 37328,
+      "Name": "msedgewebview2.exe",
+      "Role": "gpu-process",
+      "Mb": 76.4,
+      "CommandLine": "\"C:\\WebView2Runtime\\149.0.4022.98\\msedgewebview2.exe\" --type=gpu-process --noerrdialogs --user-data-dir=\"C:\\Users\\reteren\\AppData\\Local\\dev.marknote.app\\EBWebView\" --webview-exe-name=marknote.exe --webview-exe-version=1.0.17 --embedded-browser-webview=1 --embedded-browser-webview-dpi-awareness=2 --gpu-preferences=SAAAAAAAAADgAAAEAAAAAAAAAAAAAGAAAQAAAAAAAAAAAAAAAAAAAAIAAAAAAAAAAAAAAAAAAAAQAAAAAAAAABAAAAAAAAAACAAAAAAAAAAIAAAAAAAAAA== --startup-read-main-dll --metrics-shmem-handle=1904,i,4845441887205941872,15972942533754421001,262144 --field-trial-handle=1988,i,11071891892980900394,17160611340026271324,262144 --disable-features=msPdfOOUI,msSmartScreenProtection,msWebOOUI --variations-seed-version --pseudonymization-salt-handle=1916,i,14715281086843758484,538873519715133767,4 --trace-process-track-uuid=3190708988185955192 --mojo-platform-channel-handle=1972 /prefetch:2 /pfhostedapp:2017d522a774382594858f492b9e1add59a8b77f"
+    },
+    {
+      "Pid": 5388,
+      "Name": "msedgewebview2.exe",
+      "Role": "utility",
+      "Mb": 36.7,
+      "CommandLine": "\"C:\\WebView2Runtime\\149.0.4022.98\\msedgewebview2.exe\" --type=utility --utility-sub-type=network.mojom.NetworkService --lang=en-US --service-sandbox-type=none --noerrdialogs --user-data-dir=\"C:\\Users\\reteren\\AppData\\Local\\dev.marknote.app\\EBWebView\" --webview-exe-name=marknote.exe --webview-exe-version=1.0.17 --embedded-browser-webview=1 --embedded-browser-webview-dpi-awareness=2 --startup-read-main-dll --metrics-shmem-handle=2224,i,5273848593398819686,15321780288558307447,524288 --field-trial-handle=1988,i,11071891892980900394,17160611340026271324,262144 --disable-features=msPdfOOUI,msSmartScreenProtection,msWebOOUI --variations-seed-version --pseudonymization-salt-handle=1916,i,14715281086843758484,538873519715133767,4 --trace-process-track-uuid=3190708989122997041 --mojo-platform-channel-handle=2236 /prefetch:11 /pfhostedapp:2017d522a774382594858f492b9e1add59a8b77f"
+    },
+    {
+      "Pid": 10920,
+      "Name": "msedgewebview2.exe",
+      "Role": "utility",
+      "Mb": 19.6,
+      "CommandLine": "\"C:\\WebView2Runtime\\149.0.4022.98\\msedgewebview2.exe\" --type=utility --utility-sub-type=storage.mojom.StorageService --lang=en-US --service-sandbox-type=service --noerrdialogs --user-data-dir=\"C:\\Users\\reteren\\AppData\\Local\\dev.marknote.app\\EBWebView\" --webview-exe-name=marknote.exe --webview-exe-version=1.0.17 --embedded-browser-webview=1 --embedded-browser-webview-dpi-awareness=2 --startup-read-main-dll --metrics-shmem-handle=2560,i,10593287341786066777,8330873158498785917,524288 --field-trial-handle=1988,i,11071891892980900394,17160611340026271324,262144 --disable-features=msPdfOOUI,msSmartScreenProtection,msWebOOUI --variations-seed-version --pseudonymization-salt-handle=1916,i,14715281086843758484,538873519715133767,4 --trace-process-track-uuid=3190708990060038890 --mojo-platform-channel-handle=2576 /prefetch:13 /pfhostedapp:2017d522a774382594858f492b9e1add59a8b77f"
+    },
+    {
+      "Pid": 36792,
+      "Name": "msedgewebview2.exe",
+      "Role": "renderer",
+      "Mb": 85.2,
+      "CommandLine": "\"C:\\WebView2Runtime\\149.0.4022.98\\msedgewebview2.exe\" --type=renderer --noerrdialogs --user-data-dir=\"C:\\Users\\reteren\\AppData\\Local\\dev.marknote.app\\EBWebView\" --webview-exe-name=marknote.exe --webview-exe-version=1.0.17 --embedded-browser-webview=1 --embedded-browser-webview-dpi-awareness=2 --autoplay-policy=no-user-gesture-required --video-capture-use-gpu-memory-buffer --lang=en-US --js-flags=--expose-gc --device-scale-factor=1 --num-raster-threads=4 --enable-main-frame-before-activation --renderer-client-id=5 --time-ticks-at-unix-epoch=-1789909053916288 --launch-time-ticks=7891148972 --ssd-no-pressure-read-main-dll --metrics-shmem-handle=3944,i,10483907318157406409,6717585960195602663,2097152 --field-trial-handle=1988,i,11071891892980900394,17160611340026271324,262144 --disable-features=msPdfOOUI,msSmartScreenProtection,msWebOOUI --variations-seed-version --pseudonymization-salt-handle=1916,i,14715281086843758484,538873519715133767,4 --trace-process-track-uuid=3190708990997080739 --mojo-platform-channel-handle=4012 /pfhostedapp:2017d522a774382594858f492b9e1add59a8b77f /prefetch:1"
+    }
+  ]
+}
