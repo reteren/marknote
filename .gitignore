@@ -7,14 +7,14 @@ dist/
 src-tauri/target/
 src-tauri/gen/
 
-# Редакторы и ОС
+# Editors and operating systems
 .vscode/*
 !.vscode/extensions.json
 .idea/
 Thumbs.db
 desktop.ini
 
-# Сборка и подпись
+# Build and signing
 *.exe
 *.msi
 *.pdb
@@ -23,11 +23,11 @@ desktop.ini
 .env
 .env.local
 
-# Снимки приёмки — результат прогона, а не исходник
+# Acceptance screenshots are run output, not source files.
 qa/shots/
 
-# Мусор проверок: снимки экрана и разовые скрипты агентов. Дважды уезжал в
-# коммит через git add -A, поэтому закрыт списком, а не дисциплиной.
+# QA debris: screenshots and one-off agent scripts. It was accidentally committed
+# twice through git add -A, so keep it excluded by pattern rather than by discipline.
 /artifacts/
 /scratch/
 /*.png
@@ -35,8 +35,13 @@ qa/shots/
 /qa/*.out
 /qa/*.reg
 /qa/shots/
-# Журналы прогонов приёмки: машинный вывод, а не исходник
+# Acceptance run logs and their summary are machine output, not source files.
 /qa/*.jsonl
+/qa/acceptance-summary.json
 
-# Кэш проверки оформления: перестраивается сам, в репозитории не нужен
+# Formatting-check cache: rebuilt automatically and not needed in the repository.
 /.impeccable/hook.cache.json
+
+# Python leaves these next to the helper scripts.
+__pycache__/
+*.pyc

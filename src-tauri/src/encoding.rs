@@ -135,9 +135,9 @@ mod tests {
 
     #[test]
     fn utf8_without_bom() {
-        let bytes = "Привет\n".as_bytes();
+        let bytes = "\u{41f}\u{440}\u{438}\u{432}\u{435}\u{442}\n".as_bytes();
         let decoded = decode(bytes);
-        assert_eq!(decoded.text, "Привет\n");
+        assert_eq!(decoded.text, "\u{41f}\u{440}\u{438}\u{432}\u{435}\u{442}\n");
         assert_eq!(decoded.encoding, "utf-8");
         assert!(!decoded.bom);
     }
@@ -145,9 +145,9 @@ mod tests {
     #[test]
     fn utf8_with_bom() {
         let mut bytes = b"\xEF\xBB\xBF".to_vec();
-        bytes.extend_from_slice("текст".as_bytes());
+        bytes.extend_from_slice("\u{442}\u{435}\u{43a}\u{441}\u{442}".as_bytes());
         let decoded = decode(&bytes);
-        assert_eq!(decoded.text, "текст");
+        assert_eq!(decoded.text, "\u{442}\u{435}\u{43a}\u{441}\u{442}");
         assert_eq!(decoded.encoding, "utf-8");
         assert!(decoded.bom);
         assert_eq!(
@@ -164,11 +164,11 @@ mod tests {
     #[test]
     fn utf16le_with_bom() {
         let mut bytes = b"\xFF\xFE".to_vec();
-        for unit in "текст\r\n".encode_utf16() {
+        for unit in "\u{442}\u{435}\u{43a}\u{441}\u{442}\r\n".encode_utf16() {
             bytes.extend_from_slice(&unit.to_le_bytes());
         }
         let decoded = decode(&bytes);
-        assert_eq!(decoded.text, "текст\n");
+        assert_eq!(decoded.text, "\u{442}\u{435}\u{43a}\u{441}\u{442}\n");
         assert_eq!(decoded.encoding, "utf-16le");
         assert!(decoded.bom);
         assert_eq!(decoded.line_ending, LineEnding::Crlf);
@@ -187,7 +187,7 @@ mod tests {
     fn cp1251_cyrillic() {
         let bytes = [0xCF, 0xF0, 0xE8, 0xE2, 0xE5, 0xF2];
         let decoded = decode(&bytes);
-        assert_eq!(decoded.text, "Привет");
+        assert_eq!(decoded.text, "\u{41f}\u{440}\u{438}\u{432}\u{435}\u{442}");
         assert_eq!(decoded.encoding, "windows-1251");
         assert_eq!(
             encode(

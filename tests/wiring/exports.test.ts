@@ -12,8 +12,8 @@ type ExportedValue = {
   name: string;
 };
 
-// Эти API явно предназначены для тестов или интеграционного доступа; каждый
-// комментарий ссылается на причину, по которой они не вызываются приложением.
+// These APIs are explicitly intended for tests or integration access; each
+// comment explains why the application does not call it.
 const EXPORTED_VALUE_EXCEPTIONS: ReadonlyArray<{
   file: string;
   name: string;
@@ -22,44 +22,44 @@ const EXPORTED_VALUE_EXCEPTIONS: ReadonlyArray<{
   {
     file: "src/editor/createEditor.ts",
     name: "setEditorDocumentFormat",
-    // Сохраняем документированный alias API, хотя приложение использует каноническое имя.
-    reason: "Документированный алиас для обратной совместимости; поведение тестируется через setEditorFormat.",
+    // Keep the documented API alias even though the app uses the canonical name.
+    reason: "Documented backward-compatibility alias; behavior is tested through setEditorFormat.",
   },
   {
     file: "src/editor/keymap.ts",
     name: "marknoteKeyBindings",
-    // Модуль явно объявляет эти реальные bindings инструментом для тестов и интеграций.
-    reason: "Модуль прямо объявляет реальные bindings экспортом для тестов и интеграций, которым нужно их инспектировать.",
+    // The module explicitly exposes these real bindings for tests and integrations.
+    reason: "The module exports real bindings for tests and integrations that need to inspect them.",
   },
   {
     file: "src/editor/keymap.ts",
     name: "getMarknoteKeyBindings",
-    // Фабрика дана для тех же тестов и интеграций, а не для приложения.
-    reason: "Фабрика реальных bindings экспортирована для тестов и интеграций, согласно комментарию модуля.",
+    // The factory is provided for the same tests and integrations, not the app.
+    reason: "The real-binding factory is exported for tests and integrations, as documented by the module.",
   },
   {
     file: "src/editor/livePreview/plugin.ts",
     name: "buildDecorationSets",
-    // Чистый тестовый вход отделяет расчёт декораций от зависимости на DOM.
-    reason: "Чистая функция специально экспортирована для тестирования предпросмотра без браузера; runtime использует внутренний вариант с EditorView.",
+    // A pure test entry separates decoration calculation from the DOM dependency.
+    reason: "The pure function is exported to test preview without a browser; runtime uses the EditorView variant internally.",
   },
   {
     file: "src/editor/livePreview/plugin.ts",
     name: "previewDecorations",
-    // Фасад инспекции нужен интеграционным тестам и подтверждён комментарием модуля.
-    reason: "Комментарий модуля прямо называет экспорт фасадом для тестов и интеграций.",
+    // The inspection facade is needed by integration tests and documented by the module.
+    reason: "The module explicitly describes this export as a facade for tests and integrations.",
   },
   {
     file: "src/editor/livePreview/plugin.ts",
     name: "decorationRanges",
-    // Диагностическая утилита намеренно упрощает проверки DecorationSet в тестах.
-    reason: "Комментарий модуля прямо называет эту утилиту тестовой; приложение работает с DecorationSet напрямую.",
+    // The diagnostic utility intentionally simplifies DecorationSet assertions in tests.
+    reason: "The module explicitly describes this utility as test-only; the app works with DecorationSet directly.",
   },
   {
     file: "src/editor/livePreview/widgets/Math.ts",
     name: "clearMathCache",
-    // Очистка глобального кэша нужна тестам для изоляции проверок рендера.
-    reason: "Сбрасывает глобальный кэш рендера, чтобы тесты изолированно проверяли повторное использование результатов.",
+    // Clearing the global cache lets render tests stay isolated.
+    reason: "Clears the global render cache so tests can independently verify result reuse.",
   },
 ];
 
@@ -244,7 +244,7 @@ describe("export wiring", () => {
           && entry.name === candidate.name,
       );
       if (exception && !exception.reason.trim()) {
-        throw new Error(`У исключения ${exception.file}#${exception.name} нет объяснения`);
+        throw new Error(`Exception ${exception.file}#${exception.name} has no explanation`);
       }
       if (exception) sourceImports.add(key);
     }
@@ -260,10 +260,10 @@ describe("export wiring", () => {
       dead,
       failures: [
         ...dead.map(({ file, name }) =>
-          `${relative(ROOT, file).replaceAll("\\", "/")} экспортирует ${name}, но src/ нигде не использует его; подключите вызов, удалите экспорт или добавьте одно обоснованное исключение в EXPORTED_VALUE_EXCEPTIONS`,
+          `${relative(ROOT, file).replaceAll("\\", "/")} exports ${name}, but src/ does not use it; add a call, remove the export, or add one justified exception to EXPORTED_VALUE_EXCEPTIONS`,
         ),
         ...staleExceptions.map(({ file, name }) =>
-          `Исключение ${file}#${name} больше не соответствует экспорту; удалите устаревшую запись из EXPORTED_VALUE_EXCEPTIONS`,
+          `Exception ${file}#${name} no longer matches an export; remove the stale EXPORTED_VALUE_EXCEPTIONS entry`,
         ),
       ],
     };
@@ -272,7 +272,7 @@ describe("export wiring", () => {
   it("uses each exported function/constant in src or documents an explicit exception", () => {
     const { failures } = deadExports();
 
-    expect(failures, ["Мёртвые экспорты функций/констант:", ...failures].join("\n")).toEqual([]);
+    expect(failures, ["Dead function/constant exports:", ...failures].join("\n")).toEqual([]);
   });
 
   it("keeps setEditorFormat called from the application, not only imported by tests", () => {

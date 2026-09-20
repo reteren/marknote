@@ -20,7 +20,7 @@ export function normalizeCalloutType(type: string): string {
   return KNOWN_CALLOUT_TYPES.has(lower) ? lower : "note";
 }
 
-/** Встроенные SVG-иконки для 9 стандартных типов callout Obsidian. */
+/** Inline SVG icons for the nine standard Obsidian callout types. */
 export function calloutSvg(type: string): string {
   const normalized = normalizeCalloutType(type);
   switch (normalized) {
@@ -167,22 +167,22 @@ function parseCallout(node: SyntaxNode, state: EditorState): ParsedCallout | nul
   };
 }
 
-/** Построитель декораций для callout-блоков и цитат (W6). */
+/** Decoration builder for callout blocks and quotes (W6). */
 export const calloutBuilder: BlockBuilder = (ctx: BuilderContext): boolean => {
   if (ctx.node.name !== "Blockquote" && ctx.node.name !== "Callout") return false;
 
-  // Распознаём callout либо по дереву, либо по регулярному выражению первой строки
+  // Recognize a callout either from the tree or from a regular expression on the first line.
   const callout = parseCallout(ctx.node, ctx.view.state);
 
   if (callout) {
-    // Курсор внутри блока — показываем исходный Markdown без декораций скрытия
+    // Cursor inside the block: show the original Markdown without hiding decorations.
     if (ctx.active) return true;
 
     const hide = Decoration.replace({});
     const firstLine = ctx.view.state.doc.lineAt(ctx.node.from);
     const lastLine = ctx.view.state.doc.lineAt(ctx.node.to);
 
-    // 1. Оформление всего блока callout (цветная полоса слева и фон)
+    // 1. Style the whole callout block (colored left bar and background).
     ctx.add({
       from: ctx.node.from,
       to: ctx.node.to,
@@ -191,16 +191,16 @@ export const calloutBuilder: BlockBuilder = (ctx: BuilderContext): boolean => {
       }),
     });
 
-    // 2. Скрываем маркер `>` первой строки
+    // 2. Hide the `>` marker on the first line.
     if (callout.quoteTo > callout.quoteFrom) {
       ctx.add({ from: callout.quoteFrom, to: callout.quoteTo, value: hide });
       ctx.atomic({ from: callout.quoteFrom, to: callout.quoteTo, value: hide });
     }
 
-    // 3. Маркер [!TYPE] и заголовок
+    // 3. The [!TYPE] marker and heading.
     if (callout.hasCustomTitle) {
-      // Свой заголовок: заменяем `[!TYPE]` и пробелы виджетом иконки,
-      // а текст заголовка красим стилем заголовка
+      // Custom heading: replace `[!TYPE]` and the spaces with an icon widget,
+      // and style the heading text as a heading.
       const iconWidget = Decoration.replace({
         widget: new CalloutIconWidget(callout.normalizedType),
       });
@@ -215,8 +215,8 @@ export const calloutBuilder: BlockBuilder = (ctx: BuilderContext): boolean => {
         });
       }
     } else {
-      // Без своего заголовка: заменяем `[!TYPE]` (и остаток строки) виджетом
-      // с иконкой и именем типа
+      // Without a custom heading: replace `[!TYPE]` (and the rest of the line)
+      // with a widget containing the icon and type name.
       const headerWidget = Decoration.replace({
         widget: new CalloutHeaderWidget(callout.normalizedType, callout.title),
       });
@@ -225,7 +225,7 @@ export const calloutBuilder: BlockBuilder = (ctx: BuilderContext): boolean => {
       ctx.atomic({ from: callout.markerFrom, to: endPos, value: headerWidget });
     }
 
-    // 4. Скрываем маркеры `>` на последующих строках callout-блока
+    // 4. Hide `>` markers on subsequent lines of the callout block.
     for (let lineNo = firstLine.number + 1; lineNo <= lastLine.number; lineNo++) {
       const line = ctx.view.state.doc.line(lineNo);
       const lineStartInNode = Math.max(0, ctx.node.from - line.from);
@@ -241,21 +241,21 @@ export const calloutBuilder: BlockBuilder = (ctx: BuilderContext): boolean => {
     return true;
   }
 
-  // Обычная цитата без [!TYPE]
+  // Ordinary quote without [!TYPE].
   if (ctx.node.name === "Blockquote") {
-    // Курсор внутри цитаты — показываем исходный текст
+    // Cursor inside the quote: show the original text.
     if (ctx.active) return true;
 
     const hide = Decoration.replace({});
 
-    // 1. Оформление цитаты (вертикальная линия слева)
+    // 1. Style the quote (vertical line on the left).
     ctx.add({
       from: ctx.node.from,
       to: ctx.node.to,
       value: Decoration.mark({ class: "cm-marknote-blockquote" }),
     });
 
-    // 2. Скрываем маркеры `>` цитаты на каждой строке
+    // 2. Hide quote `>` markers on every line.
     const startLine = ctx.view.state.doc.lineAt(ctx.node.from);
     const endLine = ctx.view.state.doc.lineAt(ctx.node.to);
     for (let l = startLine.number; l <= endLine.number; l++) {
@@ -276,7 +276,7 @@ export const calloutBuilder: BlockBuilder = (ctx: BuilderContext): boolean => {
   return false;
 };
 
-/** CSS-тема для callout-блоков и цитат. Использует токены из theme.css. */
+/** CSS theme for callout blocks and quotes. Uses tokens from theme.css. */
 export const calloutTheme = EditorView.baseTheme({
   ".cm-marknote-callout": {
     display: "inline-block",

@@ -12,7 +12,7 @@ export type MenuItem = {
   separator: boolean;
   disabled: boolean;
   submenu?: MenuItem[];
-  /** Формат заполняется только у пунктов File → New, чтобы обработчик не парсил label. */
+  /** Format is set only for File → New items, so the handler need not parse label. */
   formatId?: string;
 };
 
@@ -96,8 +96,8 @@ function newItems(formats: readonly FormatCapabilities[], state: MenuState): Men
 }
 
 /**
- * Возвращает данные меню без побочных эффектов. Действия выполняются только
- * обработчиком MenuBar, получившим id выбранного пункта.
+ * Returns menu data without side effects. Actions are performed only by the
+ * MenuBar handler that receives the selected item's id.
  */
 export function createMenuModel(
   formats: readonly FormatCapabilities[] = [],

@@ -44,7 +44,7 @@ export type SearchOpenEventDetail = {
 };
 
 /**
- * Проверяет синтаксическую корректность регулярного выражения, не бросая исключений.
+ * Checks regular-expression syntax without throwing exceptions.
  */
 export function isValidRegExp(source: string): boolean {
   if (!source) return true;
@@ -57,7 +57,7 @@ export function isValidRegExp(source: string): boolean {
 }
 
 /**
- * Возвращает текст ошибки регулярного выражения или null, если выражение корректно.
+ * Returns the regular-expression error text, or null when the expression is valid.
  */
 export function getRegExpError(source: string): string | null {
   if (!source) return null;
@@ -70,7 +70,7 @@ export function getRegExpError(source: string): string | null {
 }
 
 /**
- * Создаёт SearchQuery для CodeMirror, гарантируя отсутствие необработанных исключений при невалидном regex.
+ * Creates a CodeMirror SearchQuery without allowing an invalid regex to throw uncaught.
  */
 export function createSearchQuery(config: SearchQueryConfig): SearchQuery {
   return new SearchQuery({
@@ -83,7 +83,7 @@ export function createSearchQuery(config: SearchQueryConfig): SearchQuery {
 }
 
 /**
- * Возвращает текст выделения, если оно не пустое и помещается в одну строку.
+ * Returns the selected text when it is non-empty and fits on one line.
  */
 export function getInitialSearchText(state: EditorState): string | null {
   const sel = state.selection.main;
@@ -94,7 +94,7 @@ export function getInitialSearchText(state: EditorState): string | null {
 }
 
 /**
- * Ищет все непересекающиеся совпадения в документе с защитой от сбоев.
+ * Finds all non-overlapping matches in the document with failure protection.
  */
 export function findMatches(
   state: EditorState,
@@ -123,7 +123,7 @@ export function findMatches(
 }
 
 /**
- * Вычисляет счётчик совпадений: сколько всего и какое выбрано в данный момент.
+ * Computes the match counter: the total and the currently selected match.
  */
 export function getSearchStats(
   state: EditorState,
@@ -136,7 +136,7 @@ export function getSearchStats(
 
   const sel = selection ?? state.selection.main;
 
-  // 1. Точное совпадение выделения с границами найденного участка
+  // 1. The selection exactly matches the found range boundaries.
   for (let i = 0; i < matches.length; i++) {
     const m = matches[i];
     if (sel.from === m.from && sel.to === m.to) {
@@ -144,7 +144,7 @@ export function getSearchStats(
     }
   }
 
-  // 2. Курсор или часть выделения находится внутри найденного участка
+  // 2. The cursor or part of the selection lies inside the found range.
   for (let i = 0; i < matches.length; i++) {
     const m = matches[i];
     if (sel.from >= m.from && sel.to <= m.to) {
@@ -156,7 +156,7 @@ export function getSearchStats(
 }
 
 /**
- * Ищет следующее совпадение с переходом по кругу (от конца к началу).
+ * Finds the next match, wrapping around from the end to the beginning.
  */
 export function findNextMatch(
   state: EditorState,
@@ -178,12 +178,12 @@ export function findNextMatch(
     }
   }
 
-  // Переход по кругу
+  // Wrap around.
   return matches[0];
 }
 
 /**
- * Ищет предыдущее совпадение с переходом по кругу (от начала к концу).
+ * Finds the previous match, wrapping around from the beginning to the end.
  */
 export function findPreviousMatch(
   state: EditorState,
@@ -206,12 +206,12 @@ export function findPreviousMatch(
     }
   }
 
-  // Переход по кругу
+  // Wrap around.
   return matches[matches.length - 1];
 }
 
 /**
- * Вычисляет «заменить всё» на документе с корректной обработкой пересекающихся кандидатов.
+ * Computes “replace all” for the document while handling overlapping candidates correctly.
  */
 export function replaceAllMatches(
   state: EditorState,
@@ -238,7 +238,7 @@ export function replaceAllMatches(
     let lastEnd = 0;
     while (!cursor.next().done) {
       const { from, to } = cursor.value;
-      if (from < lastEnd) continue; // исключаем пересечение с предыдущей заменой
+      if (from < lastEnd) continue; // Exclude overlap with the previous replacement.
 
       let insert = replaceStr;
       if (query.regexp) {
@@ -291,7 +291,7 @@ export function dispatchSearchClose(view: EditorView): void {
 }
 
 /**
- * Набор команд управления поиском и заменой для CodeMirror и пользовательской панели.
+ * Search-and-replace control commands for CodeMirror and the custom panel.
  */
 export const searchCommands = {
   openSearch: ((view: EditorView) => {
@@ -402,8 +402,8 @@ export const searchCommands = {
 };
 
 /**
- * Расширение поиска MarkNote: настраивает подсветку @codemirror/search,
- * отключает встроенную DOM-панель в пользу Svelte-компонента и переопределяет цвета темы.
+ * MarkNote search extension: configures @codemirror/search highlighting,
+ * replaces its built-in DOM panel with the Svelte component, and overrides theme colors.
  */
 export function marknoteSearch(): Extension {
   return [

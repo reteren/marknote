@@ -285,13 +285,12 @@ export const orderedListNormalization: Extension = EditorState.transactionFilter
   if (!transaction.docChanged) return transaction;
   const changes = profileMeasure("lists.filter", () => getMarkerChangesForTransaction(transaction));
   if (!changes.length) return transaction;
-  // Возвращаем исходную транзакцию как есть и добавляем перенумерацию отдельной
-  // последующей правкой. Так положение курсора, эффекты и все пометки — включая
-  // пометки истории отмены — переносятся самим CodeMirror, и их не нужно
-  // перекладывать руками. Прежний вариант собирал новую транзакцию по полям и
-  // терял всё, что забыли перечислить; заодно он лез в приватное поле
-  // annotations через приведение типа, а это сломалось бы на обновлении
-  // библиотеки молча.
+  // Return the original transaction unchanged and add renumbering as a separate
+  // follow-up change. CodeMirror then carries over the cursor, effects, and all
+  // annotations — including undo-history annotations — without manual copying.
+  // The old version built a new transaction field by field and lost anything it
+  // forgot to list; it also accessed the private annotations field through a
+  // type cast, which could silently break on a library update.
   return [transaction, { changes, sequential: true }];
 });
 
@@ -467,7 +466,7 @@ function pairInputHandler(
   const next = state.sliceDoc(from, from + pair.close.length);
   const previous = state.sliceDoc(Math.max(0, from - pair.open.length), from);
 
-  // Для звёздочки второе нажатие расширяет только что созданную пару до **...**.
+  // For an asterisk, the second press expands the pair just created to **...**.
   const canExpandAsterisk =
     text === "*" && previous === "*" && next === "*" && state.sliceDoc(Math.max(0, from - 2), Math.max(0, from - 1)) !== "*";
   if (canExpandAsterisk) {
@@ -481,10 +480,10 @@ function pairInputHandler(
     return true;
   }
 
-  // Двойные маркеры (==, ~~) при наборе не подставляются вовсе: «=» и «~»
-  // встречаются в тексте постоянно, и человек, набравший «==», ожидает
-  // увидеть ровно два знака, а не четыре с курсором посередине. Выделенный
-  // текст эти знаки по-прежнему оборачивают (ветка выше).
+  // Double markers (==, ~~) are never inserted while typing: “=” and “~” are
+  // common in ordinary text, and someone typing “==” expects exactly two marks,
+  // not four with the cursor in the middle. Selected text is still wrapped by
+  // these marks (the branch above).
   if (pair.open.length === 2) return false;
 
   if (next === pair.close && text === pair.close[0]) {

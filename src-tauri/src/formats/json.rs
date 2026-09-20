@@ -1,7 +1,7 @@
 use super::{FormatAdapter, FormatCapabilities};
 use serde::{Deserialize, Serialize};
 
-/// Ошибка синтаксиса JSON с позицией в документе.
+/// JSON syntax error with its position in the document.
 #[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -11,10 +11,11 @@ pub struct JsonError {
     pub message: String,
 }
 
-/// Упорядоченное представление JSON-значения, сохраняющее порядок следования ключей в объектах.
-/// В отличие от `serde_json::Value` (который хранит ключи в `BTreeMap` и алфавитно сортирует их),
-/// `OrderedValue` хранит пары ключ-значение в `Vec<(String, OrderedValue)>`, гарантируя неизменность
-/// оригинального порядка ключей без необходимости внешней зависимости с флагом `preserve_order`.
+/// Ordered representation of a JSON value that preserves object key order.
+/// Unlike `serde_json::Value` (which stores keys in a `BTreeMap` and sorts them
+/// alphabetically), `OrderedValue` stores key-value pairs in
+/// `Vec<(String, OrderedValue)>`, preserving the original order without an
+/// external dependency or the `preserve_order` feature.
 #[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq)]
 pub enum OrderedValue {
@@ -141,8 +142,8 @@ impl Serialize for OrderedValue {
     }
 }
 
-/// Проверяет синтаксис JSON с точным указанием строки и столбца ошибки.
-/// Возвращает None, если документ валиден.
+/// Checks JSON syntax and reports the exact error line and column.
+/// Returns None when the document is valid.
 #[allow(dead_code)]
 pub fn validate(text: &str) -> Option<JsonError> {
     let mut de = serde_json::Deserializer::from_str(text);
@@ -163,7 +164,7 @@ pub fn validate(text: &str) -> Option<JsonError> {
     None
 }
 
-/// Форматирует JSON с отступом в два пробела, сохраняя исходный порядок ключей объектов.
+/// Formats JSON with two-space indentation while preserving object key order.
 #[allow(dead_code)]
 pub fn format(text: &str) -> anyhow::Result<String> {
     let mut de = serde_json::Deserializer::from_str(text);
@@ -195,7 +196,7 @@ pub fn format(text: &str) -> anyhow::Result<String> {
     Ok(formatted)
 }
 
-/// Адаптер формата JSON.
+/// JSON format adapter.
 #[derive(Debug, Clone, Default)]
 pub struct JsonAdapter;
 
@@ -205,8 +206,8 @@ impl FormatAdapter for JsonAdapter {
             id: "json".to_owned(),
             label: "JSON".to_owned(),
             default_extension: "json".to_owned(),
-            // Расширение jsonc не смешиваем здесь, так как serde_json не поддерживает комментарии.
-            // Для jsonc предназначен отдельный CodeAdapter с режимом подсветки json.
+            // Keep jsonc separate because serde_json does not support comments.
+            // jsonc uses a dedicated CodeAdapter with JSON highlighting.
             extensions: vec!["json".to_owned()],
             editable: true,
             creatable: true,
@@ -254,7 +255,7 @@ mod tests {
     #[test]
     fn test_broken_json_returns_line_and_column() {
         let broken = "{\n  \"first\": 1,\n  \"second\": \n}";
-        let error = validate(broken).expect("битый JSON должен вернуть ошибку");
+        let error = validate(broken).expect("broken JSON must return an error");
         assert_eq!(error.line, 4);
         assert_eq!(error.column, 1);
         assert!(!error.message.is_empty());
@@ -263,7 +264,7 @@ mod tests {
     #[test]
     fn test_trailing_comma_error() {
         let trailing = "{\n  \"a\": 1,\n}";
-        let error = validate(trailing).expect("trailing comma не валидна в JSON");
+        let error = validate(trailing).expect("a trailing comma is invalid in JSON");
         assert_eq!(error.line, 3);
         assert_eq!(error.column, 1);
     }
@@ -271,16 +272,16 @@ mod tests {
     #[test]
     fn test_trailing_garbage_detected() {
         let garbage = r#"{"a": 1} unexpected"#;
-        let error = validate(garbage).expect("мусор после JSON должен давать ошибку");
+        let error = validate(garbage).expect("trailing garbage must return an error");
         assert_eq!(error.line, 1);
         assert_eq!(error.column, 10);
     }
 
     #[test]
     fn test_format_preserves_key_order() {
-        // Ключи заданы не в алфавитном порядке (z, m, a, x, b).
+        // Keys are intentionally not alphabetical (z, m, a, x, b).
         let input = r#"{"zebra": 10, "monkey": "banana", "apple": [3, 2, 1], "xylophone": true, "bear": null}"#;
-        let formatted = format(input).expect("форматирование валидного JSON должно пройти успешно");
+        let formatted = format(input).expect("formatting valid JSON must succeed");
 
         let lines: Vec<&str> = formatted.lines().map(str::trim).collect();
         assert_eq!(lines[0], "{");
@@ -295,7 +296,7 @@ mod tests {
         assert_eq!(lines[9], "\"bear\": null");
         assert_eq!(lines[10], "}");
 
-        // Проверяем, что порядок не был переставлен в apple, bear, monkey, xylophone, zebra.
+        // Verify that the order was not changed to apple, bear, monkey, xylophone, zebra.
         let pos_z = formatted.find("\"zebra\"").unwrap();
         let pos_m = formatted.find("\"monkey\"").unwrap();
         let pos_a = formatted.find("\"apple\"").unwrap();
@@ -348,12 +349,12 @@ mod tests {
     fn test_decode_encode_roundtrip() {
         let adapter = JsonAdapter;
         let raw_bytes = b"{\r\n  \"hello\": \"\xd0\xbc\xd0\xb8\xd1\x80\"\r\n}\r\n";
-        let decoded = adapter.decode(raw_bytes).expect("декодирование успешно");
+        let decoded = adapter.decode(raw_bytes).expect("decoding succeeded");
         assert_eq!(decoded.line_ending, crate::encoding::LineEnding::Crlf);
 
         let encoded = adapter
             .encode(&decoded.text, &decoded)
-            .expect("кодирование успешно");
+            .expect("encoding succeeded");
         assert_eq!(encoded, raw_bytes);
     }
 }

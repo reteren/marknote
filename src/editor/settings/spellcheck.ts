@@ -1,9 +1,9 @@
-// Разделы settings.spellcheck и settings.autoCorrect.
+// settings.spellcheck and settings.autoCorrect sections.
 //
-// Проверка орфографии идёт средствами WebView2: словари берутся из системы,
-// язык без установленного в Windows пакета проверяться не будет.
+// Spellchecking uses WebView2: dictionaries come from the system, and a
+// language without an installed Windows package cannot be checked.
 //
-// Владелец файла — W87. Сборка расширений в ../settings.ts, туда не пишем.
+// File owner: W87. Extensions are assembled in ../settings.ts; do not edit there.
 
 import type { Extension } from "@codemirror/state";
 import type { Settings } from "../../state/settings.svelte";

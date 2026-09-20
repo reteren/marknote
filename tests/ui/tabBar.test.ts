@@ -29,10 +29,10 @@ afterEach(() => {
 });
 
 describe("TabBar UI component", () => {
-  it("показывает полосу даже с одной вкладкой, вместе с кнопкой «плюс»", () => {
-    // Полоса постоянная: владелец описал её как зону между строкой меню и
-    // текстом, а «плюс» — справа от последней вкладки. Прятать полосу при
-    // одной вкладке значило бы селить «плюс» в чужом месте.
+  it("shows the strip even with one tab, together with the plus button", () => {
+    // The strip is permanent: the owner described it as the zone between the
+    // menu bar and text, with the plus on the right of the last tab. Hiding it
+    // with one tab would place the plus somewhere unrelated.
     expect(workspace.tabs.length).toBe(1);
     const { container } = render(TabBar);
     expect(container.querySelector(".tab-bar-strip")).not.toBeNull();

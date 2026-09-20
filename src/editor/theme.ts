@@ -1,7 +1,7 @@
 import type { Extension } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 
-/** CodeMirror использует только токены общей тёмной темы MarkNote. */
+/** CodeMirror uses only tokens from MarkNote's shared dark theme. */
 export const marknoteTheme: Extension = [
   EditorView.theme({
     "&": {
@@ -12,10 +12,9 @@ export const marknoteTheme: Extension = [
       lineHeight: "var(--line-height-text)",
       maxWidth: "var(--line-width)",
       margin: "var(--editor-margin, 0 auto)",
-      // Высота, а не только минимальная: без неё корень редактора растёт
-      // вместе с текстом, .cm-scroller никогда не переполняется, полосы
-      // прокрутки не появляется и колесо мыши ничего не делает — документ
-      // длиннее окна становится недоступен.
+      // Set height, not only min-height: without it the editor root grows with
+      // the text, .cm-scroller never overflows, no scrollbar appears, and the
+      // mouse wheel does nothing — documents longer than the window become inaccessible.
       height: "100%",
       minHeight: "100%",
     },

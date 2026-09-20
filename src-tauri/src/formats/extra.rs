@@ -6,14 +6,14 @@ use super::pdf;
 use super::rtf;
 use super::FormatAdapter;
 
-/// Возвращает все дополнительные адаптеры форматов вехи M6 (JSON и класс «Код и данные»)
-/// в порядке их отображения на стартовом экране.
+/// Returns all additional format adapters from milestone M6 (JSON and “Code and data”)
+/// in the order shown on the start screen.
 pub fn adapters() -> Vec<Box<dyn FormatAdapter>> {
     let mut list: Vec<Box<dyn FormatAdapter>> = Vec::new();
     list.push(Box::new(json::JsonAdapter));
     list.extend(code::code_adapters());
-    // Классы D и E из docs/FORMATS.md идут последними: RTF сохраняется с
-    // потерями, PDF, DOCX и EPUB открываются только на чтение.
+    // Classes D and E from docs/FORMATS.md come last: RTF is saved with
+    // formatting loss, while PDF, DOCX, and EPUB are read-only.
     list.extend(rtf::adapters());
     list.extend(pdf::adapters());
     list.extend(docx::adapters());
@@ -30,7 +30,7 @@ mod tests {
     #[test]
     fn test_adapters_order_and_count() {
         let all = adapters();
-        // 1 (JSON) + 14 (код и данные) + 4 (RTF, PDF, DOCX, EPUB) = 19 адаптеров
+        // 1 (JSON) + 14 (code and data) + 4 (RTF, PDF, DOCX, EPUB) = 19 adapters.
         assert_eq!(all.len(), 19);
 
         let ids: Vec<String> = all.iter().map(|a| a.caps().id).collect();
@@ -49,8 +49,8 @@ mod tests {
         assert_eq!(ids[12], "cpp");
         assert_eq!(ids[13], "shell");
         assert_eq!(ids[14], "jsonc");
-        // Классы D и E идут последними: сначала всё, что редактируется без
-        // потерь, затем конвертируемый RTF и форматы только для чтения.
+        // Classes D and E come last: first everything editable without loss,
+        // then convertible RTF and read-only formats.
         assert_eq!(ids[15], "rtf");
         assert_eq!(ids[16], "pdf");
         assert_eq!(ids[17], "docx");
@@ -66,25 +66,25 @@ mod tests {
             assert!(!caps.default_extension.is_empty());
             assert!(!caps.extensions.is_empty());
 
-            // Требования зависят от класса формата (docs/FORMATS.md).
+            // Requirements depend on the format class (docs/FORMATS.md).
             match caps.id.as_str() {
-                // Класс E: только чтение. Сохранять нельзя, создавать нечего,
-                // автосохранение бессмысленно, содержимое приходит с потерями.
+                // Class E: read-only. It cannot be saved or created, and
+                // autosave is meaningless because content arrives lossy.
                 "pdf" | "docx" | "epub" => {
-                    assert!(!caps.editable, "{} обязан быть только для чтения", caps.id);
+                    assert!(!caps.editable, "{} must be read-only", caps.id);
                     assert!(!caps.creatable);
                     assert!(!caps.autosave);
                     assert!(caps.lossy);
                 }
-                // Класс D: правится, но сохраняется с потерями оформления,
-                // поэтому автосохранение выключено — ROADMAP числит это риском.
+                // Class D: editable but saved with formatting loss, so autosave
+                // is disabled; the ROADMAP lists this as a risk.
                 "rtf" => {
                     assert!(caps.editable);
                     assert!(!caps.creatable);
-                    assert!(!caps.autosave, "автосохранение RTF обязано быть выключено");
+                    assert!(!caps.autosave, "RTF autosave must be disabled");
                     assert!(caps.lossy);
                 }
-                // Классы B и C: правятся и сохраняются байт в байт.
+                // Classes B and C are editable and preserved byte-for-byte.
                 _ => {
                     assert!(caps.editable);
                     assert!(caps.creatable);
@@ -102,12 +102,12 @@ mod tests {
         let all = crate::formats::all();
         let creatable = crate::formats::creatable();
 
-        // 2 встроенных (markdown, plain) + 19 из extra = 21 формат
+        // 2 built-in (markdown, plain) + 19 extra = 21 formats.
         assert_eq!(all.len(), 21);
-        // PDF, DOCX и RTF с нуля не создаются: их нет на стартовом экране.
+        // PDF, DOCX, and RTF are not created from scratch: they are absent from the start screen.
         assert_eq!(creatable.len(), 17);
 
-        // Первым должен идти markdown, вторым plain, третьим json
+        // Markdown must be first, plain second, and JSON third.
         assert_eq!(all[0].id, "markdown");
         assert_eq!(all[1].id, "plain");
         assert_eq!(all[2].id, "json");
@@ -123,7 +123,7 @@ mod tests {
                 let normalized = ext.to_ascii_lowercase();
                 assert!(
                     seen.insert(normalized.clone()),
-                    "Обнаружен конфликт: расширение '{}' дублируется в формате '{}'",
+                    "Conflict: extension '{}' is duplicated in format '{}'",
                     normalized,
                     format.id
                 );
@@ -142,7 +142,7 @@ mod tests {
             let caps = crate::formats::for_extension(ext);
             assert_eq!(
                 caps.id, "markdown",
-                "Расширение '{}' должно принадлежать формату markdown",
+                "Extension '{}' must belong to the markdown format",
                 ext
             );
         }
@@ -151,7 +151,7 @@ mod tests {
             let caps = crate::formats::for_extension(ext);
             assert_eq!(
                 caps.id, "plain",
-                "Расширение '{}' должно принадлежать формату plain",
+                "Extension '{}' must belong to the plain format",
                 ext
             );
         }
@@ -196,7 +196,7 @@ mod tests {
             assert_eq!(
                 crate::formats::for_extension(ext).id,
                 expected_id,
-                "Расширение '{}' должно разрешаться в '{}'",
+                "Extension '{}' must resolve to '{}'",
                 ext,
                 expected_id
             );
@@ -204,7 +204,7 @@ mod tests {
             assert_eq!(
                 crate::formats::for_path(Path::new(&path_str)).id,
                 expected_id,
-                "Путь '{}' должен разрешаться в '{}'",
+                "Path '{}' must resolve to '{}'",
                 path_str,
                 expected_id
             );

@@ -52,25 +52,25 @@ function buildFootnote(state: EditorState, nodeName: string, active = false, ind
 
 describe("footnoteBuilder", () => {
   const sampleDoc = [
-    "Текст со сноской[^1] и второй сноской[^note], а также сноской без определения[^missing].",
+    "Text with footnote[^1] and second footnote[^note], plus footnote without a definition[^missing].",
     "",
-    "[^1]: Текст первой числовой сноски.",
-    "[^note]: Текст именованной сноски.",
+    "[^1]: First numbered footnote text.",
+    "[^note]: Named footnote text.",
   ].join("\n");
 
-  it("корректно извлекает определения сносок из документа", () => {
+  it("extracts footnote definitions from the document correctly", () => {
     const state = createFootnoteState(sampleDoc);
     const defs = getFootnoteDefinitions(state);
 
-    expect(defs.get("1")).toBe("Текст первой числовой сноски.");
-    expect(defs.get("note")).toBe("Текст именованной сноски.");
+    expect(defs.get("1")).toBe("First numbered footnote text.");
+    expect(defs.get("note")).toBe("Named footnote text.");
     expect(defs.has("missing")).toBe(false);
   });
 
-  it("сноска с определением: заменяется на надстрочный виджет и раскрывается при курсоре внутри", () => {
+  it("a defined footnote becomes a superscript widget and reveals under the cursor", () => {
     const state = createFootnoteState(sampleDoc);
 
-    // 1. Курсор снаружи — [^1] заменяется на надстрочную метку FootnoteRefWidget
+    // 1. Cursor outside: [^1] becomes a superscript FootnoteRefWidget label.
     const ref1 = buildFootnote(state, "FootnoteReference", false, 0);
     expect(ref1.handled).toBe(true);
     expect(ref1.decorations).toHaveLength(1);
@@ -79,55 +79,55 @@ describe("footnoteBuilder", () => {
     expect(widget).toBeInstanceOf(FootnoteRefWidget);
     expect(widget.label).toBe("1");
 
-    // Именованная сноска [^note]
+    // Named footnote [^note].
     const refNote = buildFootnote(state, "FootnoteReference", false, 1);
     expect(refNote.handled).toBe(true);
     expect(refNote.decorations).toHaveLength(1);
     const noteWidget = refNote.decorations[0].value.spec.widget as FootnoteRefWidget;
     expect(noteWidget.label).toBe("note");
 
-    // 2. Курсор внутри ссылки — исходный текст, без декораций замены
+    // 2. Cursor inside the reference: source text, without replacement decorations.
     const ref1Active = buildFootnote(state, "FootnoteReference", true, 0);
     expect(ref1Active.handled).toBe(true);
     expect(ref1Active.decorations).toHaveLength(0);
     expect(ref1Active.atomic).toHaveLength(0);
   });
 
-  it("сноска без определения: не ломает отображение и остаётся обычным текстом", () => {
+  it("an undefined footnote does not break rendering and remains ordinary text", () => {
     const state = createFootnoteState(sampleDoc);
 
-    // Сноска [^missing] — третий узел FootnoteReference
+    // [^missing] is the third FootnoteReference node.
     const refMissing = buildFootnote(state, "FootnoteReference", false, 2);
     expect(refMissing.handled).toBe(true);
-    // Без определения — никаких замен на виджет, остаётся обычным текстом
+    // Without a definition, there is no widget replacement; ordinary text remains.
     expect(refMissing.decorations).toHaveLength(0);
     expect(refMissing.atomic).toHaveLength(0);
   });
 
-  it("определение сноски: приглушённый стиль, выделенная метка, раскрытие под курсором", () => {
+  it("a footnote definition has muted styling, an emphasized label, and cursor reveal", () => {
     const state = createFootnoteState(sampleDoc);
 
-    // 1. Курсор снаружи
+    // 1. Cursor outside.
     const def1 = buildFootnote(state, "FootnoteDefinition", false, 0);
     expect(def1.handled).toBe(true);
 
-    // Приглушённый стиль для всего определения
+    // Muted style for the entire definition.
     expect(
       def1.decorations.some((d) => d.value.spec.class?.includes("cm-marknote-footnote-definition")),
     ).toBe(true);
 
-    // Выделенная метка [^1]:
+    // Emphasized label [^1]:
     expect(
       def1.decorations.some((d) => d.value.spec.class?.includes("cm-marknote-footnote-def-label")),
     ).toBe(true);
 
-    // 2. Курсор внутри определения — исходный текст без декораций
+    // 2. Cursor inside the definition: source text without decorations.
     const def1Active = buildFootnote(state, "FootnoteDefinition", true, 0);
     expect(def1Active.handled).toBe(true);
     expect(def1Active.decorations).toHaveLength(0);
   });
 
-  it("виджет FootnoteRefWidget реализует метод eq() и хранит метку", () => {
+  it("FootnoteRefWidget implements eq() and stores its label", () => {
     const w1 = new FootnoteRefWidget("1");
     const w2 = new FootnoteRefWidget("1");
     const wDiff = new FootnoteRefWidget("2");
@@ -137,7 +137,7 @@ describe("footnoteBuilder", () => {
     expect(w1.label).toBe("1");
   });
 
-  it("footnoteTooltip экспортируется как расширение CodeMirror", () => {
+  it("footnoteTooltip is exported as a CodeMirror extension", () => {
     expect(footnoteTooltip).toBeDefined();
   });
 });

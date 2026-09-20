@@ -1,74 +1,74 @@
-# Отчёт W26: Диагностика плавающего приёмочного тестирования (TC-06, TC-02)
+# W26 report: diagnosing the flaky acceptance tests (TC-06, TC-02)
 
-**Дата:** 2026-09-15  
-**Роль:** W26 (QA & Automation)  
-**Компоненты:** `qa/acceptance.ps1`, `qa/screenshot.ps1`  
-**Целевой бинарник:** `C:\marknote\src-tauri\target\release\marknote.exe`
-
----
-
-## 1. Резюме (Executive Summary)
-
-1. **Диагноз TC-06:** Первоначальная причина гонки находилась в продукте (`windows.rs`): маршрутизация второго запуска блокировала обработку `WM_COPYDATA` из-за создания второго окна в том же потоке; вынос создания окна в отдельный поток устранил блокировку. На стороне теста гонка устранена полной заменой фиксированного `Start-Sleep` на опрос наблюдаемого условия `Wait-WindowCount -ExpectedCount 2` с таймаутом 15 с и отслеживанием завершения процесса-сателлита `Wait-ProcessExit`.
-2. **Диагноз TC-02:** Заголовок окна устанавливается асинхронно из Rust-команды `open_file` (так как фронтенд-вызов `setTitle` подавлялся ограничениями прав). Между созданием окна (заголовок по умолчанию `MarkNote`) и завершением чтения файла проходит время; тест падал при фиксированной паузе. Добавлено условие-опрос `Wait-MarkNoteWindow -TitleFilter "showcase.md"` с таймаутом 15 с, исключающее преждевременную проверку.
-3. **Совместимость и стабильность:** Скрипты `qa/acceptance.ps1` и `qa/screenshot.ps1` перекодированы в **UTF-8 с сигнатурой BOM (`EF BB BF`)**, что полностью устраняет ошибку парсинга в Windows PowerShell 5.1 и обеспечивает одинаковую работу в PowerShell 5.1 и PowerShell 7. В процедуру очистки `Stop-MarkNoteProcesses` добавлен интервал 150 мс для корректного освобождения мьютексов и именованных каналов `single-instance` ядром Windows.
-4. **Состояние системы:** В соответствии с директивой координатора (`msg_8d569d1f7a86` о прекращении экранных прогонов) активные запуски остановлены, в системе **0 запущенных процессов marknote.exe**.
+**Date:** 2026-09-15  
+**Role:** W26 (QA & Automation)  
+**Components:** `qa/acceptance.ps1`, `qa/screenshot.ps1`  
+**Target binary:** `C:\marknote\src-tauri\target\release\marknote.exe`
 
 ---
 
-## 2. Детальная диагностика гонок
+## 1. Executive summary
 
-### TC-06: Повторный запуск с другим файлом (открытие второго окна)
-- **Симптом:** При повторном вызове `marknote.exe crlf.md` тест периодически обнаруживал только 1 окно (`обнаружено только 1 окно, ожидалось >= 2`).
-- **Сторона продукта:** В обработчике `single-instance` передача пути через `WM_COPYDATA` происходила синхронно в потоке оконных сообщений. Если создание веб-вью и окна блокировало цикл выборки сообщений, второй процесс мог завершиться до фактического создания второго окна. Вынос создания окна в отдельный поток в `windows.rs` решил эту проблему на уровне ядра продукта.
-- **Сторона теста:** Ранее тест использовал фиксированную паузу `Start-Sleep -Seconds 3`. Под нагрузкой инициализация `WebView2` для второго окна занимала от 3.2 до 4.5 секунд, из-за чего перечисление окон происходило до того, как окно становилось видимым (`IsApplication = Visible && Width >= 200`).
-- **Решение:** Внедрена функция `Wait-WindowCount -ExpectedCount 2 -TimeoutSec 15`, которая опрашивает Win32 API (`EnumWindows`, `IsWindowVisible`, `GetWindowRect`) каждые 100 мс с логированием в JSONL.
-
-### TC-02: Заголовок при открытии файла (`showcase.md`)
-- **Симптом:** Тест периодически фиксировал заголовок `MarkNote` вместо `showcase.md — MarkNote`.
-- **Механизм:** Первичное окно создаётся с базовым заголовком `MarkNote`. Загрузка документа и установка целевого заголовка происходят после инициализации Tauri runtime и вызова команды `open_file` из Rust.
-- **Решение:** Заменено немедленное считывание заголовка на `Wait-MarkNoteWindow -ProcessId $pid -TitleFilter "showcase.md" -TimeoutSec 15`. Опрос завершается сразу в момент выставления целевого заголовка Win32.
+1. **TC-06 diagnosis:** the original race was in the product (`windows.rs`): routing a second launch blocked the handling of `WM_COPYDATA`, because the second window was created on the same thread; moving window creation onto a separate thread removed the block. On the test side the race was removed by replacing the fixed `Start-Sleep` entirely with a poll for an observable condition, `Wait-WindowCount -ExpectedCount 2` with a 15 s timeout, plus `Wait-ProcessExit` to follow the satellite process out.
+2. **TC-02 diagnosis:** the window title is set asynchronously from the Rust `open_file` command (the frontend `setTitle` call was suppressed by the permission set). Time passes between creating the window, which carries the default title `MarkNote`, and finishing the read of the file; the test failed on a fixed pause. A polled condition `Wait-MarkNoteWindow -TitleFilter "showcase.md"` with a 15 s timeout was added, which rules out checking too early.
+3. **Compatibility and stability:** `qa/acceptance.ps1` and `qa/screenshot.ps1` were re-encoded as **UTF-8 with a BOM (`EF BB BF`)**, which removes the parse error in Windows PowerShell 5.1 completely and makes them behave the same under PowerShell 5.1 and PowerShell 7. The cleanup routine `Stop-MarkNoteProcesses` gained a 150 ms interval so that Windows can release the `single-instance` mutexes and named pipes properly.
+4. **State of the machine:** following the coordinator's directive (`msg_8d569d1f7a86` about stopping on-screen runs), the active runs were stopped; there are **0 running marknote.exe processes**.
 
 ---
 
-## 3. Архитектура устойчивого приёмочного тестирования
+## 2. The races in detail
 
-Все проверки в `qa/acceptance.ps1` переведены на реактивную модель ожидания:
+### TC-06: starting again with another file (opening a second window)
+- **Symptom:** on a repeated `marknote.exe crlf.md` the test periodically saw only 1 window (`found only 1 window, expected >= 2`).
+- **Product side:** in the `single-instance` handler the path was passed through `WM_COPYDATA` synchronously on the window message thread. If creating the web view and the window blocked the message loop, the second process could exit before the second window actually existed. Moving window creation onto a separate thread in `windows.rs` solved this at the core of the product.
+- **Test side:** the test used a fixed `Start-Sleep -Seconds 3`. Under load, initializing `WebView2` for the second window took between 3.2 and 4.5 seconds, so windows were enumerated before the window became visible (`IsApplication = Visible && Width >= 200`).
+- **Fix:** a `Wait-WindowCount -ExpectedCount 2 -TimeoutSec 15` function that polls the Win32 API (`EnumWindows`, `IsWindowVisible`, `GetWindowRect`) every 100 ms and logs to JSONL.
 
-1. **`Wait-Until`:** Универсальный диспетчер ожидания с логированием каждого тика состояния в `acceptance-journal.jsonl`.
-2. **`Wait-MarkNoteWindow`:** Ожидание появления окна заданного процесса и/или с заданным заголовком.
-3. **`Wait-ProcessExit`:** Ожидание штатного завершения вспомогательного процесса (для `single-instance`).
-4. **`Wait-WindowCount`:** Ожидание требуемого количества видимых прикладных окон.
-5. **`Wait-UiText`:** Опрос доступных элементов UI Automation с поддержкой ожидания появления или исчезновения (`-Absent $true`).
-6. **Очистка ресурсов:** Функция `Stop-MarkNoteProcesses` гарантированно убивает зависшие процессы и выдерживает паузу 150 мс, чтобы системные дескрипторы мьютексов `dev.marknote.app` успели закрыться до старта следующего сценария.
-7. **Ввод через Win32 `keybd_event`:** Устранена зависимость от `System.Windows.Forms.SendKeys`, приводившая к исключениям UIPI и Access Denied в неинтерактивных сессиях.
+### TC-02: the title when opening a file (`showcase.md`)
+- **Symptom:** the test periodically recorded the title `MarkNote` instead of `showcase.md — MarkNote`.
+- **Mechanism:** the first window is created with the base title `MarkNote`. Loading the document and setting the intended title happen after the Tauri runtime is initialized and the `open_file` command is called from Rust.
+- **Fix:** reading the title immediately was replaced with `Wait-MarkNoteWindow -ProcessId $pid -TitleFilter "showcase.md" -TimeoutSec 15`. The poll ends the moment Win32 reports the intended title.
 
 ---
 
-## 4. Совместимость с оболочками
+## 3. The shape of a stable acceptance suite
 
-- **Проблема:** Windows PowerShell 5.1 по умолчанию интерпретирует UTF-8 файлы без BOM в системной кодовой странице (CP1251), что ломало русские строковые литералы и вызывало синтаксические ошибки парсера.
-- **Решение:**
-  - `qa/acceptance.ps1` сохранён с UTF-8 BOM (`EF BB BF`).
-  - `qa/screenshot.ps1` сохранён с UTF-8 BOM (`EF BB BF`).
-  - В шапке документации указаны команды для обеих сред:
+Every check in `qa/acceptance.ps1` now waits reactively:
+
+1. **`Wait-Until`:** the general waiting mechanism, logging every state tick to `acceptance-journal.jsonl`.
+2. **`Wait-MarkNoteWindow`:** waits for a window of a given process and/or with a given title.
+3. **`Wait-ProcessExit`:** waits for an auxiliary process to exit normally (for `single-instance`).
+4. **`Wait-WindowCount`:** waits for the required number of visible application windows.
+5. **`Wait-UiText`:** polls the accessible UI Automation elements, and can wait for something to appear or to disappear (`-Absent $true`).
+6. **Releasing resources:** `Stop-MarkNoteProcesses` reliably kills stuck processes and then waits 150 ms so the system handles of the `dev.marknote.app` mutexes can close before the next scenario starts.
+7. **Input through the Win32 `keybd_event`:** this removed the dependency on `System.Windows.Forms.SendKeys`, which raised UIPI and Access Denied exceptions in non-interactive sessions.
+
+---
+
+## 4. Shell compatibility
+
+- **Problem:** Windows PowerShell 5.1 reads a UTF-8 file without a BOM in the system code page (CP1251) by default, which mangled the non-ASCII string literals and produced parser syntax errors.
+- **Fix:**
+  - `qa/acceptance.ps1` is saved as UTF-8 with a BOM (`EF BB BF`).
+  - `qa/screenshot.ps1` is saved as UTF-8 with a BOM (`EF BB BF`).
+  - The documentation header gives the command for both shells:
     ```powershell
     powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\qa\acceptance.ps1 -Runs 20
     pwsh.exe -NoProfile -ExecutionPolicy Bypass -File .\qa\acceptance.ps1 -Runs 20
     ```
-  - Корректность синтаксиса подтверждена парсером `[System.Management.Automation.Language.Parser]::ParseFile`.
+  - The syntax was confirmed with the parser, `[System.Management.Automation.Language.Parser]::ParseFile`.
 
 ---
 
-## 5. Точное описание для владельца `windows.rs`
+## 5. Exact description for the owner of `windows.rs`
 
-> **Поведение маршрутизации и обновления заголовков окон (`windows.rs`):**  
-> При вызове вторичного экземпляра с аргументом пути обработка `WM_COPYDATA` не должна выполняться синхронно в оконной процедуре основного окна, если создание нового окна или инициализация WebView2 требует блокирующих вызовов. Вынос обработки нового окна в отдельный рабочий поток полностью устраняет задержки и потерю событий при конкурентных запусках. Кроме того, установка заголовка окна в команде `open_file` происходит асинхронно после создания дескриптора окна; окно изначально отображается с дефолтным именем приложения (`MarkNote`), а заголовок документа выставляется через системный вызов после считывания метаданных файла.
+> **Routing behaviour and window title updates (`windows.rs`):**  
+> when a secondary instance is started with a path argument, `WM_COPYDATA` must not be handled synchronously in the window procedure of the main window if creating a new window or initializing WebView2 needs blocking calls. Moving the handling of a new window onto a separate worker thread removes the delays and the lost events on concurrent launches entirely. Besides that, setting the window title in the `open_file` command happens asynchronously after the window handle exists; the window first shows the default application name (`MarkNote`), and the document title is set through a system call once the file metadata has been read.
 
 ---
 
-## 6. Итоговый статус
+## 6. Final status
 
-- Модифицированные файлы: `qa/acceptance.ps1`, `qa/screenshot.ps1`, `qa/REPORT_W26.md`.
-- Число активных процессов `marknote.exe`: **0**.
-- Набор тестов полностью автономен, устойчив к нагрузке и готов к выполнению как в среде Windows PowerShell 5.1, так и PowerShell 7.
+- Files changed: `qa/acceptance.ps1`, `qa/screenshot.ps1`, `qa/REPORT_W26.md`.
+- Running `marknote.exe` processes: **0**.
+- The suite is fully self-contained, holds up under load, and is ready to run under both Windows PowerShell 5.1 and PowerShell 7.

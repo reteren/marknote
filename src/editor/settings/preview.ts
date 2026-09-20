@@ -1,7 +1,7 @@
-// Раздел settings.livePreview: включение предпросмотра, момент раскрытия
-// разметки, отрисовка формул и изображений, порог отключения по размеру.
+// settings.livePreview section: enabling preview, when to reveal markup,
+// rendering formulas and images, and the size cutoff.
 //
-// Владелец файла — W86. Сборка расширений в ../settings.ts, туда не пишем.
+// File owner: W86. Extensions are assembled in ../settings.ts; do not edit there.
 
 import type { Extension } from "@codemirror/state";
 import type { Settings } from "../../state/settings.svelte";

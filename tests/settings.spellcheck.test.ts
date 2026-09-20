@@ -87,7 +87,7 @@ describe("spellcheck and autoCorrect settings", () => {
     );
     expect(view.contentDOM.querySelectorAll('[spellcheck="false"]').length).toBeGreaterThan(0);
 
-    // Человек может захотеть проверять и код: выключенная настройка снимает пометки.
+    // A user may want to check code too: disabling the setting removes the marks.
     applyEditorSettings(view, {
       ...defaultSettings,
       spellcheck: { enabled: true, skipCodeFormulaLinks: false },

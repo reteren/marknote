@@ -1,7 +1,7 @@
-// Настройки живого предпросмотра, превращённые в расширение CodeMirror.
+// Live-preview settings represented as a CodeMirror extension.
 //
-// Сюда сходятся шесть полей settings.livePreview из settings.json. Значения
-// попадают в фасет, который читают плагин и построители декораций.
+// The six settings.livePreview fields from settings.json converge here. Values
+// enter the facet read by the plugin and decoration builders.
 
 import { Facet, type Extension } from "@codemirror/state";
 import type { MarkupRevealMode, MaxImageWidth, Settings } from "../../state/settings.svelte";
@@ -45,7 +45,7 @@ export const livePreviewConfigFacet = Facet.define<
   },
 });
 
-/** Расширение настроек живого предпросмотра для settingsCompartment. */
+/** Live-preview settings extension for settingsCompartment. */
 export function livePreviewSettings(settings?: Partial<LivePreviewConfig> | null): Extension {
   return livePreviewConfigFacet.of(settings ?? undefined);
 }

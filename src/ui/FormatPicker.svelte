@@ -183,7 +183,7 @@
     color: var(--text-normal);
   }
 
-  /* Grid mode (стартовый экран) */
+  /* Grid mode (start screen) */
   .grid-container {
     display: grid;
     grid-template-columns: repeat(3, minmax(100px, 140px));

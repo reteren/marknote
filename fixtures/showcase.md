@@ -1,71 +1,71 @@
-# Заголовок первого уровня
+# First level heading
 
-## Второй уровень
-### Третий ### 
-#### Четвёртый
-##### Пятый
-###### Шестой
+## Second level
+### Third ### 
+#### Fourth
+##### Fifth
+###### Sixth
 
-Обычный абзац с **жирным**, *курсивом*, ***жирным курсивом***,
-~~зачёркнутым~~, `кодом`, ==подсветкой==, %%комментарием%% и
-формулой $E = mc^2$ внутри строки.
+An ordinary paragraph with **bold**, *italic*, ***bold italic***,
+~~strikethrough~~, `code`, ==highlight==, %%a comment%% and
+the formula $E = mc^2$ inside the line.
 
-Вложенность: **жирный *и курсив* внутри** и `код с **звёздочками**`.
+Nesting: **bold *and italic* inside** and `code with **asterisks**`.
 
-Ссылка на [сайт](https://example.com) и ![картинку](./logo.png).
+A link to [a site](https://example.com) and ![an image](./logo.png).
 
-- Маркированный пункт
-- Второй пункт
-  - Вложенный
-    - Ещё глубже
-- Третий
+- Bulleted item
+- Second item
+  - Nested
+    - Deeper still
+- Third
 
-1. Первый
-2. Второй
-   1. Вложенный нумерованный
-3. Третий
+1. First
+2. Second
+   1. Nested numbered
+3. Third
 
-- [ ] Невыполненная задача
-- [x] Выполненная задача
-- [ ] Задача с **разметкой** внутри
+- [ ] An unfinished task
+- [x] A finished task
+- [ ] A task with **markup** inside
 
-> Цитата первого уровня
-> > Вложенная цитата
-> Продолжение
+> A first level quote
+> > A nested quote
+> Continued
 
 > [!NOTE]
-> Заметка Obsidian.
+> An Obsidian note.
 
 > [!WARNING]
-> Предупреждение.
+> A warning.
 
-> [!TIP] Свой заголовок
-> Подсказка с заголовком.
+> [!TIP] A title of its own
+> A tip with a title.
 
-| Колонка | Выравнивание | Число |
+| Column | Alignment | Number |
 | --- | :---: | ---: |
-| раз | по центру | 1 |
-| два | по центру | 22 |
+| one | centered | 1 |
+| two | centered | 22 |
 
 ```rust
 fn main() {
-    println!("блок кода с подсветкой");
+    println!("a code block with highlighting");
 }
 ```
 
 ```
-блок кода без языка
+a code block with no language
 ```
 
 $$
 \int_0^\infty e^{-x^2}\,dx = \frac{\sqrt{\pi}}{2}
 $$
 
-Сноска в тексте[^1] и вторая[^note].
+A footnote in the text[^1] and a second one[^note].
 
-[^1]: Текст первой сноски.
-[^note]: Текст именованной сноски.
+[^1]: The text of the first footnote.
+[^note]: The text of the named footnote.
 
 ---
 
-Последний абзац после горизонтальной линии.
+The last paragraph after the horizontal rule.

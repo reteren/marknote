@@ -59,8 +59,8 @@ fn utf16_is_binary(payload: &[u8], little_endian: bool) -> bool {
             u16::from_be_bytes([pair[0], pair[1]])
         };
         units += 1;
-        // Управляющие: всё ниже пробела, кроме табуляции и переводов строк,
-        // плюс DEL. Их обилие и отличает двоичный файл от текста.
+        // Controls are everything below the space except tabs and line breaks,
+        // plus DEL. Their abundance distinguishes binary data from text.
         let is_control = (unit <= 0x001F && !matches!(unit, 0x0009 | 0x000A | 0x000C | 0x000D))
             || unit == 0x007F;
         if is_control {
@@ -87,13 +87,13 @@ mod tests {
 
     #[test]
     fn utf8_cyrillic_is_text() {
-        assert!(!is_binary("Обычный текст на русском языке\n".as_bytes()));
+        assert!(!is_binary("Ordinary text in English\n".as_bytes()));
     }
 
     #[test]
     fn utf16le_with_bom_is_text() {
         let mut bytes = b"\xFF\xFE".to_vec();
-        bytes.extend("Заметка\r\n".encode_utf16().flat_map(u16::to_le_bytes));
+        bytes.extend("Note\r\n".encode_utf16().flat_map(u16::to_le_bytes));
         assert!(!is_binary(&bytes));
     }
 

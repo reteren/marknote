@@ -110,10 +110,10 @@ import { EditorView, type EditorView as EditorViewType } from "@codemirror/view"
 
   const rawDocumentTitle = $derived(getDocumentTitle(documentState));
   const documentFileName = $derived(rawDocumentTitle.replace(/\s+—\s+MarkNote$/u, ""));
-  /** Заголовок окна для системы: панель задач и переключение окон. */
+  /** Window title for the system: taskbar and window switching. */
   const title = $derived(t("window.documentTitle", { filename: documentFileName }));
-  /** Подпись в строке меню: имя файла и его формат, без имени программы —
-   *  программа и так перед глазами, а формат человеку важнее. */
+  /** Menu-bar caption: file name and format, without the program name —
+   *  the program is already visible, while the format is more useful to the user. */
   const documentLabel = $derived(
     `${documentFileName} · ${formatLabel(documentState.format.id, documentState.format.label)}`,
   );
@@ -149,9 +149,10 @@ import { EditorView, type EditorView as EditorViewType } from "@codemirror/view"
   });
 
   function pathKey(path: string): string {
-    // Открытый файл возвращается в длинной форме Windows (\\?\C:\…), а
-    // брошенный в окно приходит обычной. Без снятия приставки один и тот же
-    // файл выглядит как два разных, и рядом появлялась вторая вкладка.
+    // An opened file is returned in Windows' extended form (\\?\C:\…), while a
+    // file dropped onto the window arrives in the ordinary form. Without
+    // removing the prefix, the same file looks like two different files and a
+    // second tab appears next to it.
     return path
       .replaceAll("/", "\\")
       .replace(/^\\\\\?\\UNC\\/iu, "\\\\")
@@ -304,9 +305,10 @@ import { EditorView, type EditorView as EditorViewType } from "@codemirror/view"
     const stem = currentName.replace(/\.[^.]*$/u, "") || "Untitled";
     const suggestedName = `${stem}.md`;
     try {
-      // Через общий saveAs, а не напрямую по IPC: только он применяет правку
-      // текста при записи — удаление пробелов в конце строк и завершающий
-      // перевод строки. Прямой вызов сохранял бы иначе, чем Ctrl+S.
+      // Use the shared saveAs path rather than IPC directly: it is the only
+      // path that applies the write-time text policy — trimming trailing
+      // whitespace and adding a final newline. A direct call would save
+      // differently from Ctrl+S.
       const result = await saveAsFile(
         { text: documentState.text, format: markdownFormat },
         suggestedName,
@@ -382,7 +384,7 @@ import { EditorView, type EditorView as EditorViewType } from "@codemirror/view"
       const created = await invoke<NewDocument>("new_document", { formatId: format.id });
       resetDocument(created.format, created.text);
     } catch {
-      // До запуска Tauri используем заготовку из уже загруженного реестра.
+      // Before Tauri starts, use the stub from the registry that is already loaded.
       resetDocument(format, format.template);
     }
     startScreenDismissed = true;
@@ -404,9 +406,10 @@ import { EditorView, type EditorView as EditorViewType } from "@codemirror/view"
     actions.resetLossyWarning();
     startScreenDismissed = true;
     formatPickerOpen = false;
-    // Заголовок окна пересчитается сам: он выведен из documentState, а тот
-    // только что изменился. Отдельного вызова здесь быть не должно — две
-    // реализации одного заголовка мы уже разводили и в меню, и в правке.
+    // The window title will update on its own: it is derived from documentState,
+    // which just changed. There must be no separate call here — we have already
+    // had to disentangle two implementations of the same title in the menu and
+    // in the editor.
     if (editorView) {
       void setEditorFormat(editorView, format);
       editorView.focus();
@@ -940,16 +943,16 @@ import { EditorView, type EditorView as EditorViewType } from "@codemirror/view"
     lastDropKey = batchKey;
     lastDropAt = now;
 
-    // Брошенный файл открывается вкладкой в этом же окне: окно человек уже
-    // открыл, и плодить рядом ещё одно — не то, чего он ждёт. Файлы
-    // открываются по очереди: каждая вкладка забирает состояние редактора.
+    // A dropped file opens as a tab in this window: the user already opened the
+    // window, and creating another one beside it is not what they expect. Files
+    // open in sequence, with each tab taking over the editor state.
     void normalized.reduce(
       (chain, path) => chain.then(() => openFileInTab(path)),
       Promise.resolve(),
     );
   }
 
-  /** Открывает файл вкладкой: уже открытый — просто показывает. */
+  /** Opens a file as a tab; if it is already open, simply reveals it. */
   async function openFileInTab(path: string): Promise<void> {
     const key = pathKey(path);
     const existing = workspace.tabs.find(
@@ -993,12 +996,12 @@ import { EditorView, type EditorView as EditorViewType } from "@codemirror/view"
     try {
       void getCurrentWindow()
         .setTitle(currentTitle)
-        // Ошибку показываем, а не глотаем: именно молчаливый catch скрывал,
-        // что у окна не было разрешения на смену заголовка и в панели задач
-        // все окна назывались одинаково.
-        .catch((error) => console.error("Не удалось задать заголовок окна", error));
+        // Show the error instead of swallowing it: a silent catch was what hid
+        // the missing permission to change the title and left every window with
+        // the same taskbar name.
+        .catch((error) => console.error("Could not set the window title", error));
     } catch {
-      // Запуск вне Tauri не должен ломать редактор.
+      // Running outside Tauri must not break the editor.
     }
   });
 
@@ -1009,12 +1012,12 @@ import { EditorView, type EditorView as EditorViewType } from "@codemirror/view"
   });
 
   $effect(() => {
-    // Настройки грузятся сами при импорте модуля и приходят из Rust уже после
-    // того, как редактор поднялся на умолчаниях. Дальше этот эффект держит
-    // редактор в согласии с окном настроек: переключатель перенастраивает
-    // отсек, а не пересоздаёт редактор.
-    // Читаем settings до проверки готовности, чтобы эффект подписался на
-    // изменения и после первой загрузки: Svelte отслеживает то, что прочитано.
+    // Settings load during module import and arrive from Rust after the editor
+    // has started with defaults. From then on, this effect keeps the editor in
+    // sync with the settings window: a toggle reconfigures the compartment
+    // instead of recreating the editor.
+    // Read settings before checking readiness so the effect subscribes to
+    // changes after the initial load as well: Svelte tracks what was read.
     const settings = settingsState.settings;
     const ready = settingsState.ready;
     const view = editorView;
@@ -1035,11 +1038,11 @@ import { EditorView, type EditorView as EditorViewType } from "@codemirror/view"
 
     const setup = async (): Promise<void> => {
       try {
-        // Подписываемся на окне webview, а не на окне как таковом. Rust шлёт
-        // эти события через emit_to с целью webview_window, а события,
-        // адресованные webview, до слушателей обычного окна не доходят —
-        // именно поэтому программа закрывалась не спрашивая и с задержкой в
-        // пять секунд: ответа не было, срабатывал сторож по времени.
+        // Subscribe on the webview window, not the window object itself. Rust
+        // sends these events with emit_to targeting webview_window, and events
+        // addressed to the webview do not reach ordinary-window listeners —
+        // that was why the program closed without asking after a five-second
+        // delay: no response arrived and the timeout watchdog fired.
         const currentWindow = getCurrentWebviewWindow();
         unlistenNativeClose = await currentWindow.listen("save-before-close", handleNativeCloseRequest);
         nativeCloseReady = true;

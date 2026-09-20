@@ -1,7 +1,7 @@
-// Счёт слов считается по изменённому куску, а не по всему документу. Правка
-// может разрезать слово, склеить два слова, удалить пробел или вставить целый
-// абзац, и каждый такой случай меняет счёт по-разному. Проверка держит одно:
-// после любой последовательности правок число совпадает с честным пересчётом.
+// Word counts are calculated from the changed region rather than the whole
+// document. An edit may split a word, join two words, remove whitespace, or
+// insert a whole paragraph, and each case changes the count differently. This
+// check ensures that after any sequence of edits the count matches a full recount.
 
 import { EditorState, type ChangeSpec } from "@codemirror/state";
 import { describe, expect, it } from "vitest";
@@ -12,11 +12,11 @@ function fullWordCount(text: string): number {
 }
 
 function randomInsert(random: () => number): string {
-  const alphabet = ["a", "b", " ", "\n", "слово", "  ", "x y", ""];
+  const alphabet = ["a", "b", " ", "\n", "word", "  ", "x y", ""];
   return alphabet[Math.floor(random() * alphabet.length)];
 }
 
-/** Тот же генератор при том же зерне — падение можно повторить. */
+/** The same generator with the same seed makes failures reproducible. */
 function seeded(seed: number): () => number {
   let value = seed;
   return () => {
@@ -25,10 +25,10 @@ function seeded(seed: number): () => number {
   };
 }
 
-describe("счёт слов после правок", () => {
-  it("совпадает с полным пересчётом после случайных правок", () => {
+describe("word counts after edits", () => {
+  it("match a full recount after random edits", () => {
     const random = seeded(20260920);
-    let state = EditorState.create({ doc: "первое слово и ещё\nвторая строка тут" });
+    let state = EditorState.create({ doc: "first word and more\nsecond line here" });
 
     for (let step = 0; step < 300; step += 1) {
       const from = Math.floor(random() * (state.doc.length + 1));
@@ -39,18 +39,18 @@ describe("счёт слов после правок", () => {
 
       const stats = getEditorStats(next.state, state, next.changes);
       const expected = fullWordCount(next.state.doc.toString());
-      expect(stats.words, `шаг ${step}: правка ${from}-${to} «${insert}» в «${next.state.doc.toString().slice(0, 60)}»`)
+      expect(stats.words, `step ${step}: edit ${from}-${to} "${insert}" in "${next.state.doc.toString().slice(0, 60)}"`)
         .toBe(expected);
 
       state = next.state;
     }
   });
 
-  it("совпадает с полным пересчётом при вставке и удалении больших кусков", () => {
-    const paragraph = "абзац из нескольких слов, повторённый много раз. ".repeat(50);
-    let state = EditorState.create({ doc: "начало" });
+  it("match a full recount when inserting and deleting large chunks", () => {
+    const paragraph = "paragraph with several words, repeated many times. ".repeat(50);
+    let state = EditorState.create({ doc: "origin" });
 
-    const inserted = state.update({ changes: { from: 6, insert: `\n\n${paragraph}` } });
+    const inserted = state.update({ changes: { from: state.doc.length, insert: `\n\n${paragraph}` } });
     expect(getEditorStats(inserted.state, state, inserted.changes).words)
       .toBe(fullWordCount(inserted.state.doc.toString()));
 

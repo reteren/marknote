@@ -85,11 +85,10 @@
   }
 </script>
 
-<!-- Полоса видна всегда, даже с одной вкладкой: владелец описал её как
-     постоянную зону между строкой меню и текстом, а кнопку «плюс» — справа
-     от последней вкладки. Прятать её при одной вкладке было моей выдумкой,
-     и из-за неё «плюс» приходилось селить в чужом месте, рядом с состоянием
-     сохранения. -->
+<!-- The strip is always visible, even with one tab: the owner described it as
+     a permanent zone between the menu bar and text, with the plus button to the
+     right of the last tab. Hiding it with one tab was my invention and forced
+     the plus button into an unrelated place beside the save state. -->
   <div
     class="tab-bar-strip"
     role="tablist"

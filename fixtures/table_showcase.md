@@ -1,7 +1,7 @@
-# Таблица данных
+# Data table
 
-| Колонка 1 | Колонка 2 (центр) | Число (справа) |
+| Column 1 | Column 2 (center) | Number (right) |
 | :--- | :---: | ---: |
-| Первая строка | Значение по центру | 100 |
-| Вторая строка | Ещё одно значение | 250 |
-| Третья строка | Финальное | 42 |
+| First row | A centered value | 100 |
+| Second row | One more value | 250 |
+| Third row | The final one | 42 |

@@ -1,24 +1,24 @@
 ﻿<#
 .SYNOPSIS
-    Снятие снимка окна процесса MarkNote в PNG через System.Drawing и Win32 API.
+    Captures a MarkNote window to PNG through System.Drawing and the Win32 API.
 
 .DESCRIPTION
-    Ищет главное видимое окно процесса marknote по PID (или имени процесса),
-    игнорируя служебные и невидимые окна (включая служебное окно плагина single-instance
-    размером 16x16 вида 'dev.marknote.app-siw'). Сохраняет снимок окна в PNG.
-    Совместим с Windows PowerShell 5.1 и PowerShell 7 (кодировка UTF-8 с BOM).
+    Finds the main visible window of the marknote process by PID (or by process
+    name), ignoring service and invisible windows (including the 16x16 helper
+    window of the single-instance plugin, 'dev.marknote.app-siw'). Saves a PNG.
+    Works on Windows PowerShell 5.1 and PowerShell 7 (UTF-8 with BOM).
 
 .PARAMETER ProcessId
-    Идентификатор целевого процесса. Если не задан, ищется окно среди запущенных процессов 'marknote'.
+    Target process id. When omitted, a window is looked up among the running 'marknote' processes.
 
 .PARAMETER ProcessName
-    Имя процесса для поиска, по умолчанию 'marknote'.
+    Process name to look for, 'marknote' by default.
 
 .PARAMETER OutputPath
-    Путь для сохранения PNG-снимка. По умолчанию 'qa/shots/shot_<PID>_<timestamp>.png'.
+    Where to save the PNG. Defaults to 'qa/shots/shot_<PID>_<timestamp>.png'.
 
 .PARAMETER TitleFilter
-    Необязательная подстрока в заголовке окна для фильтрации.
+    Optional substring of the window title used to narrow the search.
 
 .EXAMPLE
     .\qa\screenshot.ps1 -ProcessId 12345 -OutputPath "qa/shots/window.png"
@@ -47,10 +47,10 @@ param(
 
 Set-StrictMode -Off
 
-# Загружаем необходимые сборки
+# Load the assemblies we need
 Add-Type -AssemblyName System.Drawing
 
-# Компилируем P/Invoke методы user32/gdi32, если еще не добавлены в сессию
+# Compile the user32/gdi32 P/Invoke methods unless the session already has them
 if (-not ([System.Management.Automation.PSTypeName]'Win32.ScreenCapturer').Type) {
     $csharpCode = @"
 using System;
@@ -129,7 +129,7 @@ namespace Win32 {
                 GetWindowText(hWnd, sb, sb.Capacity);
                 string title = sb.ToString();
 
-                // Фильтрация служебных окон single-instance (16x16, dev.marknote.app-siw и т.д.)
+                // Filter out single-instance service windows (16x16, dev.marknote.app-siw and the like)
                 if (title.IndexOf("siw", StringComparison.OrdinalIgnoreCase) >= 0 ||
                     title.IndexOf("single-instance", StringComparison.OrdinalIgnoreCase) >= 0) {
                     return true;
@@ -161,10 +161,10 @@ namespace Win32 {
     Add-Type -TypeDefinition $csharpCode -Language CSharp
 }
 
-# Определяем целевой PID и ищем подходящие окна
+# Work out the target PID and look for suitable windows
 $candidates = $null
 if ($ProcessId -eq 0) {
-    # Сначала проверяем все существующие окна для процессов с именем ProcessName
+    # First look through the windows of every process named ProcessName
     $allWins = [Win32.ScreenCapturer]::EnumerateWindows(0, $TitleFilter)
     $filtered = $allWins | Where-Object {
         $p = Get-Process -Id $_.ProcessId -ErrorAction SilentlyContinue
@@ -173,13 +173,13 @@ if ($ProcessId -eq 0) {
 
     if ($filtered) {
         $candidates = @($filtered)
-        # Назначаем ProcessId процессу найденного окна
+        # Take ProcessId from the process that owns the window we found
         $targetWin = $candidates | Sort-Object -Property @{ Expression = { -not [string]::IsNullOrWhiteSpace($_.Title) }; Descending = $true }, @{ Expression = { $_.Width * $_.Height }; Descending = $true } | Select-Object -First 1
         $ProcessId = $targetWin.ProcessId
     } else {
         $procs = Get-Process -Name $ProcessName -ErrorAction SilentlyContinue
         if (-not $procs) {
-            Write-Error "Процесс '$ProcessName' не найден."
+            Write-Error "Process '$ProcessName' not found."
             return $null
         }
         $proc = $procs | Sort-Object -Property @{ Expression = { $_.MainWindowHandle -ne 0 }; Descending = $true }, WorkingSet -Descending | Select-Object -First 1
@@ -191,7 +191,7 @@ if ($ProcessId -eq 0) {
 }
 
 if (-not $candidates -or $candidates.Count -eq 0) {
-    # Если конкретный PID не дал окон, пробуем поискать среди всех процессов с таким именем
+    # If that PID has no windows, try every process with the same name
     $allPids = Get-Process -Name $ProcessName -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Id
     foreach ($p in $allPids) {
         if ($p -ne $ProcessId) {
@@ -206,11 +206,11 @@ if (-not $candidates -or $candidates.Count -eq 0) {
 }
 
 if (-not $candidates -or $candidates.Count -eq 0) {
-    Write-Warning "Не найдено подходящих окон для PID $ProcessId."
+    Write-Warning "No suitable window found for PID $ProcessId."
     return $null
 }
 
-# Сортируем: сначала с непустым заголовком, затем по площади
+# Sort: titled windows first, then by area
 $targetWindow = $candidates | Sort-Object -Property @{ Expression = { -not [string]::IsNullOrWhiteSpace($_.Title) }; Descending = $true }, @{ Expression = { $_.Width * $_.Height }; Descending = $true } | Select-Object -First 1
 
 $hwnd = $targetWindow.Handle
@@ -219,11 +219,11 @@ $h = $targetWindow.Height
 $title = $targetWindow.Title
 
 if ($w -le 0 -or $h -le 0) {
-    Write-Warning "Размеры окна некорректны: ${w}x${h}."
+    Write-Warning "Window size is not usable: ${w}x${h}."
     return $null
 }
 
-# Формируем путь для сохранения
+# Build the output path
 if ([string]::IsNullOrWhiteSpace($OutputPath)) {
     $shotsDir = Join-Path $PSScriptRoot "shots"
     if (-not (Test-Path $shotsDir)) {
@@ -240,19 +240,19 @@ if ([string]::IsNullOrWhiteSpace($OutputPath)) {
     }
 }
 
-# Делаем окно активным перед захватом
+# Bring the window to the front before capturing
 [Win32.ScreenCapturer]::SetForegroundWindow($hwnd) | Out-Null
 
-# Создаем Bitmap и Graphics
+# Create the Bitmap and Graphics
 $bmp = New-Object System.Drawing.Bitmap($w, $h, [System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
 $g = [System.Drawing.Graphics]::FromImage($bmp)
 $hdc = $g.GetHdc()
 
-# Пробуем PrintWindow (флаг 2 = PW_RENDERFULLCONTENT)
+# Try PrintWindow first (flag 2 = PW_RENDERFULLCONTENT)
 $captured = [Win32.ScreenCapturer]::PrintWindow($hwnd, $hdc, 2)
 
 if (-not $captured) {
-    # Fallback: BitBlt из DC окна
+    # Fallback: BitBlt from the window DC
     $srcDc = [Win32.ScreenCapturer]::GetDC($hwnd)
     if ($srcDc -ne [IntPtr]::Zero) {
         $captured = [Win32.ScreenCapturer]::BitBlt($hdc, 0, 0, $w, $h, $srcDc, 0, 0, 0x00CC0020) # SRCCOPY
@@ -263,7 +263,7 @@ if (-not $captured) {
 $g.ReleaseHdc($hdc)
 $g.Dispose()
 
-# Сохраняем в PNG
+# Save as PNG
 $bmp.Save($OutputPath, [System.Drawing.Imaging.ImageFormat]::Png)
 $bmp.Dispose()
 
@@ -277,5 +277,5 @@ $result = [PSCustomObject]@{
     OutputPath   = (Resolve-Path $OutputPath).Path
 }
 
-Write-Verbose "Снимок сохранён: $($result.OutputPath) ($($w)x$($h), заголовок: '$title')"
+Write-Verbose "Screenshot saved: $($result.OutputPath) ($($w)x$($h), title: '$title')"
 return $result

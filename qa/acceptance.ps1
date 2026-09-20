@@ -1,34 +1,34 @@
 <#
 .SYNOPSIS
-    Скрипт приёмочного тестирования собранного приложения MarkNote.
+    Acceptance test script for the built MarkNote application.
 
 .DESCRIPTION
-    Запускает release\marknote.exe и проверяет десять критериев: запуск без
-    аргументов, открытие файлов, single-instance, большие документы, отказ
-    бинарного файла и Ctrl+F. TC-09 с вводом текста проверяется вручную из CHECKLIST.md,
-    поскольку синтетический ввод в WebView2 не даёт надёжного результата. Все переходы
-    ждут наблюдаемое условие с верхним пределом, а не фиксированную паузу.
-    Каждый опрос записывается в JSONL-журнал с числом процессов, окнами,
-    заголовками, размерами, видимостью и временем.
+    Runs release\marknote.exe and checks ten criteria: starting with no
+    arguments, opening files, single-instance, large documents, refusing a
+    binary file and Ctrl+F. TC-09, typing text, is checked by hand from CHECKLIST.md,
+    because synthetic input into WebView2 is not reliable. Every transition waits
+    for an observable condition with an upper bound rather than a fixed pause.
+    Every poll is written to a JSONL journal with the process count, windows,
+    titles, sizes, visibility and timings.
 
-    Запускать из Windows PowerShell 5.1 или PowerShell 7:
+    Run from Windows PowerShell 5.1 or PowerShell 7:
       powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\qa\acceptance.ps1 -Runs 1
       pwsh.exe -NoProfile -ExecutionPolicy Bypass -File .\qa\acceptance.ps1 -Runs 1
 
 .PARAMETER Runs
-    Число последовательных прогонов полного набора; по умолчанию 1.
+    How many times to run the whole set in a row; 1 by default.
 
 .PARAMETER BinaryPath
-    Путь к уже собранному release-бинарнику.
+    Path to an already built release binary.
 
 .PARAMETER FixturesDir
-    Каталог приёмочных fixtures.
+    Directory with the acceptance fixtures.
 
 .PARAMETER ShotsDir
-    Каталог PNG-снимков окон.
+    Directory for the PNG window screenshots.
 
 .PARAMETER JournalPath
-    JSONL-журнал всех опросов состояния.
+    JSONL journal of every state poll.
 
 .EXAMPLE
     powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\qa\acceptance.ps1 -Runs 1
@@ -57,12 +57,12 @@ Set-StrictMode -Off
 $ErrorActionPreference = "Continue"
 
 if (-not (Test-Path -LiteralPath $BinaryPath -PathType Leaf)) {
-    Write-Error "Бинарник не найден по пути: $BinaryPath"
+    Write-Error "Binary not found at: $BinaryPath"
     exit 2
 }
 
 if (-not (Test-Path -LiteralPath $FixturesDir -PathType Container)) {
-    Write-Error "Каталог fixtures не найден: $FixturesDir"
+    Write-Error "Fixtures directory not found: $FixturesDir"
     exit 2
 }
 
@@ -72,7 +72,7 @@ if (-not (Test-Path -LiteralPath $ShotsDir -PathType Container)) {
 
 $screenshotScript = Join-Path $PSScriptRoot "screenshot.ps1"
 if (-not (Test-Path -LiteralPath $screenshotScript -PathType Leaf)) {
-    Write-Error "Скрипт снимка не найден: $screenshotScript"
+    Write-Error "Screenshot script not found: $screenshotScript"
     exit 2
 }
 
@@ -200,7 +200,7 @@ try {
     Add-Type -AssemblyName System.Windows.Forms
 } catch {
     $uiAutomationAvailable = $false
-    Write-Warning "UI Automation/System.Windows.Forms недоступны: автоматическая проверка поиска TC-10 будет FAIL"
+    Write-Warning "UI Automation/System.Windows.Forms unavailable: the automatic TC-10 search check will FAIL"
 }
 
 # Only the binary under test is counted and stopped. The owner may have the
@@ -674,9 +674,9 @@ function Record-Result {
     $status = if ($Outcome.Passed) { "PASS" } else { "FAIL" }
     $color = if ($Outcome.Passed) { "Green" } else { "Red" }
     Write-Host "[$status] run=$script:CurrentRun $Id`: $Name" -ForegroundColor $color
-    Write-Host "       Детали: $($Outcome.Details)" -ForegroundColor Gray
-    if ($Outcome.ElapsedMs -gt 0) { Write-Host "       Время: $($Outcome.ElapsedMs) мс" -ForegroundColor Gray }
-    if (-not [string]::IsNullOrWhiteSpace($Outcome.Screenshot)) { Write-Host "       Снимок: $($Outcome.Screenshot)" -ForegroundColor DarkGray }
+    Write-Host "       Details: $($Outcome.Details)" -ForegroundColor Gray
+    if ($Outcome.ElapsedMs -gt 0) { Write-Host "       Time: $($Outcome.ElapsedMs) ms" -ForegroundColor Gray }
+    if (-not [string]::IsNullOrWhiteSpace($Outcome.Screenshot)) { Write-Host "       Screenshot: $($Outcome.Screenshot)" -ForegroundColor DarkGray }
     Write-Host ""
     $script:Results += [PSCustomObject]@{
         Run = $script:CurrentRun
@@ -700,10 +700,10 @@ function Invoke-Scenario {
     try {
         $outcome = & $Body
         if (-not $outcome) {
-            $outcome = New-Outcome -Passed $false -Details "Сценарий не вернул результат"
+            $outcome = New-Outcome -Passed $false -Details "The scenario returned no result"
         }
     } catch {
-        $outcome = New-Outcome -Passed $false -Details ("Исключение QA: " + $_.Exception.Message)
+        $outcome = New-Outcome -Passed $false -Details ("QA exception: " + $_.Exception.Message)
     } finally {
         [void](Stop-MarkNoteProcesses)
     }
@@ -722,7 +722,7 @@ function Test-NoArguments {
         if ($shot) { $screenshot = $shot.OutputPath }
     }
     $passed = $windowWait.Found -and $window -and ($window.Title -like "*MarkNote*")
-    $details = if ($passed) { "Окно '$($window.Title)', размер $($window.Width)x$($window.Height), visible=$($window.Visible)" } else { "Окно MarkNote не найдено за $($windowWait.ElapsedMs) мс" }
+    $details = if ($passed) { "Window '$($window.Title)', size $($window.Width)x$($window.Height), visible=$($window.Visible)" } else { "No MarkNote window within $($windowWait.ElapsedMs) ms" }
     return New-Outcome -Passed $passed -Details $details -ElapsedMs $watch.ElapsedMilliseconds -Screenshot $screenshot
 }
 
@@ -737,7 +737,7 @@ function Test-Showcase {
         if ($shot) { $screenshot = $shot.OutputPath }
     }
     $passed = $windowWait.Found -and $window -and ($window.Title -like "*showcase.md*")
-    $details = if ($passed) { "Заголовок '$($window.Title)', размер $($window.Width)x$($window.Height), visible=$($window.Visible)" } else { "Заголовок showcase.md не появился за $($windowWait.ElapsedMs) мс" }
+    $details = if ($passed) { "Title '$($window.Title)', size $($window.Width)x$($window.Height), visible=$($window.Visible)" } else { "The showcase.md title did not appear within $($windowWait.ElapsedMs) ms" }
     return New-Outcome -Passed $passed -Details $details -ElapsedMs $windowWait.ElapsedMs -Screenshot $screenshot
 }
 
@@ -752,7 +752,7 @@ function Test-Cp1251 {
         if ($shot) { $screenshot = $shot.OutputPath }
     }
     $passed = $windowWait.Found -and $window -and ($window.Title -like "*cp1251.txt*")
-    $details = if ($passed) { "Заголовок '$($window.Title)', размер $($window.Width)x$($window.Height), visible=$($window.Visible)" } else { "Заголовок cp1251.txt не появился за $($windowWait.ElapsedMs) мс" }
+    $details = if ($passed) { "Title '$($window.Title)', size $($window.Width)x$($window.Height), visible=$($window.Visible)" } else { "The cp1251.txt title did not appear within $($windowWait.ElapsedMs) ms" }
     return New-Outcome -Passed $passed -Details $details -ElapsedMs $windowWait.ElapsedMs -Screenshot $screenshot
 }
 
@@ -769,7 +769,7 @@ function Test-Nonexistent {
     }
     $passed = $windowWait.Found -and $alive
     $windows = @(Get-ApplicationWindows -State $state)
-    $details = "processAlive=$alive, окна=$($windows.Count): " + (($windows | ForEach-Object { "'$($_.Title)' $($_.Width)x$($_.Height) visible=$($_.Visible)" }) -join "; ")
+    $details = "processAlive=$alive, windows=$($windows.Count): " + (($windows | ForEach-Object { "'$($_.Title)' $($_.Width)x$($_.Height) visible=$($_.Visible)" }) -join "; ")
     return New-Outcome -Passed $passed -Details $details -ElapsedMs $windowWait.ElapsedMs -Screenshot $screenshot
 }
 
@@ -824,7 +824,7 @@ function Test-BigDocument {
         if ($shot) { $screenshot = $shot.OutputPath }
     }
     $passed = $windowWait.Found -and $responsive
-    $details = "window=$($windowWait.Found), responding=$responsive, elapsed=$($windowWait.ElapsedMs) мс, processes=$($state.ProcessCount)"
+    $details = "window=$($windowWait.Found), responding=$responsive, elapsed=$($windowWait.ElapsedMs) ms, processes=$($state.ProcessCount)"
     return New-Outcome -Passed $passed -Details $details -ElapsedMs $windowWait.ElapsedMs -Screenshot $screenshot
 }
 
@@ -850,7 +850,7 @@ function Test-SearchShortcut {
     $process = Start-MarkNote -Path $path
     $windowWait = Wait-MarkNoteWindow -ProcessId $process.Id -TitleFilter "showcase.md" -TestId "TC-10-window" -TimeoutSec 15
     if (-not $windowWait.Found) {
-        return New-Outcome -Passed $false -Details "showcase окно не появилось" -ElapsedMs $windowWait.ElapsedMs
+        return New-Outcome -Passed $false -Details "the showcase window did not appear" -ElapsedMs $windowWait.ElapsedMs
     }
     $editorReady = Wait-Until -TestId "TC-10" -Phase "editor-mounted" -TimeoutSec 15 -Condition {
         param($state)
@@ -897,31 +897,31 @@ function Test-SearchShortcut {
 Write-Host "============================================================" -ForegroundColor Cyan
 Write-Host "       MarkNote Acceptance Test Suite (W42)                 " -ForegroundColor Cyan
 Write-Host "============================================================" -ForegroundColor Cyan
-Write-Host "Запускать PowerShell 5.1 или PowerShell 7; Runs=$Runs"
-Write-Host "Целевой бинарник: $BinaryPath"
-Write-Host "Папка fixtures:   $FixturesDir"
-Write-Host "Папка снимков:    $ShotsDir"
-Write-Host "JSONL-журнал:     $script:JournalPath"
-Write-Host "Сессия:           $script:SessionId"
-Write-Host "Изолированный конфиг: $script:ConfigDir"
+Write-Host "Run under PowerShell 5.1 or PowerShell 7; Runs=$Runs"
+Write-Host "Target binary:    $BinaryPath"
+Write-Host "Fixtures folder:  $FixturesDir"
+Write-Host "Screenshots:      $ShotsDir"
+Write-Host "JSONL journal:    $script:JournalPath"
+Write-Host "Session:          $script:SessionId"
+Write-Host "Isolated config:  $script:ConfigDir"
 Write-Host ""
 
 for ($run = 1; $run -le $Runs; $run += 1) {
     $script:CurrentRun = $run
-    Write-Host "====================== ПРОГОН $run/$Runs ======================" -ForegroundColor Cyan
-    Invoke-Scenario -Id "TC-01" -Name "Запуск без аргументов: окно и заголовок MarkNote" -Body { Test-NoArguments }
-    Invoke-Scenario -Id "TC-02" -Name "Запуск showcase.md: корректный заголовок" -Body { Test-Showcase }
-    Invoke-Scenario -Id "TC-03" -Name "Запуск cp1251.txt: корректный заголовок" -Body { Test-Cp1251 }
-    Invoke-Scenario -Id "TC-04" -Name "Несуществующий путь: процесс жив и окно показано" -Body { Test-Nonexistent }
-    Invoke-Scenario -Id "TC-05" -Name "Повторный запуск с тем же файлом: один процесс" -Body { Test-SameFile }
-    Invoke-Scenario -Id "TC-06" -Name "Повторный запуск с другим файлом: второе окно" -Body { Test-SecondWindow }
-    Invoke-Scenario -Id "TC-07" -Name "big-10k.md: окно появляется и процесс отзывчив" -Body { Test-BigDocument }
-    Invoke-Scenario -Id "TC-08" -Name "logo.png: бинарный файл отклонён с сообщением" -Body { Test-BinaryRejected }
+    Write-Host "======================= RUN $run/$Runs =======================" -ForegroundColor Cyan
+    Invoke-Scenario -Id "TC-01" -Name "Start with no arguments: a MarkNote window and title" -Body { Test-NoArguments }
+    Invoke-Scenario -Id "TC-02" -Name "Open showcase.md: the title is right" -Body { Test-Showcase }
+    Invoke-Scenario -Id "TC-03" -Name "Open cp1251.txt: the title is right" -Body { Test-Cp1251 }
+    Invoke-Scenario -Id "TC-04" -Name "A path that does not exist: the process lives and a window is shown" -Body { Test-Nonexistent }
+    Invoke-Scenario -Id "TC-05" -Name "Starting again with the same file: one process" -Body { Test-SameFile }
+    Invoke-Scenario -Id "TC-06" -Name "Starting again with another file: a second window" -Body { Test-SecondWindow }
+    Invoke-Scenario -Id "TC-07" -Name "big-10k.md: the window appears and the process responds" -Body { Test-BigDocument }
+    Invoke-Scenario -Id "TC-08" -Name "logo.png: the binary file is refused with a message" -Body { Test-BinaryRejected }
     # TC-09 is manual: reliable text entry cannot be synthesized through this WebView2 UIA session.
-    Invoke-Scenario -Id "TC-10" -Name "Ctrl+F: панель поиска открывается" -Body { Test-SearchShortcut }
+    Invoke-Scenario -Id "TC-10" -Name "Ctrl+F: the search panel opens" -Body { Test-SearchShortcut }
     $runResults = @($script:Results | Where-Object { $_.Run -eq $run })
     $runPassed = @($runResults | Where-Object { $_.Passed }).Count
-    Write-Host "Прогон ${run}: $runPassed/$($runResults.Count) PASS" -ForegroundColor $(if ($runPassed -eq $runResults.Count) { "Green" } else { "Red" })
+    Write-Host "Run ${run}: $runPassed/$($runResults.Count) PASS" -ForegroundColor $(if ($runPassed -eq $runResults.Count) { "Green" } else { "Red" })
     Write-Host ""
 }
 
@@ -944,17 +944,17 @@ $passedTests = @($allResults | Where-Object { $_.Passed }).Count
 $failedTests = @($allResults | Where-Object { -not $_.Passed }).Count
 
 Write-Host "============================================================" -ForegroundColor Cyan
-Write-Host "                     ИТОГИ ПРИЁМКИ                          " -ForegroundColor Cyan
+Write-Host "                   ACCEPTANCE SUMMARY                       " -ForegroundColor Cyan
 Write-Host "============================================================" -ForegroundColor Cyan
-Write-Host "Прогонов:          $totalRuns"
-Write-Host "Тестов в прогоне:  $testsPerRun"
-Write-Host "Полностью зелёных:  $fullyGreen/$totalRuns" -ForegroundColor $(if ($fullyGreen -eq $totalRuns) { "Green" } else { "Red" })
-Write-Host "Тестов PASS:       $passedTests/$($allResults.Count)" -ForegroundColor Green
-Write-Host "Тестов FAIL:       $failedTests/$($allResults.Count)" -ForegroundColor $(if ($failedTests -gt 0) { "Red" } else { "Green" })
+Write-Host "Runs:              $totalRuns"
+Write-Host "Tests per run:     $testsPerRun"
+Write-Host "Fully green runs:  $fullyGreen/$totalRuns" -ForegroundColor $(if ($fullyGreen -eq $totalRuns) { "Green" } else { "Red" })
+Write-Host "Tests PASS:        $passedTests/$($allResults.Count)" -ForegroundColor Green
+Write-Host "Tests FAIL:        $failedTests/$($allResults.Count)" -ForegroundColor $(if ($failedTests -gt 0) { "Red" } else { "Green" })
 
 $failuresByTest = @($allResults | Where-Object { -not $_.Passed } | Group-Object Id | Sort-Object Name)
 if ($failuresByTest.Count -gt 0) {
-    Write-Host "Плавающие/упавшие тесты:" -ForegroundColor Yellow
+    Write-Host "Flaky or failing tests:" -ForegroundColor Yellow
     foreach ($group in $failuresByTest) { Write-Host "  $($group.Name): $($group.Count)" -ForegroundColor Red }
 }
 
@@ -970,13 +970,13 @@ $summary = [ordered]@{
     results = $allResults
 }
 [IO.File]::WriteAllText($summaryPath, ($summary | ConvertTo-Json -Depth 10), $script:Utf8NoBom)
-Write-Host "Подробный журнал:  $script:JournalPath"
-Write-Host "Сводка JSON:       $summaryPath"
-Write-Host "Остаток процессов marknote: $(@(Get-TestMarkNoteProcesses).Count)"
+Write-Host "Full journal:      $script:JournalPath"
+Write-Host "JSON summary:      $summaryPath"
+Write-Host "Leftover marknote processes: $(@(Get-TestMarkNoteProcesses).Count)"
 
 if ($failedTests -gt 0 -or $fullyGreen -ne $totalRuns) {
-    Write-Host "Приёмка завершена со статусом FAILED." -ForegroundColor Red
+    Write-Host "Acceptance finished with status FAILED." -ForegroundColor Red
     exit 1
 }
-Write-Host "Все $totalRuns прогонов полностью PASSED." -ForegroundColor Green
+Write-Host "All $totalRuns runs fully PASSED." -ForegroundColor Green
 exit 0

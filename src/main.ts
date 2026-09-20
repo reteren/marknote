@@ -5,7 +5,7 @@ import "./styles/theme.css";
 const target = document.getElementById("app");
 
 if (!target) {
-  throw new Error("Не найден корневой элемент MarkNote");
+  throw new Error("MarkNote root element not found");
 }
 
 mount(App, { target });

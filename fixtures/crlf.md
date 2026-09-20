@@ -1,4 +1,4 @@
 # CRLF
 
-Строка раз.
-Строка два.
+Line one.
+Line two.

@@ -2,8 +2,8 @@ use super::{FormatAdapter, FormatCapabilities};
 
 const HTML_TEMPLATE: &str = "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n  <meta charset=\"UTF-8\">\n  <title>Document</title>\n</head>\n<body>\n\n</body>\n</html>\n";
 
-/// Универсальный адаптер для форматов класса «Код и данные».
-/// Сохраняет файлы байт в байт без изменений разметки.
+/// Universal adapter for “Code and data” formats.
+/// Preserves files byte-for-byte without changing their markup.
 #[derive(Debug, Clone)]
 pub struct CodeAdapter {
     caps: FormatCapabilities,
@@ -265,7 +265,7 @@ impl FormatAdapter for CodeAdapter {
     }
 }
 
-/// Возвращает все адаптеры класса «Код и данные» в порядке стартового экрана.
+/// Returns all “Code and data” adapters in start-screen order.
 pub fn code_adapters() -> Vec<Box<dyn FormatAdapter>> {
     vec![
         Box::new(CodeAdapter::yaml()),
@@ -285,7 +285,7 @@ pub fn code_adapters() -> Vec<Box<dyn FormatAdapter>> {
     ]
 }
 
-/// Поиск адаптера по расширению среди адаптеров кода (регистронезависимо).
+/// Finds a code adapter by extension, case-insensitively.
 #[allow(dead_code)]
 pub fn find_code_adapter(ext: &str) -> Option<CodeAdapter> {
     let normalized = ext.trim().trim_start_matches('.').to_ascii_lowercase();
@@ -359,13 +359,13 @@ mod tests {
             let found = find_code_adapter(ext);
             assert!(
                 found.is_some(),
-                "Формат для расширения '{}' должен быть найден",
+                "A format for extension '{}' must be found",
                 ext
             );
             assert_eq!(
                 found.unwrap().caps().id,
                 expected_id,
-                "Для расширения '{}' ожидался id '{}'",
+                "Extension '{}' was expected to resolve to id '{}'",
                 ext,
                 expected_id
             );
@@ -402,7 +402,7 @@ mod tests {
         for adapter in non_html {
             assert!(
                 adapter.caps().template.is_empty(),
-                "Для формата {} шаблон должен быть пустым",
+                "The template for format {} must be empty",
                 adapter.caps().id
             );
         }
@@ -412,18 +412,18 @@ mod tests {
     fn test_code_adapter_capabilities_flags() {
         for adapter in code_adapters() {
             let caps = adapter.caps();
-            assert!(caps.editable, "{}: editable должно быть true", caps.id);
-            assert!(caps.creatable, "{}: creatable должно быть true", caps.id);
+            assert!(caps.editable, "{}: editable must be true", caps.id);
+            assert!(caps.creatable, "{}: creatable must be true", caps.id);
             assert!(
                 !caps.live_preview,
-                "{}: live_preview должно быть false",
+                "{}: live_preview must be false",
                 caps.id
             );
-            assert!(caps.autosave, "{}: autosave должно быть true", caps.id);
-            assert!(!caps.lossy, "{}: lossy должно быть false", caps.id);
+            assert!(caps.autosave, "{}: autosave must be true", caps.id);
+            assert!(!caps.lossy, "{}: lossy must be false", caps.id);
             assert!(
                 caps.syntax_mode.is_some(),
-                "{}: syntax_mode должен быть задан",
+                "{}: syntax_mode must be set",
                 caps.id
             );
         }
@@ -433,17 +433,15 @@ mod tests {
     fn test_decode_encode_roundtrip_bytes() {
         let adapter = CodeAdapter::rust();
         let raw_bytes = b"fn main() {\r\n    println!(\"\xd0\x9f\xd1\x80\xd0\xb8\xd0\xb2\xd0\xb5\xd1\x82\");\r\n}\r\n";
-        let decoded = adapter
-            .decode(raw_bytes)
-            .expect("декодирование должно пройти успешно");
+        let decoded = adapter.decode(raw_bytes).expect("decoding must succeed");
         assert_eq!(decoded.line_ending, crate::encoding::LineEnding::Crlf);
 
         let encoded = adapter
             .encode(&decoded.text, &decoded)
-            .expect("кодирование должно пройти успешно");
+            .expect("encoding must succeed");
         assert_eq!(
             encoded, raw_bytes,
-            "Байты после круглого прогона должны полностью совпадать"
+            "Bytes must remain identical after a round trip"
         );
     }
 }

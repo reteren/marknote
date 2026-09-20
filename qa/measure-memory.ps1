@@ -1,11 +1,11 @@
 <#
 .SYNOPSIS
-  Память MarkNote: только своё поддерево процессов.
+  MarkNote memory: only its own process subtree.
 .DESCRIPTION
-  В системе обычно работают чужие msedgewebview2 — от браузера и других
-  программ. Считать их по имени нельзя: число получится случайным. Скрипт
-  запускает MarkNote, находит всех потомков по дереву процессов и
-  суммирует их рабочий набор, разбивая по ролям процессов WebView2.
+  Other msedgewebview2 processes are usually running on the machine, from
+  the browser and other programs. Counting them by name gives an arbitrary
+  number, so the script starts MarkNote, walks the process tree for its own
+  descendants and sums their working sets, split by WebView2 process role.
 #>
 [CmdletBinding()]
 param(
@@ -42,7 +42,7 @@ function Get-ProcessTree {
 
 function Get-WebViewRole {
     param([string]$CommandLine)
-    if ([string]::IsNullOrWhiteSpace($CommandLine)) { return "основной" }
+    if ([string]::IsNullOrWhiteSpace($CommandLine)) { return "main" }
     if ($CommandLine -match "--type=([a-zA-Z-]+)") {
         $type = $Matches[1]
         if ($type -eq "utility" -and $CommandLine -match "--utility-sub-type=([^\s]+)") {
@@ -50,7 +50,7 @@ function Get-WebViewRole {
         }
         return $type
     }
-    return "основной"
+    return "main"
 }
 
 $configDir = Join-Path ([IO.Path]::GetTempPath()) ("marknote-memory-" + [Guid]::NewGuid().ToString("N"))
@@ -85,7 +85,7 @@ $rows = foreach ($item in $tree) {
 }
 
 $rows | Sort-Object Mb -Descending | Format-Table -AutoSize
-"Всего в поддереве: {0} процессов, {1} МБ" -f @($rows).Count, [math]::Round((@($rows) | Measure-Object -Property Mb -Sum).Sum, 1)
+"Subtree total: {0} processes, {1} MB" -f @($rows).Count, [math]::Round((@($rows) | Measure-Object -Property Mb -Sum).Sum, 1)
 
 if (-not [string]::IsNullOrWhiteSpace($OutputPath)) {
     $report = [pscustomobject]@{

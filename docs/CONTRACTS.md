@@ -1,435 +1,125 @@
-# Внутренние контракты модулей
+# Internal module contracts
 
-Документ фиксирует границы между параллельно разрабатываемыми модулями.
-**Сигнатуры менять нельзя.** Если сигнатура не подходит — сообщить координатору,
-а не править в одностороннем порядке.
+This document records boundaries between modules developed in parallel.
+**Signatures must not change.** If a signature is unsuitable, tell the
+coordinator instead of changing it unilaterally.
 
-Владение файлами (никто не трогает чужие файлы):
-
-| Владелец | Файлы |
+| Owner | Files |
 | --- | --- |
-| W1 · Rust core | `src-tauri/build.rs`, `src-tauri/src/main.rs`, `src-tauri/src/lib.rs`, `src-tauri/src/commands.rs`, `src-tauri/src/windows.rs`, `src-tauri/Cargo.toml`, `src-tauri/tauri.conf.json`, `src-tauri/capabilities/**` |
-| W2 · Rust formats/IO | `src-tauri/src/formats/**`, `src-tauri/src/encoding.rs`, `src-tauri/src/atomic_write.rs`, `src-tauri/src/watcher.rs` |
-| W3 · Frontend shell | `index.html`, `tsconfig.json`, `svelte.config.js`, `src/main.ts`, `src/App.svelte`, `src/editor/createEditor.ts`, `src/editor/keymap.ts`, `src/editor/theme.ts`, `src/state/**`, `src/ui/**`, `src/styles/**` |
-| W4 · Разметка и предпросмотр | `src/editor/markdownExtensions.ts`, `src/editor/livePreview/**`, `tests/**`, `vitest.config.ts` |
-| Координатор | `package.json`, `vite.config.ts`, `docs/**`, `README.md`, `ROADMAP.md` |
-
-Нужна новая зависимость в `package.json` — не добавлять самостоятельно,
-написать координатору в `worker_done`.
-
----
-
-## 1. Rust: `formats`
-
-```rust
-// src-tauri/src/formats/mod.rs
-use serde::Serialize;
-use std::path::Path;
-
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct FormatCapabilities {
-    pub id: String,                  // "markdown", "plain", "json"
-    pub label: String,               // "Markdown"
-    pub default_extension: String,   // "md"  (без точки)
-    pub extensions: Vec<String>,     // ["md", "markdown", "mdown", "mkd"]
-    pub editable: bool,
-    pub creatable: bool,
-    pub live_preview: bool,
-    pub autosave: bool,
-    pub lossy: bool,
-    pub syntax_mode: Option<String>, // "json" | "yaml" | ... | None
-    pub template: String,            // заготовка нового документа
-}
-
-/// Все зарегистрированные форматы.
-pub fn all() -> Vec<FormatCapabilities>;
-/// Только те, у которых creatable == true. Порядок — как на стартовом экране.
-pub fn creatable() -> Vec<FormatCapabilities>;
-pub fn by_id(id: &str) -> Option<FormatCapabilities>;
-/// Расширение без точки, регистр не важен. Неизвестное — формат "plain".
-pub fn for_extension(ext: &str) -> FormatCapabilities;
-pub fn for_path(path: &Path) -> FormatCapabilities;
-```
-
-В M3 в реестре ровно два формата: `markdown` и `plain`. Структура полей
-закладывается целиком — M6 только дописывает записи реестра.
-
-## 2. Rust: `encoding`
-
-```rust
-// src-tauri/src/encoding.rs
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum LineEnding { Lf, Crlf }
-
-#[derive(Debug, Clone)]
-pub struct Decoded {
-    pub text: String,          // всегда с \n внутри
-    pub encoding: String,      // "utf-8", "utf-16le", "windows-1251", ...
-    pub bom: bool,
-    pub line_ending: LineEnding,
-}
-
-/// UTF-8/UTF-16 BOM → по BOM; иначе chardetng. Переводы строк нормализуются в \n.
-pub fn decode(bytes: &[u8]) -> Decoded;
-
-/// Обратная операция: \n разворачивается в line_ending, BOM дописывается если был.
-pub fn encode(text: &str, encoding: &str, bom: bool, line_ending: LineEnding) -> Vec<u8>;
-```
-
-## 3. Rust: `atomic_write`
-
-```rust
-// src-tauri/src/atomic_write.rs
-/// Пишет во временный файл в той же папке, затем fs::rename поверх цели.
-/// Никогда не открывает целевой файл на запись напрямую.
-pub fn write_atomic(path: &std::path::Path, bytes: &[u8]) -> anyhow::Result<()>;
-```
-
-## 4. Rust: `watcher`
-
-```rust
-// src-tauri/src/watcher.rs
-pub struct FileWatcher { /* ... */ }
-
-impl FileWatcher {
-    pub fn new(app: tauri::AppHandle) -> Self;
-    /// Начать следить за path, события адресуются окну window_label.
-    pub fn watch(&self, window_label: &str, path: &std::path::Path);
-    pub fn unwatch(&self, window_label: &str);
-    /// Подавить события по пути на ~1.5 с — вызывается перед собственной записью.
-    pub fn suppress(&self, path: &std::path::Path);
-}
-```
-
-События в окно: `file-changed-externally` (payload `{ "path": String }`),
-`file-deleted` (payload `{ "path": String }`).
-
-## 5. IPC-команды (владелец — W1)
-
-| Команда | Аргументы | Возвращает |
-| --- | --- | --- |
-| `open_file` | `path: String` | `OpenedFile` |
-| `save_file` | `path, text, encoding, bom, lineEnding` | `SaveResult`; отказ с ошибкой, если `format.editable == false` |
-| `save_as` | `text, formatId, suggestedName` | `Option<SaveResult>` (None — отмена) |
-| `pick_file` | — | `Option<String>` |
-| `new_document` | `formatId: String` | `NewDocument` |
-| `list_creatable_formats` | — | `Vec<FormatCapabilities>` |
-| `format_for_extension` | `ext: String` | `FormatCapabilities` |
-| `read_image` | `docPath: Option<String>, src: String` | `String` (data-URL) |
-| `open_in_new_window` | `path: String` | `()` |
-| `reveal_in_explorer` | `path: String` | `()` |
-| `take_pending_file` | — | `Option<String>` — путь, отложенный для этого окна |
-| `respond_to_close` | `allow: bool` | `()` — ответ на `save-before-close` |
-| `get_settings` | — | `Settings` — состав в docs/SETTINGS.md |
-| `save_settings` | `settings: Settings` | `Settings` — записанные значения после проверки границ |
-| `reset_settings` | — | `Settings` — умолчания |
-| `get_resolved_language` | — | `String` — язык интерфейса с учётом значения `system` |
-| `reveal_settings_file` | — | `()` — показать `settings.json` в проводнике |
-
-```ts
-// то, что видит фронтенд (serde camelCase)
-type OpenedFile = {
-  path: string;
-  text: string;
-  encoding: string;
-  bom: boolean;
-  lineEnding: "lf" | "crlf";
-  format: FormatCapabilities;
-  readonly: boolean;
-};
-type SaveResult = {
-  path: string;
-  savedAt: string /* ISO */;
-  format: FormatCapabilities;
-  /** true — формат сохраняется с потерями и пользователя нужно предупредить
-   *  (SPEC раздел 3.2). Для Markdown и простого текста всегда false. */
-  lossyWarning: boolean;
-};
-type NewDocument = { text: string; format: FormatCapabilities };
-```
-
-Событие `open-file-request` с payload `{ "path": String }` — окно просят
-открыть файл (аргумент командной строки, второй запуск, проводник).
-
-**Важно про старт.** Событием пользоваться можно только для окон, которые
-уже живут. При первом запуске `setup` отрабатывает раньше, чем webview
-загрузит Svelte, а события Tauri не буферизуются — отправленное в этот
-момент событие теряется, и файл из аргумента не открывается. Поэтому путь,
-предназначенный окну, складывается на стороне Rust, а фронтенд забирает его
-командой `take_pending_file` сразу после того, как подписался на событие.
-Открытие обязано быть идемпотентным: если путь придёт и событием, и
-командой, файл открывается один раз.
-
-**Конфликт при сохранении.** `save_file` запоминает время правки и размер
-файла на момент открытия и сравнивает их перед записью. Если файл изменила
-другая программа, запись не выполняется, а команда возвращает ошибку
-`{ code: "file-conflict", path, message }`. Фронтенд обязан показать выбор
-«Перечитать» или «Оставить моё» и не записывать молча — это касается и
-автосохранения, которое идёт тем же путём.
-
-**Картинки.** `read_image` принимает только относительный путь внутри
-каталога документа: выход вверх, символические ссылки наружу и пути к
-устройствам отклоняются, размер файла ограничен 16 МиБ. Документ приходит
-извне, и ссылка в нём не должна читать посторонние файлы.
-
-**Закрытие окна.** Окно не закрывается само: Rust перехватывает
-`CloseRequested`, отменяет закрытие и шлёт в окно `save-before-close`.
-Фронтенд обязан ответить командой `respond_to_close`: `true` после
-сохранения, автосохранения или явного «Discard», `false` на «Cancel».
-Если ответа нет пять секунд, окно закрывается принудительно — зависший
-webview не должен делать окно неубиваемым. Это единственный модальный
-диалог во всей программе (SPEC раздел 2.3).
-
-## 6. Frontend: границы W3 ↔ W4
-
-W4 отдаёт, W3 потребляет:
-
-```ts
-// src/editor/markdownExtensions.ts
-import type { MarkdownExtension } from "@lezer/markdown";
-/** ==подсветка==, %%комментарий%%, $формула$, $$блок$$, > [!NOTE], [^1] */
-export const marknoteMarkdown: MarkdownExtension[];
-
-// src/editor/livePreview/index.ts
-import type { Extension } from "@codemirror/state";
-export function livePreview(opts?: {
-  /** Выше этого размера документа предпросмотр выключается. По умолчанию 5 МБ. */
-  maxBytes?: number;
-  /** Отдаёт data-URL для картинки, относительной к документу. */
-  resolveImage?: (src: string) => Promise<string>;
-}): Extension;
-```
-
-W3 отдаёт, W4 потребляет (только типы, не реализацию):
-
-```ts
-// src/state/formats.svelte.ts
-export type FormatCapabilities = { /* см. раздел 1, camelCase */ };
-```
-
-`createEditor` — владение W3:
-
-```ts
-// src/editor/createEditor.ts
-export type EditorStats = {
-  line: number; col: number;
-  lines: number; words: number; chars: number;
-  selection: null | { fromLine: number; toLine: number; words: number; chars: number };
-};
-
-export function createEditor(opts: {
-  parent: HTMLElement;
-  doc: string;
-  format: FormatCapabilities;
-  /** Нужен для разрешения относительных ссылок на картинки. null — документ
-   *  ещё не сохранён, относительные ссылки разрешить нельзя. */
-  path?: string | null;
-  onChange: (doc: string) => void;
-  onStats: (stats: EditorStats) => void;
-}): import("@codemirror/view").EditorView;
-
-/** Меняет путь у живого редактора без пересборки расширений: после
- *  «Сохранить как» ссылки должны разрешаться относительно новой папки. */
-export function setEditorDocumentPath(
-  view: import("@codemirror/view").EditorView,
-  path: string | null,
-): void;
-
-// src/editor/imageResolver.ts
-/** data: и http(s) отдаются как есть; относительный путь читается командой
- *  read_image. Кэш по паре «путь документа + ссылка», сбрасывается при
- *  смене документа. */
-export function createImageResolver(
-  docPath: string | null,
-): (src: string) => Promise<string>;
-```
-
-## 7. Общие правила
-
-- Никаких заглушек и `todo!()` в путях, которые обещаны как готовые.
-- Rust: `cargo check` без ошибок перед завершением (варнинги допустимы).
-- TypeScript: `npx tsc --noEmit` / `npm run check` без ошибок по своим файлам.
-- Комментарии по-русски, как в остальном проекте.
-- Тёмная тема одна; токены берутся из `src/styles/theme.css`, новых цветов
-  «от себя» не вводить.
-
-## 8. Порядок работ и заглушки
-
-В каталоге одновременно работают четыре агента. Чтобы никто не ждал:
-
-**Поставщик API создаёт заглушки первым делом.** W2 и W4 в первые минуты
-создают все свои файлы с финальными сигнатурами из этого документа и
-тривиальным телом (`unimplemented!()` / пустой `Extension`), сразу проверяют,
-что проект компилируется, и только потом наполняют их. Потребители (W1 и W3) к
-этому моменту ещё пишут свой каркас.
-
-Правила совместной работы в одном каталоге:
-
-- Чужие файлы не редактировать и не удалять — даже чтобы «быстро починить».
-- `git commit`, `git add`, любые команды git — не запускать, коммитит координатор.
-- `package.json`, `vite.config.ts` — не трогать, нужна зависимость → в `worker_done`.
-- `npm run tauri dev` и `npm run dev` не запускать: порт 1420 один на всех.
-  Проверки: `cargo check`, `npx tsc --noEmit`, `npm run build`, `npx vitest run`.
-- Ошибка компиляции в чужом файле — это не твоя задача. Убедись, что твои файлы
-  чисты, и упомяни чужую ошибку в отчёте.
-
-## 9. Подключаемые построители декораций (веха M4)
-
-Блочные элементы M4 пишутся отдельными модулями параллельно с плагином M2.
-Общий тип — в `src/editor/livePreview/types.ts` (владелец: координатор).
-
-```ts
-export type DecoSink = (deco: Range<Decoration>) => void;
-export type BuilderContext = {
-  view: EditorView;
-  node: SyntaxNode;
-  active: boolean;   // результат isNodeActive, своего правила не изобретать
-  add: DecoSink;     // replace / mark / widget
-  atomic: DecoSink;  // диапазоны для EditorView.atomicRanges
-};
-export type BlockBuilder = (ctx: BuilderContext) => boolean; // true — узел обработан
-```
-
-Модули и их владельцы:
-
-| Файл | Экспорт | Владелец |
-| --- | --- | --- |
-| `src/editor/livePreview/tables.ts` | `tableBuilder: BlockBuilder` | W5 |
-| `src/editor/livePreview/codeBlocks.ts` | `codeBlockBuilder: BlockBuilder` | W5 |
-| `src/editor/livePreview/callouts.ts` | `calloutBuilder: BlockBuilder` | W6 |
-| `src/editor/livePreview/footnotes.ts` | `footnoteBuilder: BlockBuilder` | W6 |
-
-`plugin.ts` (владелец W4) при обходе дерева зовёт построители по порядку и
-останавливается на первом, вернувшем `true`. Если построитель ещё не создан —
-его просто нет в списке; сборка от этого не ломается.
-
-## 10. Поиск и замена (веха M5)
-
-| Файл | Экспорт | Владелец |
-| --- | --- | --- |
-| `src/editor/search.ts` | `marknoteSearch(): Extension`, `searchCommands` | W7 |
-| `src/ui/FindPanel.svelte` | компонент панели | W7 |
-
-Исключение из владения W3: эти два файла его не касаются, остальной `src/ui/**`
-по-прежнему за ним.
-
-## 11. Адаптеры форматов сверх реестра M3 (веха M6)
-
-| Файл | Экспорт | Владелец |
-| --- | --- | --- |
-| `src-tauri/src/formats/extra.rs` | `pub fn adapters() -> Vec<Box<dyn FormatAdapter>>` | W8 |
-| `src-tauri/src/formats/code.rs` | адаптер «код и данные» | W8 |
-| `src-tauri/src/formats/json.rs` | адаптер JSON | W8 |
-
-Реестр в `formats/mod.rs` (владелец W2) подмешивает `extra::adapters()` к своим
-двум встроенным адаптерам. Пока файла нет — реестр работает на двух форматах.
-
-## 12. Применение настроек к редактору
-
-Окно настроек долго было витриной: значения сохранялись в `settings.json` и
-никем не читались. Стык заведён отдельно от поведения, чтобы разделы настроек
-можно было переносить параллельно, не сталкиваясь в одном файле.
-
-| Файл | Экспорт | Владелец |
-| --- | --- | --- |
-| `src/editor/settings.ts` | `settingsCompartment`, `editorSettingsExtensions(settings)`, `applyEditorSettings(view, settings)` | координатор |
-| `src/editor/settings/appearance.ts` | `editorAppearanceExtensions(settings)` — раздел `settings.editor.*` | W85 |
-| `src/editor/settings/preview.ts` | `livePreviewSettingsExtensions(settings)` — раздел `settings.livePreview.*` | W86 |
-| `src/editor/settings/spellcheck.ts` | `spellcheckSettingsExtensions(settings)` — `settings.spellcheck` и `settings.autoCorrect` | W87 |
-
-Три раздела пишутся параллельно, поэтому у каждого свой файл и своя функция.
-`settings.ts` только складывает их результаты и не правится никем, кроме
-координатора: иначе три автора сойдутся в одном файле и затрут друг друга.
-Владелец раздела волен заводить рядом сколько угодно своих файлов, менять
-`src/editor/theme.ts` (W85) или `src/editor/livePreview/**` (W86) — но чужой
-функции сборки не касается.
-
-Правила стыка:
-
-- всё, что зависит от настроек, возвращается из `editorSettingsExtensions`
-  и живёт в одном отсеке (`Compartment`). Смена настройки перенастраивает
-  отсек, а не пересоздаёт редактор: иначе теряются история отмены, положение
-  курсора и прокрутка;
-- `settings` может быть `null`. Это не ошибка: редактор поднимается раньше,
-  чем Rust отдаёт `settings.json`. Каждая проверка пишется так, чтобы
-  отсутствие значения давало прежнее, зашитое в код поведение;
-- `src/App.svelte` уже загружает настройки и вызывает `applyEditorSettings`
-  в эффекте. Владельцам разделов оболочка не нужна — они работают внутри
-  своих файлов и подключаются к `editorSettingsExtensions`;
-- добавлять новые поля в `Settings` нельзя: состав настроек описан в
-  `docs/SETTINGS.md` и уже показан в окне. Задача — применить то, что есть.
-
-## 13. Вкладки внутри окна
-
-Решение владельца, отменяющее прежний принцип «одно окно — один файл, вкладок
-нет». Он записан в спецификации (разделы 1, 6 и 9), в README и в ROADMAP —
-после появления вкладок эти места обязаны быть исправлены, иначе документы
-снова начнут врать.
-
-Что именно меняется, а что нет:
-
-- открытие файла из проводника по-прежнему открывает **новое окно**, а не
-  вкладку в уже открытом. Одно исключение было и остаётся: пустое стартовое
-  окно переиспользуется, иначе после запуска программы рядом висело бы
-  ненужное пустое окно. Формулировка «всегда новое окно» была слишком
-  безоговорочной, это заметили при сверке документов. Остальное здесь не
-  трогаем;
-- внутри окна появляется полоса вкладок между строкой меню и областью текста;
-- на вкладке — имя файла, а для безымянного документа первые слова его текста,
-  и формат;
-- справа от последней вкладки кнопка «плюс»: новая вкладка открывается со
-  стартовым экраном, где выбирают формат или бросают файл;
-- окно без вкладок существовать не может: закрытие последней вкладки закрывает
-  окно, со всеми обычными вопросами про несохранённое.
-
-### Разделение работ
-
-| Файл | Экспорт | Владелец |
-| --- | --- | --- |
-| `src/state/workspace.svelte.ts` (новый) | состояние набора вкладок, см. ниже | W99 |
-| `src/state/document.svelte.ts` | `documentState` как вид на активную вкладку | W99 |
-| `src/state/autosave.ts` | автосохранение по вкладкам | W99 |
-| `src/ui/TabBar.svelte` (новый) | полоса вкладок | W100 |
-| `src/App.svelte` | место полосы в сетке, обработчики | W100 |
-| `src/editor/createEditor.ts` | состояние редактора на вкладку | W101 |
-
-### Договор состояния (W99 отдаёт, остальные пользуются)
-
-```ts
-export type TabId = string;
-export type WorkspaceTab = { id: TabId; document: DocumentState };
-
-export const workspace: {
-  tabs: WorkspaceTab[];
-  activeId: TabId;
-};
-
-export function activeTab(): WorkspaceTab;
-export function openTab(document?: Partial<DocumentState>): TabId;
-export function closeTab(id: TabId): void;
-export function activateTab(id: TabId): void;
-/** Подпись вкладки: имя файла, либо первые слова текста, либо «Untitled». */
-export function tabLabel(tab: WorkspaceTab): { name: string; format: string };
-```
-
-**Главное правило совместимости.** `documentState` остаётся экспортом
-`document.svelte.ts` и продолжает вести себя как прежде — как объект с теми же
-полями, который можно читать и менять. Внутри он становится видом на документ
-активной вкладки. Так три десятка мест, которые его используют, не переписываются
-и не ломаются; переписать их все разом означало бы менять всё сразу и не суметь
-проверить ничего.
-
-### Чего делать нельзя
-
-- заводить второе хранилище текста. Текст живёт в документе вкладки, редактор
-  показывает активный;
-- терять историю отмены и положение курсора при переключении вкладок. Это
-  задача W101: у каждой вкладки своё состояние редактора;
-- автосохранять неактивные вкладки по таймеру активной. Таймер принадлежит
-  вкладке, а не окну;
-- прятать полосу, когда вкладка одна. Такое правило я выдумал сам при первой
-  раздаче, и владелец поправил: полоса — постоянная зона между строкой меню и
-  текстом, а кнопка «плюс» живёт справа от последней вкладки. Пока полосу
-  прятали, «плюс» приходилось селить рядом с состоянием сохранения.
+| W1 · Rust core | src-tauri/build.rs, main.rs, lib.rs, commands.rs, windows.rs, Cargo.toml, tauri.conf.json, capabilities/** |
+| W2 · Rust formats/IO | src-tauri/src/formats/**, encoding.rs, atomic_write.rs, watcher.rs |
+| W3 · Frontend shell | index.html, tsconfig.json, svelte.config.js, src/main.ts, App.svelte, editor, state, ui, styles |
+| W4 · Markup and preview | src/editor/markdownExtensions.ts, src/editor/livePreview/**, tests/**, vitest.config.ts |
+| Coordinator | package.json, vite.config.ts, docs/**, README.md, ROADMAP.md |
+
+Do not add a package.json dependency independently; report it to the coordinator.
+
+## 1. Rust format contract
+
+FormatCapabilities has id, label, default_extension, extensions, editable,
+creatable, live_preview, autosave, lossy, optional syntax_mode, and a
+new-document template. all() returns every registered format; creatable()
+returns only formats with creatable true in start-screen order; by_id() looks up
+an identifier; for_extension() is case-insensitive and falls back to plain;
+for_path() selects by filename. Milestone M3 has markdown and plain; later
+milestones add registry entries without changing the structure.
+
+## 2. Encoding contract
+
+LineEnding is either Lf or Crlf. Decoded contains normalized text (internal LF),
+encoding, BOM presence, and the original line ending. decode detects UTF-8/UTF-16
+BOMs or uses chardetng and normalizes endings. encode restores the requested
+encoding, line ending, and BOM.
+
+## 3. Atomic writes and watcher
+
+write_atomic writes a temporary file in the same directory and renames it over
+the target; it never opens the target directly for writing. FileWatcher watches
+a path for a window, removes a watch, and suppresses our own write for about
+1.5 seconds. Events are file-changed-externally and file-deleted, each carrying
+a path string.
+
+## 4. IPC commands (owner: W1)
+
+open_file(path) returns OpenedFile. save_file(path, text, encoding, bom,
+lineEnding) returns SaveResult and rejects non-editable formats. save_as(text,
+formatId, suggestedName) returns an optional SaveResult. pick_file returns an
+optional path. new_document returns NewDocument. list_creatable_formats and
+format_for_extension expose the format registry. read_image(docPath, src)
+returns a data URL. open_in_new_window, reveal_in_explorer, and
+respond_to_close return unit. take_pending_file returns an optional queued
+path. get_settings, save_settings, reset_settings, get_resolved_language, and
+reveal_settings_file implement the settings contract.
+
+OpenedFile contains path, text, encoding, BOM, lineEnding, FormatCapabilities,
+and readonly. SaveResult contains path, ISO savedAt, format, and lossyWarning.
+NewDocument contains template text and format.
+
+The open-file-request event carries a path. During first startup events are not
+buffered, so Rust queues the path and the frontend calls take_pending_file
+after subscribing. Opening is idempotent when both event and command deliver it.
+
+save_file compares timestamp and size captured at open time. A changed file
+returns code file-conflict without writing; the frontend offers Reload or Keep
+mine. read_image accepts a relative path inside the document folder, rejects
+traversal, external symlinks, device paths, and files over 16 MiB.
+
+Rust intercepts CloseRequested and sends save-before-close. The frontend answers
+respond_to_close with true after Save, autosave, or Discard and false after
+Cancel. A five-second timeout prevents a hung WebView from blocking close.
+
+## 5. Frontend W3/W4 boundary
+
+W4 provides the marknote Markdown extension for highlight, comments, inline and
+block formulas, callouts, footnotes, and other custom nodes. It also provides
+livePreview with maxBytes (default 5 MiB) and resolveImage callbacks. W3
+provides FormatCapabilities.
+
+createEditor accepts a parent element, document text, format, optional document
+path, onChange, and onStats, returning an EditorView. setEditorDocumentPath
+updates the live path without rebuilding extensions. createImageResolver returns
+data/http URLs as-is, resolves relative paths through read_image, caches by
+document path plus source, and clears the cache on document change.
+
+## 6. Shared rules
+
+No stubs or todo implementations may remain in paths promised as complete.
+cargo check and npx tsc --noEmit must pass. Product documentation and comments
+are written in English. There is one dark theme; use tokens from
+src/styles/theme.css and do not invent colors. Never edit another owner’s
+files; the coordinator runs Git commands. Do not touch package.json or
+vite.config.ts without reporting it. Do not run the shared development servers.
+
+## 7. Decoration builders and search
+
+W4 block builders share BuilderContext and return true when they handle a node.
+Tables and code blocks belong to W5; callouts and footnotes belong to W6. W7
+owns src/editor/search.ts and src/ui/FindPanel.svelte and exports the search
+extension and commands.
+
+## 8. Format adapters and settings
+
+W8 owns extra.rs, code.rs, and json.rs adapters and exposes adapters() for the
+W2 registry. Settings sections use separate files: settingsCompartment,
+editorSettingsExtensions, and applyEditorSettings belong to the coordinator;
+appearance belongs to W85, preview to W86, and spellcheck/autocorrect to W87.
+settings.ts combines the results. A null settings value means settings are not
+loaded and must preserve old hard-coded behavior. Do not add Settings fields
+without updating docs/SETTINGS.md and the settings window.
+
+## 9. Tabs
+
+Tabs supersede the former one-window/one-file principle. Explorer opening still
+uses a new window, except that an empty start window is reused. A permanent tab
+bar sits between menu and editor; each tab shows its filename (or initial words
+for an untitled document) and format. The plus button opens the start screen
+for a new format or dropped file. Closing the last tab closes the window with
+the normal unsaved-changes prompt.
+
+workspace.svelte.ts owns tab-set state, document.svelte.ts exposes the active
+documentState view, autosave is per-tab, TabBar owns the tab bar, App.svelte
+places it and handles events, and createEditor owns per-tab editor state.
+documentState keeps its old readable and mutable fields while becoming a view
+of the active tab. Do not create a second text store, lose history or cursor
+position on tab switches, autosave inactive tabs on the active timer, or hide
+the tab bar when only one tab exists.

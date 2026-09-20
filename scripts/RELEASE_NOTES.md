@@ -1,363 +1,243 @@
 # MarkNote 1.0.0
 
-Первый публичный выпуск. Номера 1.0.1–1.0.18 из истории — это внутренние
-сборки во время разработки, они никуда не публиковались.
+First public release. Versions 1.0.1–1.0.18 in the history were internal
+development builds and were not published.
 
-Что это: редактор Markdown для Windows с живым предпросмотром, вкладками и
-поддержкой текстовых и кодовых форматов. Смесь Блокнота и Obsidian: файл
-открывается двойным щелчком, разметка не мешает читать, хранилищ и плагинов
-нет.
+MarkNote is a Windows Markdown editor with live preview, tabs, and text/code
+formats. It combines Notepad and Obsidian: files open on double-click, markup
+does not interfere with reading, and there are no vaults or plugins.
 
-- Живой предпросмотр: разметка скрыта, пока курсор не встанет внутрь.
-- Вкладки, перетаскивание файлов в окно, открытие из Проводника.
-- 21 формат: Markdown, текст, JSON с проверкой, 14 кодовых с подсветкой и
-  номерами строк, RTF, а PDF, DOCX и EPUB — на чтение.
-- Таблицы как объект: полоски с плюсом по краям, перетаскивание строк и
-  столбцов.
-- Формулы KaTeX, выноски, сноски, задачи с флажками.
-- Атомарное сохранение и автосохранение.
-- Настройки: язык интерфейса (10 языков), шрифт, размер, ширина колонки,
-  номера строк, предпросмотр, автозамена.
+Highlights:
 
-Установщик 3,15 МБ, без прав администратора. Своего браузера не тащит:
-используется системный WebView2.
+- live preview hides markup until the cursor enters a node;
+- tabs, file drop, and Explorer opening;
+- 21 formats: Markdown, plain text, validated JSON, 14 highlighted code
+  formats, lossy RTF, and read-only PDF, DOCX, and EPUB;
+- tables with edge controls and row/column dragging;
+- KaTeX formulas, callouts, footnotes, and task checkboxes;
+- atomic saving and autosave;
+- settings for ten interface languages, font, size, column width, line numbers,
+  preview, and autocorrect.
 
----
+Installer size: 3.15 MB, with no administrator rights. MarkNote uses the
+system WebView2 rather than shipping its own browser.
 
 # MarkNote 1.0.18
 
-Выпуск про скорость, память и порядок в коде. Все числа измерены на собранной
-программе; скрипты замеров и отчёты лежат в `qa/`.
+This release focuses on speed, memory, and code hygiene. Measurements were made
+on the built application; measurement scripts remain in qa/.
 
-## Скорость
+## Speed
 
-- Ввод в большом документе перестал упираться в пересчёт всего текста. На файле
-  5 МБ путь одного нажатия сократился с 99.8 до 15.3 мс, применение правки — с
-  87.7 до 7.2 мс. Виноваты были счётчик слов в строке состояния и проверка
-  размера документа для порога предпросмотра: оба пересчитывали весь файл на
-  каждый символ.
-- Движение курсора в документе 1 МБ: 19.2 → 9.4 мс, первая отрисовка
-  181.8 → 107.1 мс.
-- Файл, открываемый в новом окне, читается и разбирается один раз, а не дважды:
-  на файле 10 МБ повторный разбор 39.7 → 4.1 мс.
+- Editing a 5 MB document no longer recalculates the entire text on each key:
+  one keypress fell from 99.8 to 15.3 ms and applying the edit from 87.7 to
+  7.2 ms. The status word counter and preview-size check were both scanning the
+  whole document.
+- Cursor movement in a 1 MB document fell from 19.2 to 9.4 ms; first render
+  fell from 181.8 to 107.1 ms.
+- A file opened in a new window is read and parsed once rather than twice:
+  repeated parsing on a 10 MB file fell from 39.7 to 4.1 ms.
 
-## Память
+## Memory
 
-- Отключён сборщик отчётов о сбоях WebView2, которые никуда не собирались:
-  чистый запуск 385.6 → 376.2 МБ, семь процессов вместо восьми.
-- У кэша отрисованных формул появился потолок в 256 записей: память страницы
-  после документа 1 МБ 37.4 → 30.7 МБ.
-- Окно настроек грузится при первом открытии, а не при каждом запуске.
+- WebView2 crash reporting that was never collected is disabled: clean startup
+  fell from 385.6 to 376.2 MB, with seven processes instead of eight.
+- The rendered-formula cache is capped at 256 entries: page memory after a 1 MB
+  document fell from 37.4 to 30.7 MB.
+- Settings loads on first open rather than every launch.
 
-## Порядок
+## Hygiene
 
-- Анализатор Rust (clippy) больше не выдаёт ни одной подсказки.
-- README переписан: возможности, горячие клавиши, честные числа и честный
-  список того, что ещё не доделано.
-- В образце `fixtures/showcase.md` убран мусор, случайно попавший туда
-  15 сентября.
-
----
+- Rust clippy produces no suggestions.
+- README now describes capabilities, shortcuts, measured values, and unfinished
+  work honestly.
+- The fixture showcase.md no longer contains accidental sample debris.
 
 # MarkNote 1.0.17
 
-Выпуск про скорость и память. Всё измерено на работающей программе, числа и
-способ замера лежат в qa/W140-report.md, qa/W141-REPORT.md, qa/w142-report.md.
+This release focuses on speed and memory. Measurements and their method were
+recorded during development and are intentionally not shipped as working-note
+reports.
 
-## Редактор
+## Editor
 
-- Живой предпросмотр перестал пересчитывать размер всего документа при каждом
-  движении курсора. На документе 1 МБ стрелка 19.2 → 9.4 мс, первая
-  отрисовка 181.8 → 107.1 мс; на 5 МБ движение курсора 75.3 → 62.9 мс, смена
-  видимой области 47.9 → 35.5 мс.
-- Направляющие линии вложенных списков строятся только для видимой части, а
-  не для всего списка.
+- Live preview no longer recalculates the whole document on each cursor move.
+  On a 1 MB document cursor movement fell from 19.2 to 9.4 ms and first render
+  from 181.8 to 107.1 ms; on 5 MB, cursor movement fell from 75.3 to 62.9 ms
+  and viewport change from 47.9 to 35.5 ms.
+- Indentation guides for nested lists are built only for the visible range.
 
-## Память
+## Memory
 
-- Кэш отрисованных формул больше не растёт без предела: хранятся 256
-  последних. Память страницы после документа 1 МБ 37.4 → 30.7 МБ, после
-  200 циклов открытия и закрытия вкладок 39.2 → 32.5 МБ.
-- Окно настроек грузится при первом открытии, а не при каждом запуске:
-  главный кусок кода 558 → 539 КБ.
+- The rendered-formula cache keeps the latest 256 entries. Page memory after a
+  1 MB document fell from 37.4 to 30.7 MB, and after 200 tab open/close cycles
+  from 39.2 to 32.5 MB.
+- Settings loads on first open; the main chunk fell from 558 to 539 KB.
 
-## Открытие файлов
+## Opening files
 
-- Файл, открываемый в новом окне, читается и разбирается один раз, а не
-  дважды. На файле 10 МБ повторный разбор 39.7 → 4.1 мс. Если файл успели
-  изменить между проверкой и открытием, он читается заново.
-
----
+- A file opened in a new window is read and parsed once. On a 10 MB file,
+  repeated parsing fell from 39.7 to 4.1 ms. If the file changes between the
+  initial check and opening, it is read again.
 
 # MarkNote 1.0.16
 
-## Кодовые форматы
+## Code formats
 
-- Слева у каждой строки её номер — в json, py, css и других форматах с
-  подсветкой кода. Настройка «нумерация строк» осталась и теперь означает
-  «показывать номера везде, включая Markdown».
-- В форматах без Markdown из меню убраны форматирование, абзац и вставки:
-  в .txt или .py нечего выделять жирным и некуда вставлять таблицу.
-  Правка текста, поиск и пункты JSON остались. Горячие клавиши этих команд
-  там же молчат, а Ctrl + «0» по-прежнему сбрасывает масштаб.
+- Line numbers appear in JSON, Python, CSS, and other syntax-highlighted
+  formats. The line-number setting remains and now means “show numbers
+  everywhere, including Markdown”.
+- Markdown formatting, paragraph, and insertion commands are removed from
+  non-Markdown menus. Text editing, search, and JSON actions remain. Those
+  formatting shortcuts are also silent there, while Ctrl+0 still resets zoom.
 
-## Перетаскивание
+## File drop
 
-- Файл, брошенный в окно, открывается вкладкой в этом же окне. Пустая
-  вкладка занимается первым файлом, на каждый следующий заводится своя, а
-  уже открытый файл просто показывается.
+- A dropped file opens as a tab in the same window. The empty tab takes the
+  first file; each additional file gets its own tab, and an already open file
+  is shown.
 
-## Внешний вид
+## Appearance
 
-- У полосы прокрутки убрана тёмная подложка: вдоль края документа больше нет
-  ленты, виден только ползунок.
-
----
+- The dark track behind the scrollbar is removed; only the thumb is visible.
 
 # MarkNote 1.0.15
 
-- Знаки «=» и «~» при наборе больше не удваиваются: набрали «==» — получите
-  ровно два знака, а не четыре с курсором посередине. Выделенный текст эти
-  знаки по-прежнему оборачивают в ==выделение== и ~~зачёркивание~~.
-
----
+- Equals and tilde are no longer doubled while typing: two typed characters
+  remain two, rather than becoming four with the cursor in the middle.
+  Selected text is still wrapped in highlight or strikethrough markers.
 
 # MarkNote 1.0.14
 
-- Знаки «=» и «==» на строке под текстом больше не превращают эту строку в
-  заголовок и не прячутся: это обычный текст. Подчёркивание заголовка из трёх
-  и более знаков работает как раньше.
-
----
+- A single or double equals line under text no longer creates a heading or
+  hides itself; it is ordinary text. Setext underlines of three or more marks
+  keep their previous heading behavior.
 
 # MarkNote 1.0.13
 
-## Курсор после команд из меню
+## Cursor after menu commands
 
-- После Bold, Italic, Strikethrough, Highlight и вставки заголовка курсор
-  остаётся там, где его поставила команда, а не прыгает в начало документа.
-  Оба меню возвращали фокус так, что браузер сбрасывал курсор на первую
-  строку.
-- Заголовок на пустой строке ставит курсор за «## », и текст пишется справа.
+- After Bold, Italic, Strikethrough, Highlight, and heading insertion, the
+  cursor remains where the command placed it instead of jumping to the start.
+- A heading inserted on an empty line leaves the cursor after its marker.
 
-## Знак равенства
+## Equals sign
 
-- Одиночное «=» печатается одним знаком. Раньше каждое нажатие вставляло
-  «====»: знак равенства было не набрать. Пара «==…==» для выделения цветом
-  закрывается на втором «=» подряд. То же с «~».
+- A single equals sign remains one sign. A second consecutive equals closes a
+  highlight pair; tilde behaves the same way.
 
-## Формулы и горизонтальная линия
+## Formulas and horizontal rules
 
-- Блок $$ … $$ снова рисуется формулой. Раньше он ронял обновление редактора:
-  документ застывал, формула оставалась сырой, а вставка горизонтальной линии
-  в таком документе «не срабатывала» и уводила курсор в начало.
-- Щелчок по формуле открывает её разметку для правки; пока курсор на любой
-  строке блока, видна разметка, а не картинка.
-
----
+- Display math blocks render again instead of freezing editor updates. Clicking
+  a formula reveals its source; while the cursor is anywhere in the block, the
+  source remains visible.
 
 # MarkNote 1.0.12
 
-## Форматирование
+## Formatting
 
-- После Bold, Italic, Strikethrough и Highlight по выделенному тексту курсор
-  встаёт в конце, за закрывающими знаками.
-- После вставки заголовка курсор стоит за «## », где пишется текст.
-- Маркированный список сразу показывает точку, а не черточку.
-- После горизонтальной линии курсор переходит ровно на одну строку ниже.
-- Одна или две черточки под текстом больше не делают его заголовком: это
-  начало списка. «---» прямо под текстом по-прежнему делает заголовок, как в
-  Markdown и Obsidian; для линии оставьте пустую строку перед ней.
+- Bold, italic, strikethrough, and highlight leave the cursor after the closing
+  markers.
+- Heading insertion leaves the cursor after the heading marker.
+- Bulleted lists show a bullet immediately.
+- After a horizontal rule, the cursor moves exactly one line down.
+- One or two hyphens under text start a list rather than creating a heading;
+  three or more still create a Setext heading.
 
-## Таблицы
+## Tables
 
-- Выделенный столбец и перетаскиваемая строка обводятся одной рамкой.
-- Ручка строки слева видна при наведении.
-- Полоска «добавить столбец» ровно в высоту таблицы.
-- Пока тащится строка или столбец, другие ручки и плюсы не появляются.
-- Текст, набранный сразу под таблицей, остаётся обычным текстом: между ним и
-  таблицей появляется пустая строка. Вставка через Ctrl+V сразу под таблицу
-  пока ещё попадает в неё.
+- A selected column and a dragged row use one outline.
+- The row handle is visible on hover at the left.
+- The add-column bar is exactly the table height.
+- Other handles and plus controls stay hidden during a drag.
+- Text immediately below a table remains ordinary text; paste directly below a
+  table still needs separate acceptance.
 
-## Формулы
+## Formulas
 
-- Блок $$ … $$ рисуется формулой и сразу после текста без пустой строки, и в
-  самом конце документа.
-
----
+- A display block renders immediately after text without a blank line and at the
+  end of a document.
 
 # MarkNote 1.0.11
 
-## Таблицы
+## Tables
 
-- Полоска с плюсом «добавить строку» появляется, только когда мышь у нижнего
-  края таблицы, а «добавить столбец» — у правого. В середине строки и под
-  таблицей её больше нет.
-- Линии полосок обычного серого цвета, как границы таблицы.
-- Ручку перемещения столбца легче схватить: зона захвата больше самой ручки.
-- Строки перетаскиваются за ручку слева.
+- Add-row and add-column bars appear only near the bottom and right table edges.
+- Bar lines use the normal table-border gray.
+- Column handle hit areas are larger than the visible handle.
+- Rows can be dragged from the left handle.
+- Remaining visual work at that time was a single column/row outline and exact
+  handle/bar geometry.
 
-Ещё в работе: выделенный столбец обводится по клеткам, а не одной рамкой;
-ручка строки видна плохо; вертикальная полоска чуть длиннее таблицы.
+## Spell checking
 
-## Проверка орфографии
-
-- Убран выбор языка проверки: он ничего не менял. Словарь выбирает Windows по
-  языку интерфейса системы, и изнутри программы это не переопределить.
-  Осталось включение проверки и пропуск кода, формул и ссылок.
-
----
+- The ineffective language selector was removed. Windows chooses the dictionary
+  from its system interface language; MarkNote still offers spellcheck and
+  skip-code/formula/link settings.
 
 # MarkNote 1.0.10
 
-Та же программа, что 1.0.9: код не менялся. Номер новый, потому что 1.0.9 уже
-передан, а один номер не может означать два разных установщика.
+Same product as 1.0.9; no code changed. A new version was required because
+1.0.9 had already been distributed and one number cannot identify two installers.
 
-Если таблицы показываются голыми чертами, а заголовки решётками, — выключен
-живой предпросмотр: Settings → Preview → Live preview. Переустановка это не
-исправит, настройки переживают установку.
-
----
+If tables show raw pipes and headings show hashes, live preview is disabled in
+Settings → Preview → Live preview. Reinstalling does not change that setting.
 
 # MarkNote 1.0.9
 
 ## Windows
 
-- **MarkNote есть в «Приложениях по умолчанию».** Открыть «Параметры →
-  Приложения → Приложения по умолчанию», найти MarkNote и назначить его для
-  нужных расширений — из двадцати трёх, которые он понимает. Назначить себя
-  обработчиком сам MarkNote не пытается: в Windows 10 и 11 этот выбор делает
-  человек, и подделка его считается вредоносным поведением.
+- MarkNote is listed in Windows Default Apps for its supported extensions.
+  MarkNote never assigns itself as the default; Windows requires a person to
+  choose the association.
 
-## Таблицы
+## Tables
 
-- Таблица — объект, а не набор черт. При вставке появляется сетка из четырёх
-  пустых клеток, и больше ничего.
-- Органы управления появляются при наведении: полоска с плюсом во всю ширину у
-  нижнего края добавляет строку, во всю высоту у правого — столбец. Ручки
-  перемещения — у столбца под курсором и у строк слева; при перетаскивании
-  столбец подсвечивается.
-- Таблица масштабируется вместе с текстом по Ctrl + «+».
-- Текст под таблицей нажимается: органы управления не перехватывают щелчки.
+- A table is an object, not a collection of drawing characters. Inserting one
+  creates a four-cell grid.
+- Hover controls provide a full-width add-row bar at the bottom, a full-height
+  add-column bar at the right, and handles above the active column and left of
+  rows.
+- Tables scale with editor text zoom and controls do not intercept clicks below
+  the table.
 
-## Клавиши и списки
+## Keys and lists
 
-- **Tab снова делает отступ**, Shift+Enter переносит курсор на новую строку и
-  сохраняет уровень отступа, выход из отступа — Backspace. Ctrl+Enter больше
-  строку не создаёт.
-- Нумерация включается только после пробела за точкой: «1.» с текстом
-  вплотную остаётся обычным текстом. Перенумерация больше не выбрасывает
-  курсор между числом и точкой.
-- Направляющие линии отступа — слева и видимые, не только у списков, но и у
-  простого текста.
-- В контекстном меню все три вида списка: обычный, нумерованный и список задач.
-  Списки стоят выше заголовков.
-- Галочка в списке задач нарисована сразу и остаётся нарисованной, пока курсор
-  на строке. После вставки любого списка курсор встаёт туда, где печатают.
-- Появилась «Очистить форматирование».
-- **Горизонтальная линия работает.** Вставка падала с исключением, и снаружи
-  это выглядело как «нажимаю, и ничего».
+- Tab indents and Shift+Enter creates a soft line break without changing list
+  level; Backspace exits the indent. Ctrl+Enter no longer creates a line.
+- Numbering starts only after a separator and space. A bare number remains text.
+- Indentation guides are visible on the left.
+- The context menu includes bulleted, numbered, and task lists.
+- Task checkboxes and Clear formatting are available.
+- Horizontal-rule insertion works without losing the cursor.
 
-## Прочее
+## Other
 
-- **Список недавних файлов.** Настройка «открывать последние файлы» наконец
-  делает то, что обещает. Десять последних, пропавшие с диска не показываются,
-  рядом кнопка очистки.
-- Язык проверки орфографии — один, выпадающим списком. Множественный выбор был
-  обманом: отмечалось несколько языков, работал один.
-
-## Что может не работать
-
-- **Язык проверки орфографии, возможно, не действует вовсе.** Движок WebView2
-  по известной и не закрытой ошибке Microsoft берёт язык проверки из системы и
-  игнорирует тот, что сообщает ему редактор. Это проверяется прямо сейчас; если
-  подтвердится, выбор языка уберём или свяжем с перезапуском.
-
----
+- Recent files lists ten existing files and has a clear button.
+- Spellchecking uses one Windows-selected dictionary.
 
 # MarkNote 1.0.8
 
-## Главное в этом выпуске
-
-- **Окно закрывалось, не спрашивая про несохранённое.** Оно спрашивало
-  фронтенд, ответа не получало и через пять секунд закрывалось сторожем — с
-  разрешением. Те три-четыре секунды задержки, которые были заметны, оказались
-  ожиданием сторожа, а за ними пряталась потеря текста. Закрытие теперь
-  занимает около сорока миллисекунд, и вопрос задаётся.
-- **Прокрутка документа.** Текст длиннее окна нельзя было пролистать: ни
-  полосы прокрутки, ни колеса мыши.
-- **Нумерованные списки ведут себя как в Обсидиане**: перенумерация от первого
-  пункта при любом введённом числе, продолжение по Enter, выход из списка на
-  пустом пункте, Tab и Shift+Tab с правильным счётом уровней, мягкий перенос
-  по Shift+Enter, прерывание списка заголовком. Под вложенными списками —
-  направляющие линии.
-
----
+- Closing now asks about unsaved text instead of waiting for a five-second
+  watchdog timeout.
+- Long documents can be scrolled.
+- Numbered lists follow Obsidian-style renumbering, Enter continuation,
+  empty-item exit, Tab/Shift+Tab nesting, Shift+Enter soft breaks, heading
+  interruption, and indentation guides.
 
 # MarkNote 1.0.7
 
-## Вкладки
+Tabs were added inside the window. Each tab preserves undo history, cursor
+position, and scroll; autosave belongs to the tab. A plus button opens the start
+screen, and closing a dirty tab asks the same Save/Discard/Cancel question.
+Explorer opening still uses a new window except for an empty start window.
 
-Внутри окна появились вкладки. Прежний принцип «одно окно — один файл, вкладок
-нет» отменён владельцем проекта осознанно; документы приведены в соответствие.
+The release also fixed deadlocks during double-click launch and New Window,
+browser print/reload accelerators, native window titles, editor zoom, and
+single-file watcher state in a tabbed workspace.
 
-- Полоса вкладок между строкой меню и текстом, видна всегда.
-- На вкладке — имя файла и расширение; у безымянного документа вместо имени
-  первые слова его текста.
-- Кнопка «плюс» справа от последней вкладки открывает новую вкладку со
-  стартовым экраном, где выбирают формат или бросают файл. То же делает
-  `Ctrl+T`.
-- Переключение вкладок не теряет историю отмены, положение курсора и
-  прокрутку: у каждой вкладки своё состояние редактора.
-- Автосохранение принадлежит вкладке, а не окну: несохранённая неактивная
-  вкладка сохраняется по своему сроку.
-- Закрытие вкладки с несохранёнными правками спрашивает так же, как спрашивало
-  окно. При закрытии окна с несколькими такими вкладками задаётся один общий
-  вопрос со списком, а не череда одинаковых окон подряд.
-- Открытие файла из проводника по-прежнему открывает новое окно, а не вкладку
-  в уже открытом. Исключение одно: пустое стартовое окно переиспользуется.
+The tab bar has no glow, the current-line outline is gone, scrollbars and
+checkboxes use quiet theme tokens, and the View menu shows the active zoom.
 
-## Исправления, которые стоит назвать прямо
-
-- **Программа намертво зависала при открытии файла двойным щелчком.** Замок
-  реестра открытых файлов захватывался повторно из-под самого себя, а обычный
-  Mutex в Rust не входит повторно. Главный сценарий из спецификации не работал
-  совсем.
-- **Пункт меню «New Window» не работал** по той же причине в другом месте:
-  команда выполнялась на главном потоке и ждала поток webview, которому некому
-  было ответить.
-- **Ctrl+P открывал диалог печати** поверх редактора; F5, Ctrl+R и
-  Ctrl+Shift+I тоже вели себя по-браузерному.
-- **Заголовок окна не менялся**: в панели задач все окна назывались одинаково,
-  и с несколькими файлами отличить их было нельзя. Оба пути установки
-  заголовка были сломаны, и оба молча.
-- **Масштаб редактора не работал** ни с клавиатуры, ни из меню, ни из
-  настроек: размер шрифта задавался из трёх мест сразу, и настройки
-  перекрывали множитель масштаба.
-- **Слежение за файлом на диске** учитывало только один файл на окно — с
-  вкладками правки чужой программы во второй вкладке проходили бы
-  незамеченными.
-
-## Внешний вид
-
-- Полоса вкладок без свечения и лишних акцентов.
-- Убрана обводка, появлявшаяся вокруг всей области текста при щелчке мимо
-  строки.
-- Убрана подсветка текущей строки.
-- Полосы прокрутки и галочки в тон тёмной теме; серая подложка вокруг
-  числовых полей в настройках приглушена.
-- Меню View показывает текущий масштаб; подписи читаются как `Ctrl + «+»`.
-- Шрифт редактора: у тех, у кого в настройках осталось старое умолчание с
-  засечками, оно однократно заменяется на обычный системный шрифт. Осознанный
-  выбор засечек не сбрасывается.
-
-## Что не работает
-
-- Вариант «открывать последние файлы» при запуске: списка недавних файлов в
-  программе пока нет.
-- Проверка орфографии идёт на одном языке из выбранных: атрибут языка по
-  спецификации HTML принимает одну метку, а одновременную проверку движок
-  настраивает у себя.
-
-Установщик неподписан: Windows SmartScreen может показать предупреждение.
-WebView2 при необходимости ставится загрузчиком.
+Known limitations were unsigned installers and WebView2 spellcheck language
+selection; Windows SmartScreen may warn and WebView2 uses the system dictionary.

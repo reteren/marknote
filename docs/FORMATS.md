@@ -1,121 +1,122 @@
-# Форматы файлов
+# File formats
 
-Вы просили «продвинутый Блокнот»: чтобы двойной клик по чему угодно текстовому
-давал осмысленный результат. Проблема в том, что форматы неравноценны — `.md`
-можно сохранить байт в байт, а PDF нельзя сохранить вообще.
+You asked for an “advanced Notepad”: double-clicking any text-like file should
+produce a meaningful result. The problem is that formats are not equivalent:
+`.md` can be saved byte for byte, while a PDF cannot be saved at all.
 
-Решение: четыре класса. Класс определяет, что программа разрешает делать, и
-честно показывает это в строке состояния.
+The solution is four classes. The class determines what the application allows
+and reports it honestly in the status bar.
 
 ---
 
-## Классы
+## Classes
 
-### A · Родной — Markdown
+### A · Native — Markdown
 
 `.md` `.markdown` `.mdown` `.mkd` `.mdx`
 
-Живой предпросмотр, автосохранение, всё из [SPEC.md](SPEC.md). Это основной
-сценарий, остальное — дополнение.
+Live preview, autosave, and everything in [SPEC.md](SPEC.md). This is the main
+scenario; everything else is an addition.
 
-### B · Простой текст
+### B · Plain text
 
 `.txt` `.log` `.ini` `.cfg` `.conf` `.env` `.csv` `.tsv`
 
-Правка без разметки: разметка Markdown не распознаётся и не прячется. Мягкий
-перенос на 81 символе работает. Автосохранение включено, файл пишется байт в
-байт.
+Editing without markup: Markdown markup is not recognized or hidden. Soft
+wrapping at 81 characters works. Autosave is enabled and the file is written
+byte for byte.
 
-`.csv` и `.tsv` — текстом, без таблицы. Табличный редактор в этой программе
-не помещается, а превращать данные в Markdown-таблицу значит испортить файл
-при сохранении.
+`.csv` and `.tsv` are treated as text, without a table editor. This application
+does not include a table editor, and converting data to a Markdown table would
+damage the file on save.
 
-### C · Код и данные
+### C · Code and data
 
 `.json` `.yaml` `.yml` `.toml` `.xml` `.html` `.css` `.js` `.ts` `.rs` `.py`
 `.go` `.c` `.cpp` `.sh`
 
-Подсветка синтаксиса вместо предпросмотра Markdown, автосохранение,
-сохранение без изменений. Язык подсветки грузится по требованию.
+Syntax highlighting instead of Markdown preview, autosave, and unchanged
+saving. The highlighting language is loaded on demand.
 
-Для JSON дополнительно: проверка синтаксиса с подсветкой места ошибки и команда
-`Format JSON` в меню `Format`.
+For JSON, additionally: syntax validation with the error location highlighted,
+and a `Format JSON` command in the `Format` menu.
 
-### D · С потерями — конвертируемые
+### D · Lossy — convertible
 
 `.rtf`
 
-При открытии конвертируется в Markdown, правится как обычный Markdown. При
-сохранении конвертируется обратно — но обратная конвертация покрывает только
-то, что выразимо в Markdown.
+On opening, the file is converted to Markdown and edited as ordinary Markdown.
+On save, it is converted back, but the reverse conversion covers only what can
+be expressed in Markdown.
 
-Поэтому:
+Therefore:
 
-- **автосохранение выключено**, нужен явный `Ctrl+S`;
-- первое сохранение показывает предупреждение о потере оформления с выбором
-  «сохранить как RTF» или «сохранить как Markdown»;
-- строка состояния помечена `Lossy format`.
+- **autosave is disabled**; explicit `Ctrl+S` is required;
+- the first save shows a formatting-loss warning with a choice of “save as RTF”
+  or “save as Markdown”;
+- the status bar is marked `Lossy format`.
 
-Переживает конвертацию туда и обратно: заголовки, жирный, курсив,
-зачёркнутый, списки маркированные и нумерованные, ссылки, таблицы, абзацы.
+The round trip preserves headings, bold, italic, strikethrough, bulleted and
+numbered lists, links, tables, and paragraphs.
 
-Теряется: шрифты, кегли, цвета, поля, колонтитулы, встроенные объекты,
-сложные таблицы с объединёнными ячейками.
+The following are lost: fonts, font sizes, colors, margins, headers and
+footers, embedded objects, and complex tables with merged cells.
 
-### E · Только чтение
+### E · Read-only
 
 `.pdf` `.docx` `.epub`
 
-Текст извлекается и показывается как Markdown. Правка запрещена, строка
-состояния помечена `Read-only`. Доступна команда `Save as Markdown…` — она
-создаёт новый `.md`, оригинал не трогает.
+Text is extracted and shown as Markdown. Editing is disabled and the status bar
+is marked `Read-only`. `Save as Markdown…` creates a new `.md` without touching
+the original.
 
-Качество извлечения зависит от файла. Текстовый PDF даёт приличный результат.
-PDF со сложной вёрсткой, колонками или сканами — кашу. Это ограничение
-формата, не программы, и его лучше показать честно, чем притворяться.
+Extraction quality depends on the file. A text PDF gives a decent result.
+Complex layouts, columns, or scans produce poor output. This is a limitation
+of the format, not the application, and it is better to report it honestly
+than pretend otherwise.
 
 ---
 
-## Сводная таблица
+## Summary table
 
-| Класс | Расширения | Предпросмотр | Правка | Создание с нуля | Автосохранение | Потери |
+| Class | Extensions | Preview | Editing | Create from scratch | Autosave | Losses |
 | --- | --- | --- | --- | --- | --- | --- |
-| A | md, markdown, mdown, mkd | Markdown | да | да | да | нет |
-| B | txt, log, ini, cfg, env, csv, tsv | нет | да | да | да | нет |
-| C | json, yaml, toml, xml, html, css, js, ts, rs, py, … | подсветка кода | да | да | да | нет |
-| D | rtf | Markdown | да | да | нет | да |
-| E | pdf, docx, epub | Markdown | нет | нет | — | — |
+| A | md, markdown, mdown, mkd | Markdown | yes | yes | yes | no |
+| B | txt, log, ini, cfg, env, csv, tsv | none | yes | yes | yes | no |
+| C | json, yaml, toml, xml, html, css, js, ts, rs, py, … | code highlighting | yes | yes | yes | no |
+| D | rtf | Markdown | yes | yes | no | yes |
+| E | pdf, docx, epub | Markdown | no | no | — | — |
 
-## Создание файлов
+## Creating files
 
-Создать с нуля можно документ любого типа из классов A, B, C и D — со
-стартового экрана или через `File ▸ New`. Класс E создать нельзя: собрать PDF
-из текста программа не умеет, и пункта в списке нет.
+Documents of any type in classes A, B, C, and D can be created from scratch
+from the start screen or through `File ▸ New`. Class E cannot be created:
+the application cannot assemble a PDF from text, and no such item is listed.
 
-Новый документ не пустой, если у формата есть осмысленная заготовка:
+A new document is not empty when the format has a meaningful template:
 
-| Тип | Заготовка |
+| Type | Template |
 | --- | --- |
-| JSON | `{}` с курсором внутри |
-| YAML, TOML, Markdown, текст | пусто |
-| HTML | минимальный каркас документа с `<html>`, `<head>`, `<body>` |
-| CSV, TSV | пусто |
+| JSON | `{}` with the cursor inside |
+| YAML, TOML, Markdown, text | empty |
+| HTML | minimal document skeleton with `<html>`, `<head>`, and `<body>` |
+| CSV, TSV | empty |
 
-Форматы с потерями и форматы только для чтения — RTF, DOCX, EPUB, PDF —
-создать нельзя, их можно только открыть: заготовки у них нет и быть не должно.
-Открытый RTF при первом сохранении предупреждает о потере оформления.
+Lossy and read-only formats — RTF, DOCX, EPUB, and PDF — cannot be created;
+they can only be opened because they have no template and should not have one.
+An opened RTF warns about formatting loss on its first save.
 
-Тип документа можно сменить в любой момент кликом по типу в строке состояния —
-текст сохраняется, меняются только правила. Подробности в
-[SPEC.md, раздел 2.4](SPEC.md#24-смена-типа-документа).
+The document type can be changed at any time by clicking the type in the status
+bar; the text is preserved and only the rules change. Details are in
+[SPEC.md, section 2.4](SPEC.md#24-change-document-type).
 
 ---
 
-## Реализация
+## Implementation
 
-Трейт на стороне Rust, `src-tauri/src/formats/mod.rs`:
+The Rust-side trait is in `src-tauri/src/formats/mod.rs`:
 
-```rust
+~~~rust
 pub trait FormatAdapter {
     fn capabilities(&self) -> FormatCapabilities;
     fn load(&self, path: &Path) -> Result<LoadedDocument>;
@@ -125,20 +126,20 @@ pub trait FormatAdapter {
 pub struct LoadedDocument {
     pub text: String,
     pub encoding: Encoding,   // UTF-8, UTF-8 BOM, UTF-16LE, CP1251
-    pub line_ending: LineEnding, // CRLF или LF
+    pub line_ending: LineEnding, // CRLF or LF
 }
-```
+~~~
 
-Диспетчер выбирает адаптер по расширению. Неизвестное расширение: если файл
-похож на текст — класс B, если двоичный — сообщение об отказе.
+The dispatcher chooses an adapter by extension. For an unknown extension, a
+text-like file uses class B; a binary file produces a rejection message.
 
-Библиотеки: `pdf-extract` для PDF, `docx-rs` для DOCX, разбор RTF пишется
-вручную — подмножество спецификации небольшое, а готовые крейты для обратной
-конвертации всё равно нет.
+Libraries: `pdf-extract` for PDF, `docx-rs` for DOCX, and a hand-written RTF
+parser — the specification subset is small, and no ready-made crates for
+reverse conversion exist anyway.
 
-## Ассоциации файлов
+## File associations
 
-Установщик регистрирует по умолчанию только класс A — `.md` и родственные.
-Остальные попадают в список «Открыть с помощью», но не перехватывают двойной
-клик. Программа, которая после установки забирает себе `.json` и `.txt`, — это
-не то, чего от неё ждут.
+The installer registers only class A by default — `.md` and related
+extensions. The others appear in the “Open with” list but do not take over
+double-click behavior. An application that claims `.json` and `.txt` after
+installation is not behaving as users expect.

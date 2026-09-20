@@ -101,8 +101,8 @@
       <path d="M8 8h8M8 11h5" fill="none" stroke="currentColor" stroke-width="1.35" stroke-linecap="round" />
       <path d="M12.1 16.9c.1-2.2 1.3-3.8 3.9-4.6-.1 2.5-1.4 4.1-3.9 4.6Zm0 0c-.1-1.5-.8-2.6-2.4-3.2.1 1.7.8 2.7 2.4 3.2Z" fill="var(--text-accent)" />
     </svg>
-    <!-- Имя документа показывает строка меню, после File/Edit/View/Help.
-         Здесь его нет намеренно: иначе оно видно дважды. -->
+    <!-- The menu bar shows the document name after File/Edit/View/Help.
+         It is intentionally absent here, otherwise it would appear twice. -->
   </div>
 
   <div class="window-controls" role="group" aria-label={t("window.controls")}>

@@ -1,41 +1,44 @@
-# W142 — размер приложения и память
+# W142 — application size and memory
 
-## Изменения
+## Changes
 
-- `src/editor/livePreview/widgets/Math.ts`: `renderedMath` стал LRU-кэшем с
-  лимитом 256 формул. Ранее карта жила до конца процесса без ограничения.
-- `src/App.svelte`: `SettingsWindow.svelte` загружается динамически только при
-  открытии настроек. `Ctrl+,` и пункт File → Settings проверены в браузере.
-- `tests/wiring/wiring.test.ts` учитывает динамические Svelte-импорты как рёбра
-  графа монтирования; `closeProtocol.test.ts` дожидается lazy-import.
+- `src/editor/livePreview/widgets/Math.ts`: `renderedMath` became an LRU cache
+  capped at 256 formulas. It used to be a map that lived until the process
+  exited, with no limit at all.
+- `src/App.svelte`: `SettingsWindow.svelte` is imported dynamically, only when
+  the settings are opened. `Ctrl+,` and File → Settings were checked in the
+  browser.
+- `tests/wiring/wiring.test.ts` counts dynamic Svelte imports as edges of the
+  mount graph; `closeProtocol.test.ts` waits for the lazy import.
 
-## Измерения
+## Measurements
 
-Все замеры браузера воспроизводятся командой `node qa/measure-memory.mjs` при
-запущенных Vite/Edge из `qa/browser/README.md`; результаты лежат в
-`w142-memory-before.json` и `w142-memory-after.json`. Heap измеряется через
-CDP после `HeapProfiler.collectGarbage`, поэтому для сравнения использован
-именно browser heap, а не изменчивый working set процессов.
+Every browser measurement is reproduced by `node qa/measure-memory.mjs` with
+Vite and Edge running as described in `qa/browser/README.md`; the results are
+in `w142-memory-before.json` and `w142-memory-after.json`. The heap is measured
+through CDP after `HeapProfiler.collectGarbage`, so the comparison uses the
+browser heap rather than the volatile working set of the processes.
 
-| Что измерялось | Инструмент | До | После | Доказательство |
+| What was measured | Tool | Before | After | Evidence |
 |---|---|---:|---:|---|
-| Основной JS-чанк | `node qa/measure-build.mjs` | 558352 B | 538570 B | `w142-build-report-before.json`, `w142-build-report-after.json` |
-| Изолированный эффект lazy SettingsWindow | тот же Rollup-отчёт | 558465 B | 538570 B | `w142-build-report-before-settings.json`, `w142-build-report-after-settings.json` |
-| Стартовый browser heap | CDP | 9.96 MB | 9.88 MB | `w142-memory-*.json` |
-| Документ 1 MiB | CDP | 37.44 MB | 30.69 MB | `w142-memory-*.json` |
-| 10 вкладок | CDP | 38.18 MB | 31.42 MB | `w142-memory-*.json` |
-| После закрытия 9 вкладок | CDP | 37.87 MB | 31.11 MB | `w142-memory-*.json` |
-| 500 правок / 500 уникальных формул | CDP | 37.81 MB | 31.05 MB | `w142-memory-*.json` |
-| 200 циклов открыть/закрыть вкладку | CDP | 39.22 MB | 32.45 MB | `w142-memory-*.json` |
+| Main JS chunk | `node qa/measure-build.mjs` | 558352 B | 538570 B | `w142-build-report-before.json`, `w142-build-report-after.json` |
+| Isolated effect of the lazy SettingsWindow | the same Rollup report | 558465 B | 538570 B | `w142-build-report-before-settings.json`, `w142-build-report-after-settings.json` |
+| Browser heap at startup | CDP | 9.96 MB | 9.88 MB | `w142-memory-*.json` |
+| A 1 MiB document | CDP | 37.44 MB | 30.69 MB | `w142-memory-*.json` |
+| 10 tabs | CDP | 38.18 MB | 31.42 MB | `w142-memory-*.json` |
+| After closing 9 tabs | CDP | 37.87 MB | 31.11 MB | `w142-memory-*.json` |
+| 500 edits / 500 unique formulas | CDP | 37.81 MB | 31.05 MB | `w142-memory-*.json` |
+| 200 cycles of opening and closing a tab | CDP | 39.22 MB | 32.45 MB | `w142-memory-*.json` |
 
-До/после для heap — это один и тот же сценарий из скрипта. Снижение примерно
-на 6.76 MiB после документа и после 200 циклов подтверждает эффект ограничения
-кэша формул; динамическая загрузка настроек дополнительно уменьшает стартовый
-чанк, но в сценарии памяти настройки не открываются.
+Before and after for the heap is the same scenario from the script. The drop of
+roughly 6.76 MiB after the document and after the 200 cycles confirms the
+effect of capping the formula cache; loading the settings dynamically shrinks
+the startup chunk on top of that, although the memory scenario never opens the
+settings.
 
-В финальном основном чанке десять самых тяжёлых модулей:
+The ten heaviest modules in the final main chunk:
 
-| Модуль | Размер |
+| Module | Size |
 |---|---:|
 | `@lezer/javascript` | 81155 B |
 | `@lezer/markdown` | 59346 B |
@@ -48,40 +51,42 @@ CDP после `HeapProfiler.collectGarbage`, поэтому для сравне
 | `src/editor/keymap.ts` | 23298 B |
 | `@codemirror/lang-html` | 22334 B |
 
-`SettingsWindow` теперь отдельный чанк 20631 B JS и 6.90 KB CSS. KaTeX остаётся
-отдельным чанком 260.83 KB. Rollup предупреждает, что часть language-data
-динамических импортов не может быть вынесена: языки также статически попадают
-через `createEditor.ts` и другие адаптеры; эти файлы были вне границ задачи,
-поэтому рискованное изменение не делал.
+`SettingsWindow` is now a separate chunk of 20631 B of JS and 6.90 KB of CSS.
+KaTeX stays a separate chunk of 260.83 KB. Rollup warns that some of the
+language-data dynamic imports cannot be split out: the languages also arrive
+statically through `createEditor.ts` and other adapters; those files were
+outside the bounds of this task, so that risky change was not made.
 
-## Нативные процессы
+## Native processes
 
-`measure-memory.mjs` записывает все совпадающие процессы `marknote.exe` и
-`msedgewebview2` и никого не останавливает. Надёжный нативный A/B-замер не
-принят: до/во время проверки уже были чужие процессы WebView2, а на финальном
-цикле появился `marknote.exe`; например, на старте было 29 WebView2 (~717 MiB
-working set), а на 200-м цикле — 1 MarkNote (~26.8 MiB) и 37 WebView2 (~1.15
-GiB). Смешивание этих процессов делает вывод о росте нативной памяти
-недостоверным, поэтому процесс владельца не закрывался; для чистого прогона
-нужно повторить тот же скрипт после остановки только сторонних экземпляров.
+`measure-memory.mjs` records every matching `marknote.exe` and `msedgewebview2`
+process and stops none of them. A trustworthy native A/B measurement was not
+accepted: other WebView2 processes were already running before and during the
+check, and a `marknote.exe` appeared during the final cycle. At the start there
+were 29 WebView2 processes (~717 MiB working set), and by cycle 200 there were
+1 MarkNote (~26.8 MiB) and 37 WebView2 (~1.15 GiB). Mixing those processes
+makes any conclusion about native memory growth unreliable, so the owner's
+process was not closed; a clean run means repeating the same script after
+stopping only the outside instances.
 
-## Проверки
+## Checks
 
-- `npx tsc --noEmit` — чисто.
-- `npx vitest run --poolOptions.threads.maxThreads=3` — 50 файлов, 429 тестов,
-  все прошли.
-- `npm run build` — успешно; предупреждения Rollup только о неэффективных
-  динамических language-data импортах и размере основного чанка.
-- Живая браузерная проверка Ctrl+, открыла Settings после lazy-import; снимок:
-  `qa/shots/w142-settings.png`.
+- `npx tsc --noEmit` — clean.
+- `npx vitest run --poolOptions.threads.maxThreads=3` — 50 files, 429 tests,
+  all passed.
+- `npm run build` — succeeded; the Rollup warnings are only about the
+  ineffective dynamic language-data imports and the size of the main chunk.
+- A live browser check: Ctrl+, opened Settings after the lazy import;
+  screenshot: `qa/shots/w142-settings.png`.
 
-## Проверил, но сознательно не менял
+## Looked at, and deliberately left alone
 
-- `tabEditorStates` уже удаляет состояние при закрытии вкладки; лишняя правка
-  не дала бы измеримого основания.
-- `imageResolver` очищает документный кэш при смене пути, а удалённые data URL
-  не складываются в дополнительный глобальный кэш.
-- Подписки App/MenuBar/FindPanel/ContextMenu имеют cleanup-функции; изменение
-  без воспроизводимого leak-сигнала было бы лишним.
-- KaTeX и языки уже разбиты на чанки; KaTeX не дублировал основной чанк.
-
+- `tabEditorStates` already drops the state when a tab is closed; an extra
+  change would have had no measurable grounds.
+- `imageResolver` clears its document cache when the path changes, and removed
+  data URLs do not accumulate in an additional global cache.
+- The subscriptions in App/MenuBar/FindPanel/ContextMenu have cleanup
+  functions; changing them without a reproducible leak signal would have been
+  gratuitous.
+- KaTeX and the languages are already split into chunks; KaTeX was not
+  duplicated in the main chunk.

@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-Скрипт для воспроизводимой генерации фикстуры sample.pdf без сторонних зависимостей.
-Генерирует стандартный валидный PDF 1.4 документ с заголовком, несколькими абзацами,
-переносом строки внутри абзаца и списком.
+Generate the sample.pdf fixture reproducibly without third-party dependencies.
+Creates a standard valid PDF 1.4 document with a heading, several paragraphs,
+a line break inside a paragraph, and a list.
 """
 
 from pathlib import Path

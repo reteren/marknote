@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Разрешения основного редактора MarkNote",
+  "description": "Permissions for the main MarkNote editor",
   "windows": ["main", "win-*"],
   "permissions": [
     "core:default",

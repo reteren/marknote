@@ -1,12 +1,11 @@
-"""Сборка набора иконок MarkNote из одного исходника.
+"""Build the MarkNote icon set from one source image.
 
-Масштабирование идёт по ближайшему соседу. Это сделано намеренно: рисунок
-постеризован, с резкими границами и зернистостью, и сглаживающие фильтры
-превращают его в мыло — особенно на 32 пикселях, где как раз и видно иконку
-в панели задач и в проводнике.
+Scaling uses the nearest-neighbor filter intentionally: the image is posterized,
+with sharp edges and grain, and smoothing filters turn it into blur—especially
+at 32 pixels, where the taskbar and Explorer icon are actually seen.
 
-Запуск:  python scripts/generate_icons.py
-Исходник: src-tauri/icons/icon-source.png (512x512, RGBA с прозрачным фоном)
+Run:     python scripts/generate_icons.py
+Source:  src-tauri/icons/icon-source.png (512x512, RGBA with transparency)
 """
 
 from __future__ import annotations
@@ -21,20 +20,20 @@ ROOT = Path(__file__).resolve().parent.parent
 ICONS = ROOT / "src-tauri" / "icons"
 SOURCE = ICONS / "icon-source.png"
 
-# Размеры для tauri.conf.json: имя файла -> сторона в пикселях.
+# Sizes for tauri.conf.json: file name -> side length in pixels.
 PNG_TARGETS = {
     "32x32.png": 32,
     "128x128.png": 128,
     "128x128@2x.png": 256,
 }
 
-# Что кладём в ICO. Windows выбирает подходящий размер сам, поэтому важно
-# покрыть и мелкие (список файлов, панель задач), и крупные (плитки, alt-tab).
+# Contents of the ICO. Windows chooses the appropriate size, so cover both
+# small uses (file lists, taskbar) and large uses (tiles, Alt-Tab).
 ICO_SIZES = [16, 24, 32, 48, 64, 128, 256]
 
 
 def scale(src: Image.Image, side: int) -> Image.Image:
-    """Уменьшение по ближайшему соседу, без сглаживания."""
+    """Downscale with nearest-neighbor filtering and no smoothing."""
     return src.resize((side, side), Image.Resampling.NEAREST)
 
 
@@ -45,13 +44,12 @@ def png_bytes(image: Image.Image) -> bytes:
 
 
 def write_ico(path: Path, images: list[Image.Image]) -> None:
-    """Пишем ICO вручную.
+    """Write an ICO manually.
 
-    Pillow при сохранении ICO пересчитывает размеры своим фильтром и
-    игнорирует то, как изображение было подготовлено, — а нам нужен именно
-    ближайший сосед. Поэтому собираем контейнер сами: заголовок, таблица
-    записей, следом PNG-полезная нагрузка каждого размера (Windows Vista и
-    новее это понимает).
+    Pillow rescales images with its own filter when saving ICO and ignores how
+    the image was prepared, while we specifically need nearest-neighbor output.
+    Build the container ourselves: header, entry table, then PNG payloads for
+    each size (Windows Vista and later understand this layout).
     """
     payloads = [png_bytes(image) for image in images]
     header = struct.pack("<HHH", 0, 1, len(images))
@@ -59,7 +57,7 @@ def write_ico(path: Path, images: list[Image.Image]) -> None:
 
     entries = bytearray()
     for image, payload in zip(images, payloads):
-        side = 0 if image.width >= 256 else image.width  # 256 пишется как 0
+        side = 0 if image.width >= 256 else image.width  # 256 is written as 0
         entries += struct.pack(
             "<BBBBHHII", side, side, 0, 0, 1, 32, len(payload), offset
         )
@@ -70,11 +68,11 @@ def write_ico(path: Path, images: list[Image.Image]) -> None:
 
 def main() -> None:
     if not SOURCE.exists():
-        raise SystemExit(f"нет исходника: {SOURCE}")
+        raise SystemExit(f"source image not found: {SOURCE}")
 
     source = Image.open(SOURCE).convert("RGBA")
     if source.size != (512, 512):
-        print(f"предупреждение: исходник {source.size}, ожидалось 512x512")
+        print(f"warning: source is {source.size}; expected 512x512")
 
     for name, side in PNG_TARGETS.items():
         image = scale(source, side)
@@ -84,11 +82,11 @@ def main() -> None:
     write_ico(ICONS / "icon.ico", [scale(source, side) for side in ICO_SIZES])
     print(f"{'icon.ico':16} {', '.join(str(s) for s in ICO_SIZES)}")
 
-    # Проверка: непрозрачный фон означает, что исходник потерял альфу где-то
-    # по дороге, и иконка будет с белым квадратом вокруг рисунка.
+    # Check: an opaque background means the source lost its alpha channel,
+    # leaving the icon with a white square around the image.
     alpha = scale(source, 32).getchannel("A")
     if alpha.getextrema()[0] != 0:
-        print("предупреждение: в иконке нет прозрачных пикселей")
+        print("warning: the icon has no transparent pixels")
 
 
 if __name__ == "__main__":

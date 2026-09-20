@@ -1,10 +1,10 @@
-// Раздел settings.editor: шрифт, размер, ширина колонки, табуляция,
-// невидимые символы, нумерация строк, мягкий перенос.
+// settings.editor section: font, size, column width, tabs, invisible
+// characters, line numbers, and soft wrapping.
 //
-// Поле zoomPercent сюда не входит: масштаб живёт в src/editor/zoom.ts и
-// работает по Ctrl +/- отдельно.
+// The zoomPercent field does not belong here: zoom lives in src/editor/zoom.ts
+// and works independently through Ctrl +/-.
 //
-// Владелец файла — W85. Сборка расширений в ../settings.ts, туда не пишем.
+// File owner: W85. Extensions are assembled in ../settings.ts; do not edit there.
 
 import { EditorState, type Extension } from "@codemirror/state";
 import { indentUnit } from "@codemirror/language";
@@ -57,26 +57,25 @@ export function editorAppearanceExtensions(settings: Settings | null, formatHasS
     extensions.push(lineNumbers());
   }
 
-  // Мягкий перенос: без него появляется горизонтальная прокрутка. Раньше
-  // EditorView.lineWrapping стоял в createEditor безусловно, поэтому
-  // отсутствие настройки означает «включён».
+  // Soft wrapping: without it, horizontal scrolling appears. EditorView.lineWrapping
+  // used to be unconditional in createEditor, so a missing setting means enabled.
   if (editor?.softWrap !== false) {
     extensions.push(EditorView.lineWrapping);
   }
 
-  // Невидимые символы: пробелы и хвостовые пробелы при редактировании.
+  // Invisible characters: spaces and trailing whitespace while editing.
   if (editor?.showInvisibles === true) {
     extensions.push(highlightWhitespace(), highlightTrailingWhitespace());
   }
 
-  // Табуляция и отступы: ширина табуляции и вставка пробелов/табов.
+  // Tabs and indentation: tab width and insertion of spaces/tabs.
   const tabWidth = typeof editor?.tabWidth === "number" && editor.tabWidth > 0 ? editor.tabWidth : 4;
   extensions.push(EditorState.tabSize.of(tabWidth));
 
   const insertSpaces = editor?.insertSpaces !== false;
   extensions.push(indentUnit.of(insertSpaces ? " ".repeat(tabWidth) : "\t"));
 
-  // Оформление: шрифт, кегль и ширина колонки задаются через тему.
+  // Appearance: font, text size, and column width are set through the theme.
   const fontFamily = resolveFontFamily(editor?.fontFamily);
   const fontSize = typeof editor?.fontSize === "number" && editor.fontSize > 0
     ? `${editor.fontSize}px`

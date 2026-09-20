@@ -1,158 +1,161 @@
-# Настройки
+# Settings
 
-Документ описывает окно настроек: состав, значения по умолчанию, хранение.
+This document describes the settings window: its contents, defaults, and
+storage.
 
-Спецификация в разделе «Ограничения» и README до сих пор утверждали, что
-окна настроек не будет. Решение изменено владельцем проекта осознанно:
-языки интерфейса и проверка орфографии без настроек не живут, а масштаб
-и ширина колонки — первое, что люди хотят подстроить под свой монитор.
+The “Constraints” section and README used to say that there would be no
+settings window. The project owner deliberately changed that decision:
+interface languages and spell checking cannot work without settings, and zoom
+and column width are the first things people want to adapt to their monitor.
 
-Принцип остаётся прежним: **настройка появляется, когда у разумных людей
-разные ответы**. Там, где ответ один, остаётся жёстко заданное поведение.
-Поэтому здесь нет переключателя тёмной темы (она одна), нет выбора
-редактора и нет вкладок.
+The principle remains: **a setting appears when reasonable people can have
+different answers**. Where there is one answer, behavior remains fixed.
+Therefore there is no dark-theme switch (there is only one theme), no editor
+choice, and no tabs.
 
 ---
 
-## 1. Где хранится
+## 1. Storage
 
-Файл `settings.json` в каталоге настроек приложения, который выдаёт
-операционная система. Хранением занимается Rust: фронтенд получает готовую
-структуру и не знает, где она лежит.
+The `settings.json` file is stored in the application settings directory
+provided by the operating system. Rust handles storage: the frontend receives
+a ready structure and does not know where it lives.
 
-Правила:
+Rules:
 
-- файл читается один раз при старте, пишется атомарно — тем же способом,
-  что и документы пользователя, через временный файл с заменой;
-- неизвестные поля при чтении сохраняются, а не выбрасываются: иначе
-  откат на старую версию сотрёт настройки, добавленные новой;
-- повреждённый файл не роняет программу: берутся значения по умолчанию, а
-  испорченный файл переименовывается в `settings.broken.json`, чтобы его
-  можно было посмотреть;
-- у каждого поля есть значение по умолчанию, и отсутствие поля равнозначно
-  умолчанию;
-- отметки о применённых разовых переносах хранятся в объекте `migrations`
-  (`migrations.fontFamilyDefault`, `migrations.spellcheckSingleLanguage`).
-  Старые поля `spellcheck.language` и `spellcheck.languages` теперь являются
-  неизвестными полями: они читаются без ошибки и сохраняются при записи вместе
-  с остальными неизвестными данными. Отметка `spellcheckSingleLanguage`
-  сохраняется для совместимости со старыми файлами и больше не запускает
-  перенос языка.
+- the file is read once at startup and written atomically, in the same way as
+  user documents, through a temporary file and replacement;
+- unknown fields are preserved on read rather than discarded: otherwise
+  rolling back to an older version would erase settings added by a newer one;
+- a damaged file does not crash the application: defaults are used and the
+  damaged file is renamed to `settings.broken.json` so it can be inspected;
+- every field has a default, and a missing field is equivalent to its default;
+- markers for completed one-time migrations are stored in the `migrations`
+  object (`migrations.fontFamilyDefault`,
+  `migrations.spellcheckSingleLanguage`). The old `spellcheck.language` and
+  `spellcheck.languages` fields are now unknown fields: they are read without
+  error and preserved on write with the other unknown data. The
+  `spellcheckSingleLanguage` marker remains for compatibility with old files
+  and no longer starts a language migration.
 
-## 2. Язык интерфейса
+## 2. Interface language
 
-По умолчанию английский. Поддерживаются:
+English is the default. The following languages are supported:
 
-| Код | Язык | Письмо |
+| Code | Language | Script direction |
 | --- | --- | --- |
-| `en` | English | слева направо |
-| `ru` | Русский | слева направо |
-| `de` | Deutsch | слева направо |
-| `es` | Español | слева направо |
-| `pt` | Português | слева направо |
-| `it` | Italiano | слева направо |
-| `fr` | Français | слева направо |
-| `zh` | 中文 | слева направо |
-| `ja` | 日本語 | слева направо |
-| `ar` | العربية | **справа налево** |
+| `en` | English | left to right |
+| `ru` | Russian | left to right |
+| `de` | Deutsch | left to right |
+| `es` | Español | left to right |
+| `pt` | Português | left to right |
+| `it` | Italiano | left to right |
+| `fr` | Français | left to right |
+| `zh` | 中文 | left to right |
+| `ja` | 日本語 | left to right |
+| `ar` | العربية | **right to left** |
 
-Отдельно про арабский: это не просто ещё один список строк. Интерфейс
-переворачивается целиком — меню, строка состояния, панель поиска,
-контекстное меню и направление раскрытия подменю. Верстка обязана
-опираться на логические свойства (`inline-start`, `inline-end`), а не на
-`left` и `right`, иначе арабский интерфейс развалится.
+Arabic is not merely another list of strings. The entire interface is
+mirrored — menus, the status bar, the search panel, the context menu, and the
+direction in which submenus open. Layout must use logical properties
+(`inline-start`, `inline-end`), not `left` and `right`, or the Arabic interface
+will break.
 
-**Текст документа направление не меняет.** Пользователь может писать
-по-арабски в английском интерфейсе и наоборот; направление абзаца
-определяет сам документ, а не язык меню.
+**The document text direction does not change.** A user can write Arabic in an
+English interface and vice versa; the document itself determines paragraph
+direction, not the menu language.
 
-Значение `system` означает «взять язык операционной системы, а если такого
-перевода нет — английский».
+The `system` value means “use the operating-system language, or English if
+that translation is unavailable.”
 
-## 3. Проверка орфографии и автозамена
+## 3. Spell checking and autocorrect
 
-Проверка орфографии идёт средствами WebView2, то есть словарь выбирает Windows
-по языку интерфейса системы. Это ограничение нельзя переопределить атрибутом
-`lang` страницы или настройкой MarkNote: Wry при создании WebView2 сам задаёт
-язык окружения (`src/webview2/mod.rs`, [строки 331–334](https://github.com/tauri-apps/wry/blob/v0.55.1/src/webview2/mod.rs#L331-L334)),
-а WebView2 отслеживает эту проблему в [обращении #5294](https://github.com/MicrosoftEdge/WebView2Feedback/issues/5294).
-Поэтому интерфейс не показывает выбора языка проверки, который ничего не
-меняет.
+Spell checking is provided by WebView2, so Windows chooses the dictionary from
+the system interface language. This limitation cannot be overridden with the
+page’s `lang` attribute or a MarkNote setting: Wry sets the environment
+language when creating WebView2
+([lines 331–334](https://github.com/tauri-apps/wry/blob/v0.55.1/src/webview2/mod.rs#L331-L334)),
+and WebView2 tracks this issue in
+[issue #5294](https://github.com/MicrosoftEdge/WebView2Feedback/issues/5294).
+Therefore the interface does not show a spell-check language selector that
+would have no effect.
 
-Настройки:
+Settings:
 
-- проверка орфографии — включена или выключена;
-- пропускать код, формулы и ссылки — по умолчанию включено: словарь не
-  подчёркивает синтаксис и идентификаторы. Выключают, если хотят проверять
-  и их;
-- автозамена: умные кавычки, длинное тире из двух дефисов, автоматическая
-  заглавная после точки, замена трёх точек на многоточие. Каждая
-  отключается отдельно, все по умолчанию выключены — Markdown-документ
-  часто уходит в систему, которая понимает только простые символы.
+- spell checking — enabled or disabled;
+- skip code, formulas, and links — enabled by default: the dictionary does
+  not underline syntax and identifiers. Disable this when those parts should
+  also be checked;
+- autocorrect: smart quotes, an em dash from two hyphens, automatic
+  capitalization after a period, and replacing three dots with an ellipsis.
+  Each can be disabled separately; all are disabled by default because a
+  Markdown document often goes to a system that understands only plain
+  characters.
 
-## 4. Редактор
+## 4. Editor
 
-| Настройка | По умолчанию | Почему так |
+| Setting | Default | Why |
 | --- | --- | --- |
-| Шрифт текста | системный без засечек | тот же, которым программа набрана сегодня: менять его при обновлении у тех, кто настройку не трогал, нечестно. Засечки и моноширинный — рядом в списке |
-| Размер шрифта | 16 | как сейчас |
-| Масштаб | 100 % | меняется и здесь, и по `Ctrl` `+` / `−` / `0` — это одно и то же значение |
-| Ширина колонки | 81 знак | из спецификации; варианты: узкая 65, обычная 81, широкая 100, во всё окно |
-| Ширина табуляции | 4 | |
-| Табуляция вставляет | пробелы | |
-| Мягкий перенос | включён | выключенный даёт горизонтальную прокрутку |
-| Показывать невидимые символы | выключено | пробелы, табуляции, переводы строк |
-| Нумерация строк | выключена | при выключенной настройке номера есть только в кодовых форматах с `syntaxMode`; при включённой — во всех форматах |
+| Text font | system sans-serif | the same font the application uses today; changing it during an update for users who never touched the setting would be unfair. Serif and monospace fonts are nearby in the list |
+| Font size | 16 | current behavior |
+| Zoom | 100% | changes here and with `Ctrl` `+` / `−` / `0` — this is one value |
+| Column width | 81 characters | from the specification; options: narrow 65, normal 81, wide 100, full window |
+| Tab width | 4 | |
+| Tab inserts | spaces | |
+| Soft wrapping | enabled | disabling it enables horizontal scrolling |
+| Show invisible characters | disabled | spaces, tabs, and line breaks |
+| Line numbers | disabled | when disabled, numbers appear only in code formats with `syntaxMode`; when enabled, they appear in all formats |
 
-## 5. Живой предпросмотр
+## 5. Live preview
 
-| Настройка | По умолчанию |
+| Setting | Default |
 | --- | --- |
-| Живой предпросмотр | включён |
-| Раскрывать разметку | под курсором (варианты: под курсором, на всей строке, никогда) |
-| Отрисовывать формулы | включено |
-| Отрисовывать изображения | включено |
-| Предельная ширина изображения | по ширине колонки |
-| Отключать предпросмотр на файлах больше | 5 МБ |
+| Live preview | enabled |
+| Reveal markup | under the cursor (options: under the cursor, whole line, never) |
+| Render formulas | enabled |
+| Render images | enabled |
+| Maximum image width | column width |
+| Disable preview for files larger than | 5 MB |
 
-Вариант «никогда» превращает редактор в обычный Markdown с подсветкой —
-это честный запасной режим для тех, кому предпросмотр мешает.
+The “never” option turns the editor into ordinary Markdown with highlighting —
+a deliberate fallback mode for people who find preview distracting.
 
-## 6. Файлы и сохранение
+## 6. Files and saving
 
-| Настройка | По умолчанию |
+| Setting | Default |
 | --- | --- |
-| Автосохранение | включено |
-| Задержка автосохранения | 2 секунды |
-| Сохранять при потере фокуса окном | включено |
-| Формат нового документа | Markdown |
-| Кодировка новых файлов | UTF-8 без BOM |
-| Переводы строк новых файлов | как в системе |
-| Убирать пробелы в конце строк при сохранении | выключено |
-| Дописывать перевод строки в конце файла | выключено |
+| Autosave | enabled |
+| Autosave delay | 2 seconds |
+| Save when the window loses focus | enabled |
+| New document format | Markdown |
+| New-file encoding | UTF-8 without BOM |
+| New-file line endings | system default |
+| Remove trailing spaces on save | disabled |
+| Append a final line break | disabled |
 
-Последние две выключены намеренно: они меняют файл сверх того, что
-напечатал пользователь, и для чужого документа это неприятный сюрприз.
+The last two are deliberately disabled: they change a file beyond what the
+user typed, which is an unpleasant surprise for an existing document.
 
-## 7. Окна
+## 7. Windows
 
-| Настройка | По умолчанию |
+| Setting | Default |
 | --- | --- |
-| Запоминать размер и положение окна | включено |
-| Открывать при запуске | стартовый экран (вариант: последние файлы) |
-| Поднимать уже открытое окно вместо нового | включено |
+| Remember window size and position | enabled |
+| Open at startup | start screen (option: recent files) |
+| Raise an already open window instead of opening another | enabled |
 
-## 8. Прочее
+## 8. Other
 
-- кнопка «Сбросить все настройки» с подтверждением;
-- кнопка «Показать файл настроек в проводнике» — чтобы можно было
-  скопировать его на другую машину;
-- в углу окна настроек видна версия программы, оттуда же копируется.
+- a “Reset all settings” button with confirmation;
+- a “Show settings file in Explorer” button, so it can be copied to another
+  machine;
+- the application version is visible in the corner of the settings window and
+  can be copied from there.
 
-## 9. Чего в настройках нет и почему
+## 9. Settings that do not exist and why
 
-- **Светлой темы.** Спецификация обещает одну тёмную тему; переключатель
-  подразумевал бы вторую, которой нет.
-- **Вкладок.** Одно окно на файл — принцип, а не настройка.
-- **Плагинов и хранилищ.** То же самое.
-- **Выбора шрифта интерфейса.** Масштаб решает ту же задачу проще.
+- **Light theme.** The specification promises one dark theme; a switch would
+  imply a second theme that does not exist.
+- **Tabs.** One window per file is a principle, not a setting.
+- **Plugins and vaults.** The same applies.
+- **Interface font selection.** Zoom solves the same problem more simply.

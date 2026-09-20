@@ -128,8 +128,8 @@
   .start-screen {
     position: absolute;
     inset: 0;
-    /* Непрозрачный: экран лежит поверх пустого редактора, и без фона сквозь
-       него видно подсветку активной строки — полосу поперёк экрана. */
+    /* Opaque: the screen lies over the empty editor, and without a background
+       the active-line highlight would show through as a stripe across the screen. */
     background: var(--bg-primary);
     display: grid;
     place-items: center;

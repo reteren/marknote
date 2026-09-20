@@ -277,7 +277,7 @@
     aria-label={t("search.panel")}
     onkeydown={onPanelKeydown}
   >
-    <!-- Строка 1: Поиск -->
+    <!-- Row 1: Search -->
     <div class="panel-row">
       <button
         type="button"
@@ -376,7 +376,7 @@
       </div>
     </div>
 
-    <!-- Строка 2: Замена (при replaceMode) -->
+    <!-- Row 2: Replace (when replaceMode is enabled) -->
     {#if replaceMode}
       <div class="panel-row replace-row">
         <div class="row-spacer"></div>

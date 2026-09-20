@@ -14,10 +14,10 @@ const SUPPRESS_DURATION: Duration = Duration::from_millis(1_500);
 
 struct WatcherState {
     app: AppHandle,
-    /// Все файлы, открытые в каждом окне.  Раньше здесь был один PathBuf на
-    /// метку окна, поэтому открытие второй вкладки затирало наблюдение за
-    /// первой.  Идентификатор вкладки не нужен: путь уже приходит в payload,
-    /// а фронтенд сопоставляет его со своей вкладкой.
+    /// All files open in each window. Previously this held one PathBuf per
+    /// window label, so opening a second tab replaced the first tab's watch.
+    /// A tab identifier is unnecessary: the path is already in the payload,
+    /// and the frontend matches it to its tab.
     watched: Mutex<HashMap<String, HashSet<PathBuf>>>,
     roots: Mutex<HashMap<PathBuf, usize>>,
     suppressed: Mutex<HashMap<PathBuf, Instant>>,

@@ -131,7 +131,8 @@ export function getEditorStats(state: EditorState, previous?: EditorState, chang
   }
 
   const fromLine = state.doc.lineAt(range.from).number;
-  // Конец в начале строки относится к предыдущей строке — так читается Ln 11–16.
+  // An end position at the start of a line belongs to the previous line — this
+  // is how Ln 11–16 is interpreted.
   const toLine = state.doc.lineAt(Math.max(range.from, range.to - 1)).number;
   return {
     line: cursorLine.number,
@@ -153,8 +154,8 @@ const setEditorDocumentPathEffect = StateEffect.define<string | null>();
 const setEditorDocumentFormatEffect = StateEffect.define<FormatCapabilities>();
 
 /**
- * Полное сопоставление syntaxMode из src-tauri/src/formats/code.rs (и частых алиасов)
- * с языками в @codemirror/language-data.
+ * Complete mapping from syntaxMode in src-tauri/src/formats/code.rs (and common
+ * aliases) to languages in @codemirror/language-data.
  */
 export const SYNTAX_MODE_MAP: Readonly<Record<string, string>> = {
   yaml: "yaml",
@@ -195,7 +196,7 @@ export const SYNTAX_MODE_MAP: Readonly<Record<string, string>> = {
 };
 
 /**
- * Находит LanguageDescription в @codemirror/language-data по syntaxMode или имени/расширению.
+ * Finds a LanguageDescription in @codemirror/language-data by syntaxMode or name/extension.
  */
 export function findLanguageDescription(modeOrName: string | null | undefined): LanguageDescription | null {
   if (!modeOrName) return null;
@@ -203,7 +204,7 @@ export function findLanguageDescription(modeOrName: string | null | undefined): 
   if (!trimmed) return null;
   const normalized = trimmed.toLowerCase();
 
-  // Исключаем плейнтекст (в language-data "text" может резолвиться в LaTeX)
+      // Exclude plain text (in language-data, "text" may resolve to LaTeX).
   if (normalized === "plain" || normalized === "text" || normalized === "txt") {
     return null;
   }
@@ -247,8 +248,8 @@ export function loadSyntaxMode(mode: string): Promise<LanguageSupport | null> {
       return support;
     })
     .catch(() => {
-      // Подсветка необязательна: неизвестный или недоступный режим не должен
-      // мешать открыть текст и не должен шуметь в консоли.
+      // Highlighting is optional: an unknown or unavailable mode must not block
+      // opening the text or create console noise.
       pendingSyntaxModes.delete(desc.name);
       return null;
     });
@@ -330,15 +331,15 @@ function activateSyntaxMode(
         selection: view.state.selection,
       });
     } catch {
-      // EditorView мог быть уничтожен, пока разрешался динамический импорт.
+      // EditorView may have been destroyed while the dynamic import was resolving.
     }
   });
 }
 
-/** Обновляет путь документа без пересоздания редактора и его расширений. */
+/** Updates the document path without recreating the editor or its extensions. */
 export function setEditorDocumentPath(view: EditorView, path: string | null): void {
-  // selection в спецификации транзакции заставляет ViewPlugin пересобрать
-  // декорации сразу после обновления StateField.
+  // A selection in the transaction spec makes ViewPlugin rebuild decorations
+  // immediately after the StateField update.
   view.dispatch({
     effects: setEditorDocumentPathEffect.of(path),
     selection: view.state.selection,
@@ -346,9 +347,9 @@ export function setEditorDocumentPath(view: EditorView, path: string | null): vo
 }
 
 /**
- * Меняет тип документа без пересоздания редактора. Перенастройка compartment
- * сохраняет текст, выделение и историю undo; асинхронный язык применяется
- * только если документ всё ещё имеет тот же формат.
+ * Changes the document type without recreating the editor. Reconfiguring the
+ * compartment preserves text, selection, and undo history; the asynchronous
+ * language is applied only if the document still has the same format.
  */
 export function setEditorFormat(view: EditorView, format: FormatCapabilities): Promise<void> | void {
   const runtime = editorRuntimes.get(view);
@@ -370,7 +371,7 @@ export function setEditorFormat(view: EditorView, format: FormatCapabilities): P
   return activateSyntaxMode(view, runtime, format);
 }
 
-/** Алиас для обратной совместимости */
+/** Backward-compatibility alias. */
 export const setEditorDocumentFormat = setEditorFormat;
 
 function buildEditorState(runtime: EditorRuntime, opts: EditorStateOptions): EditorState {
@@ -378,22 +379,21 @@ function buildEditorState(runtime: EditorRuntime, opts: EditorStateOptions): Edi
     runtime.documentPathField,
     runtime.formatField,
     editorMarkdownCommandsStateField,
-    // Таблица обрабатывает Tab раньше общего keymap, иначе сработает
-    // отступ списка вместо перехода к следующей ячейке.
+    // The table handles Tab before the general keymap; otherwise list indentation
+    // would run instead of moving to the next cell.
     keymap.of(tableKeymap),
     createMarknoteKeymap({ handlers: runtime.handlers }),
     marknoteSearch(),
-    // Всё, что зависит от настроек, — в одном отсеке: смена настройки
-    // перенастраивает его, а не пересоздаёт редактор.
+    // Everything controlled by settings lives in one compartment: changing a
+    // setting reconfigures it instead of recreating the editor.
     settingsCompartment.of(editorSettingsExtensions(opts.settings ?? null, Boolean(opts.format.syntaxMode))),
     editorFormatSyntaxStateField,
     editorSettingsStateField,
     syntaxHighlighting(classHighlighter),
     syntaxTokenTheme,
     marknoteTheme,
-    // Один и тот же отсек присутствует в каждом состоянии вкладки. Сам
-    // процент масштаба хранится в runtime view и синхронизируется при
-    // переключении состояния.
+    // The same compartment is present in every tab state. The zoom percentage
+    // itself lives in the view runtime and is synchronized when state switches.
     zoomRuntimeExtension(runtime.zoom),
     EditorView.updateListener.of((update) => {
       if (update.docChanged) runtime.onChange(update.state.doc.toString());
@@ -407,8 +407,8 @@ function buildEditorState(runtime: EditorRuntime, opts: EditorStateOptions): Edi
   );
 
   const state = EditorState.create({ doc: opts.doc, extensions });
-  // StateField хранит последний применённый снимок настроек, чтобы после
-  // setState восстановить тот же отсек и не откатить настройки вкладки.
+  // StateField stores the last applied settings snapshot so setState can restore
+  // the same compartment instead of reverting the tab's settings.
   return state.update({
     effects: [
       setEditorSettingsEffect.of(opts.settings ?? null),
@@ -419,16 +419,16 @@ function buildEditorState(runtime: EditorRuntime, opts: EditorStateOptions): Edi
 }
 
 /**
- * Создаёт состояние вкладки с тем же набором расширений, что и у view.
- * Состояние не подключается к DOM до вызова setEditorState; оболочка может
- * хранить его рядом с WorkspaceTab и передавать обратно при активации.
+ * Creates a tab state with the same extension set as the view.
+ * The state is not attached to the DOM until setEditorState; the shell can keep
+ * it beside WorkspaceTab and pass it back when activating the tab.
  */
 export function createEditorState(view: EditorView, opts: EditorStateOptions): EditorState {
   const runtime = editorRuntimes.get(view);
   if (!runtime) throw new Error("EditorView is not managed by createEditor");
 
-  // Настройки общие для окна. Если они не переданы, копируем снимок активного
-  // состояния, включая null до ответа Rust.
+  // Settings are shared by the window. If none are supplied, copy the active
+  // state's snapshot, including null before Rust responds.
   const activeSettings = view.state.field(editorSettingsStateField, false);
   return runtime.createState({
     ...opts,
@@ -436,22 +436,22 @@ export function createEditorState(view: EditorView, opts: EditorStateOptions): E
   });
 }
 
-/** Возвращает текущий viewport редактора в пикселях. */
+/** Returns the editor's current viewport in pixels. */
 export function getEditorScrollPosition(view: EditorView): EditorScrollPosition {
   return { top: view.scrollDOM.scrollTop, left: view.scrollDOM.scrollLeft };
 }
 
-/** Восстанавливает viewport после переключения состояния вкладки. */
+/** Restores the viewport after switching tab state. */
 export function setEditorScrollPosition(view: EditorView, position: EditorScrollPosition): void {
   view.scrollDOM.scrollTop = Math.max(0, position.top);
   view.scrollDOM.scrollLeft = Math.max(0, position.left);
 }
 
 /**
- * Переключает один EditorView на состояние другой вкладки.
- * Возвращает прежнее состояние, уже содержащее последнюю историю и курсор,
- * чтобы оболочка заменила свой снимок активной вкладки. Положение прокрутки
- * сохраняется отдельно: CodeMirror не включает его в EditorState.
+ * Switches one EditorView to another tab's state.
+ * Returns the previous state, now containing the latest history and cursor, so
+ * the shell can replace its active-tab snapshot. Scroll position is stored
+ * separately because CodeMirror does not include it in EditorState.
  */
 export function setEditorState(view: EditorView, nextState: EditorState): EditorState {
   const runtime = editorRuntimes.get(view);
@@ -465,8 +465,8 @@ export function setEditorState(view: EditorView, nextState: EditorState): Editor
   const settings = previousState.field(editorSettingsStateField, false) ?? null;
   const nextScroll = runtime.scrollPositions.get(nextState) ?? { top: 0, left: 0 };
   view.setState(nextState);
-  // Настройки и масштаб — свойства view, но их Compartment обязан быть в
-  // каждом состоянии. Перенастраиваем оба отсека после подключения нового.
+  // Settings and zoom are view properties, but their Compartments must be in
+  // every state. Reconfigure both compartments after attaching the new state.
   view.dispatch({
     effects: [
       settingsCompartment.reconfigure(editorSettingsExtensions(settings, Boolean(nextFormat?.syntaxMode))),
@@ -476,9 +476,9 @@ export function setEditorState(view: EditorView, nextState: EditorState): Editor
     selection: view.state.selection,
   });
   reconfigureZoom(view);
-  // setState оставляет DOM viewport как есть, а requestMeasure самого view
-  // выполняется позже. Применяем сохранённую позицию сейчас и после измерения;
-  // callback проверяет, что вкладка всё ещё активна.
+  // setState leaves the DOM viewport as is, while the view's requestMeasure runs
+  // later. Apply the saved position now and after measurement; the callback
+  // checks that the tab is still active.
   setEditorScrollPosition(view, nextScroll);
   const stateAfterReconfigure = view.state;
   view.requestMeasure({
@@ -497,13 +497,13 @@ export function createEditor(opts: {
   doc: string;
   path?: string | null;
   format: FormatCapabilities;
-  /** Команды оболочки: сохранение, открытие, окна, масштаб. Приходят из
-   *  src/state/actions.ts — редактор их не реализует, только вызывает. */
+  /** Shell commands: saving, opening, windows, and zoom. They come from
+   *  src/state/actions.ts; the editor invokes them but does not implement them. */
   handlers?: MarknoteKeymapHandlers;
   onChange: (doc: string) => void;
   onStats: (stats: EditorStats) => void;
-  /** Настройки пользователя. Может не быть: редактор поднимается раньше,
-   *  чем Rust успевает отдать settings.json. */
+  /** User settings. They may be absent because the editor starts before Rust
+   *  can provide settings.json. */
   settings?: Settings | null;
 }): EditorView {
   const imageResolver = createImageResolver(opts.path ?? null);
@@ -549,10 +549,9 @@ export function createEditor(opts: {
     state: runtime.createState(opts),
     parent: opts.parent,
   });
-  // Замеры из qa/ работают с настоящим редактором и должны как-то до него
-  // дотянуться. Ссылка выставляется только в режиме разработки (vite), в
-  // собранной программе этого кода нет вовсе: отладочная лазейка в выпуске
-  // никому не нужна.
+  // Measurements from qa/ run against the real editor and need a way to reach
+  // it. The reference is exposed only in development mode (Vite); in the built
+  // program this debug escape hatch is not useful and should not exist.
   if (import.meta.env?.DEV) {
     (globalThis as typeof globalThis & { __marknoteEditorView__?: EditorView }).__marknoteEditorView__ = view;
   }

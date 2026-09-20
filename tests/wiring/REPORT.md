@@ -1,117 +1,115 @@
-# W51 — аудит экспортов, используемых приложением (15.09.2026)
+# W51 — audit of exports used by the application (2026-09-15)
 
-В `tests/wiring/exports.test.ts` добавлена проверка экспортированных функций и
-констант в `src/editor/**`, `src/state/**` и `src/ui/**`. Она использует TypeScript
-checker для разрешения символов, импортов и реэкспортов, отдельно включает
-Svelte `<script>` как виртуальные TypeScript-файлы и игнорирует тесты при поиске
-потребителей. Сообщение о находке содержит исходный файл, имя экспорта и три
-варианта исправления: подключить вызов, удалить экспорт или внести объяснённое
-исключение.
+`tests/wiring/exports.test.ts` checks exported functions and constants in
+`src/editor/**`, `src/state/**`, and `src/ui/**`. It uses the TypeScript checker
+to resolve symbols, imports, and re-exports; Svelte `<script>` blocks are
+included as virtual TypeScript files, while tests are ignored when searching
+for consumers. A finding includes the source file, export name, and three
+possible fixes: connect a call, remove the export, or add a documented exception.
 
-`setEditorFormat` во время работы над проверкой был подключён в `App.svelte`:
-функция теперь вызывается при выборе формата и при сохранении с изменённым
-форматом. Специальная проверка `keeps setEditorFormat called from the application`
-проходит; файл фронтенда в этой задаче не менялся.
+`setEditorFormat` was connected in `App.svelte` during the audit: the function
+is now called when choosing a format and when saving after a format change. The
+special `keeps setEditorFormat called from the application` check passes; this
+task did not change the frontend file.
 
-## Найденные неиспользуемые экспорты
+## Unused exports found
 
-| Файл и экспорты | Владелец по `docs/CONTRACTS.md` | Что проверить |
+| File and exports | Owner in `docs/CONTRACTS.md` | What to check |
 | --- | --- | --- |
-| `src/editor/keymap.ts`: `marknoteKeymap`, `currentLine` | W3 · Frontend shell | Подключить, если это публичные точки входа, иначе удалить неиспользуемые экспорты. |
-| `src/editor/markdownExtensions.ts`: `calloutTypes` | W4 · Разметка и предпросмотр | Значение объявлено и экспортировано, но не читается из `src/`; подключить или убрать экспорт. |
-| `src/editor/zoom.ts`: `installZoom`, `zoomIn`, `zoomOut`, `resetZoom`, `getZoom` | Не указан в таблице владения `CONTRACTS.md` | `App.svelte` реализует масштаб напрямую; координатору назначить владельца, который решит, использовать эти функции или удалить мёртвый API. |
-| `src/state/formats.svelte.ts`: `formatById`, `formatByExtension` | W3 · Frontend shell | Подключить или удалить неиспользуемые helpers. |
-| `src/ui/menuModel.ts`: `buildMenuModel` | W3 · Frontend shell | `MenuBar.svelte` использует `createMenuModel`; подключить alias, если он нужен, или удалить. |
+| `src/editor/keymap.ts`: `marknoteKeymap`, `currentLine` | W3 · Frontend shell | Connect them if they are public entry points; otherwise remove the unused exports. |
+| `src/editor/markdownExtensions.ts`: `calloutTypes` | W4 · Markup and preview | The value is declared and exported but not read from `src/`; connect it or remove the export. |
+| `src/editor/zoom.ts`: `installZoom`, `zoomIn`, `zoomOut`, `resetZoom`, `getZoom` | Not listed in the ownership table in `CONTRACTS.md` | `App.svelte` implements zoom directly; assign an owner to decide whether to use these functions or remove the dead API. |
+| `src/state/formats.svelte.ts`: `formatById`, `formatByExtension` | W3 · Frontend shell | Connect or remove the unused helpers. |
+| `src/ui/menuModel.ts`: `buildMenuModel` | W3 · Frontend shell | `MenuBar.svelte` uses `createMenuModel`; connect the alias if needed or remove it. |
 
-Итого: **11 экспортов** без использования в `src/`. Проверка не исправляла их и
-не меняла файлы, принадлежащие W3/W4. Исключения собраны в одном
-`EXPORTED_VALUE_EXCEPTIONS`: документированный alias обратной совместимости,
-экспорт keybindings для тестов/интеграций, тестовые фасады декораций и очистка
-кэша KaTeX; у каждой записи есть отдельный комментарий и причина. Типы и
-интерфейсы не входят в аудит значений, а UI-компоненты продолжают проверяться
-отдельным тестом монтажа.
+Total: **11** exports are unused in `src/`. The check did not fix them or
+change files owned by W3/W4. Exceptions are collected in one
+`EXPORTED_VALUE_EXCEPTIONS` list: a documented backward-compatibility alias,
+keybindings exported for tests/integrations, decoration test facades, and the
+KaTeX cache reset. Every entry has its own comment and reason. Types and
+interfaces are not part of the value audit; UI components continue to be
+checked by a separate mounting test.
 
-## Проверка
+## Verification
 
-- `npx vitest run`: **222 passed, 1 intentionally failed**. Единственное
-  падение — новый audit test, перечисляющий 11 найденных экспортов; остальные
-  222 теста, включая существующий `tests/wiring/wiring.test.ts`, прошли.
-- `npx tsc --noEmit`: прошёл.
+- `npx vitest run`: **222 passed, 1 intentionally failed**. The only failure
+  was the new audit test listing the 11 discovered exports; the other 222 tests,
+  including the existing `tests/wiring/wiring.test.ts`, passed.
+- `npx tsc --noEmit`: passed.
 
-## Пределы статической проверки
+## Limits of the static check
 
-Это не runtime call graph: использование внутри недостижимой ветки всё ещё
-считается ссылкой. Динамические вызовы по строкам/reflection, computed access,
-сгенерированный код и поведение Tauri-макросов нельзя надёжно свести к
-статическим идентификаторам; такой аудит для публичных Rust-функций был бы
-шумным из-за `#[tauri::command]`, trait methods и callback-регистраций, поэтому
-его не добавляли. Svelte-проверка анализирует `<script>`; функции, используемые
-только в markup-шаблоне, потребуют отдельного Svelte-aware анализа.
+This is not a runtime call graph: use inside an unreachable branch still counts
+as a reference. Dynamic string/reflection calls, computed access, generated
+code, and Tauri macro behavior cannot be reliably reduced to static identifiers;
+an audit of public Rust functions would be noisy because of `#[tauri::command]`,
+trait methods, and callback registration, so it was not added. The Svelte check
+analyzes `<script>`; functions used only in markup need a separate Svelte-aware
+analysis.
 
-# Отчёт о связности
+# Wiring report
 
-Проверка выполнена статическим тестом `tests/wiring/wiring.test.ts` на снимке
-репозитория 14.09.2026. Тесты читают исходники и требуют не только наличия
-модулей, но и явного места подключения; сообщения об ошибках содержат файл и
-действие для исправления.
+The check was performed by the static test `tests/wiring/wiring.test.ts` against
+the repository snapshot from 2026-09-14. Tests require not only that modules
+exist, but also an explicit connection point; error messages include the file
+and corrective action.
 
-## Найденные несвязанные места
+## Unconnected locations found
 
-1. **`src/App.svelte:358` — средняя серьёзность.** Обработчик действия
-   `open-link`/`open-image` вызывает `window.open(payload, ...)` напрямую и
-   обходит `safeLinkHref` из `src/editor/livePreview/inline.ts`. Воспроизведение:
-   передать через контекстное меню внешнюю ссылку `data:`, `file:`,
-   `javascript:` или другую запрещённую схему — она попадает в `window.open`.
-   Владелец по `docs/CONTRACTS.md` — **W3 (Frontend shell, `src/App.svelte`)**;
-   нужно пропустить URL через `safeLinkHref` и не открывать `null`.
+1. **`src/App.svelte:358` — medium severity.** The `open-link`/`open-image`
+   action calls `window.open(payload, ...)` directly and bypasses
+   `safeLinkHref` from `src/editor/livePreview/inline.ts`. Reproduction: pass
+   an external `data:`, `file:`, `javascript:`, or other forbidden scheme
+   through the context menu; it reaches `window.open`. The owner in
+   `docs/CONTRACTS.md` is **W3 (Frontend shell, `src/App.svelte`)**; route the
+   URL through `safeLinkHref` and do not open `null`.
+2. **`src/state/actions.ts:462` — medium severity.** The `openLink` action
+   passes a URL to `dialogs.openLink(url)` without validation. Even if all
+   current call sites use `safeLinkHref`, the external adapter still allows the
+   scheme allowlist to be bypassed. The owner in `docs/CONTRACTS.md` is **W3
+   (`src/state/**`)**; validate the URL here before the adapter, or require the
+   adapter contract to accept only a validated value and enforce that through
+   the sole call path.
 
-2. **`src/state/actions.ts:462` — средняя серьёзность.** Действие
-   `openLink` передаёт URL в `dialogs.openLink(url)` без проверки. Даже если
-   все текущие места вызова используют `safeLinkHref`, внешний адаптер снова
-   позволяет обойти белый список схем. Владелец по `docs/CONTRACTS.md` — **W3
-   (`src/state/**`)**; либо проверять URL здесь перед адаптером, либо закрепить
-   в контракте адаптера уже проверенное значение и обеспечить это единственным
-   вызовом.
+## Connected on the current snapshot
 
-## Что на текущем снимке подключено
+- All `*Builder` exports from `src/editor/livePreview/` are listed in
+  `livePreviewBlockBuilders` in `plugin.ts`.
+- All `*Theme` and `*Tooltip` exports from live preview are included in the
+  array returned by `livePreview()` in `index.ts`.
+- All direct Rust modules, including `binary.rs`, are declared in `lib.rs`, and
+  all formats are declared in `formats/mod.rs`; `open_file` calls the binary
+  detector.
+- All `#[tauri::command]` functions are registered in `generate_handler!`, and
+  the commands from section 5 of `docs/CONTRACTS.md` exist in code.
+- Every `.svelte` file in `src/ui/` is reachable from `App.svelte` through
+  imports and used tags.
+- The direct opener in `src/editor/livePreview/plugin.ts` uses the normalized
+  result of `safeLinkHref`; the separate rule above catches bypasses through
+  the shell/UI.
 
-- Все экспорты `*Builder` из `src/editor/livePreview/` перечислены в
-  `livePreviewBlockBuilders` в `plugin.ts`.
-- Все экспорты `*Theme` и `*Tooltip` из live preview включены в массив,
-  возвращаемый `livePreview()` в `index.ts`.
-- Все прямые Rust-модули (включая `binary.rs`) объявлены в `lib.rs`, а все
-  форматы объявлены в `formats/mod.rs`; `open_file` вызывает
-  `binary::is_binary_sample`.
-- Все `#[tauri::command]` зарегистрированы в `generate_handler!`, а команды
-  из раздела 5 `docs/CONTRACTS.md` существуют в коде.
-- Все `.svelte` из `src/ui/` достижимы от `App.svelte` по импортам и
-  использованным тегам.
-- Прямой opener в `src/editor/livePreview/plugin.ts` использует нормализованный
-  результат `safeLinkHref`; отдельное правило выше ловит обход через shell/UI.
+## Verification
 
-## Проверка
+`npx vitest run` finished with **159 passing tests and 1 meaningful failure**
+(`routes every external opener through safeLinkHref`), which reports both
+findings above. The other five wiring checks passed; `npx tsc --noEmit` passed.
+The build was intentionally not run because of the dispatch scope.
 
-`npx vitest run` завершился с **159 успешными тестами и 1 осмысленным
-падающим тестом** (`routes every external opener through safeLinkHref`), который
-сообщает обе находки выше. Остальные 5 wiring-проверок прошли; `npx tsc
---noEmit` прошёл. Сборка в этой задаче намеренно не запускалась по границам
-диспетча.
+## Check limits
 
-## Пределы проверки
-
-- Это проверка исходного текста, а не TypeScript/Rust AST: она не доказывает
-  выполнение ветки во время запуска, корректность условий, порядок runtime
-  регистрации или поведение сгенерированных макросов.
-- Реестр строителей, темы, Rust-модули и команды проверяются по явным именам;
-  динамические импорты, алиасы, макросы с вычисляемыми списками и generated
-  code могут остаться незамеченными.
-- Монтаж UI проверяется по статическим default-импортам и тегам. Динамический
-  компонент (`<svelte:component>`), реэкспорт через промежуточный модуль или
-  монтирование, зависящее от runtime-условия, требует отдельного теста
-  рендера.
-- Проверка opener ловит `window.open` и обычный `receiver.openLink`. Она не
-  может доказать безопасность URL, переданного через callback, строковый
-  dispatch, `location.assign`, новый Tauri command или API, названный иначе;
-  такие внешние границы нужно проверять отдельным grep/ревью.
-- Наличие вызова `binary::is_binary*` проверяется по тексту в теле `open_file`;
-  тест не измеряет саму эвристику детектора (это задача его unit-тестов).
+- This checks source text rather than the TypeScript/Rust AST: it does not prove
+  branch execution, condition correctness, runtime registration order, or the
+  behavior of generated macros.
+- Builders, themes, Rust modules, and commands are checked by explicit names;
+  dynamic imports, aliases, computed macro lists, and generated code may go
+  unnoticed.
+- UI mounting is checked through static default imports and tags. A dynamic
+  component (`<svelte:component>`), re-export through an intermediate module,
+  or runtime-conditional mounting needs a separate render test.
+- The opener check catches `window.open` and ordinary `receiver.openLink`. It
+  cannot prove the safety of a URL passed through a callback, string dispatch,
+  `location.assign`, a new Tauri command, or an API with another name; those
+  external boundaries need a separate grep/review.
+- The presence of `binary::is_binary*` is checked textually in `open_file`; the
+  test does not measure the detector heuristic itself, which belongs to its
+  unit tests.

@@ -80,10 +80,10 @@ export const defaultSettings: Settings = {
     threeDotsToEllipsis: false,
   },
   editor: {
-    // Умолчания совпадают с тем, как программа выглядит сегодня: --font-text
-    // в src/styles/theme.css это Inter, --font-size-text это 16px. Иначе
-    // обновление молча перекрасило бы шрифт и сменило кегль у всех, кто ни
-    // одной настройки не трогал.
+    // Defaults match the current appearance: --font-text is Inter in
+    // src/styles/theme.css and --font-size-text is 16px. Otherwise an update
+    // would silently recolor the font and change its size for anyone who had
+    // never touched a setting.
     fontFamily: "system-sans",
     fontSize: 16,
     zoomPercent: 100,

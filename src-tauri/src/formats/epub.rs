@@ -537,8 +537,8 @@ fn append_end_tag(
 }
 
 fn append_text(output: &mut String, text: &str) {
-    // Пробелы между тегами сохраняем, а переносы строк из разметки — нет:
-    // в HTML они значения не имеют, а в тексте дали бы рваные абзацы.
+    // Preserve spaces between tags but discard line breaks from the markup:
+    // they have no meaning in HTML and would create fragmented paragraphs.
     let meaningful = !text.chars().all(char::is_whitespace);
     let inline_spacing = !text.contains(['\n', '\r']);
     if meaningful || inline_spacing {
@@ -648,9 +648,9 @@ mod tests {
     #[test]
     fn extracts_xhtml_and_decodes_the_xml_declared_cyrillic_encoding() {
         let xhtml = r#"<?xml version="1.0" encoding="windows-1251"?>
-<html xmlns="http://www.w3.org/1999/xhtml"><head><title>Скрытый заголовок</title></head>
-<body><h1>Привет, мир</h1><p>Текст <strong>важен</strong> &amp; читается.</p>
-<ol><li>Первый пункт</li><li>Второй пункт</li></ol></body></html>"#;
+<html xmlns="http://www.w3.org/1999/xhtml"><head><title>Hidden heading</title></head>
+<body><h1>Hello, world</h1><p>Text <strong>matters</strong> &amp; is readable.</p>
+<ol><li>First item</li><li>Second item</li></ol></body></html>"#;
         let (xhtml, _, had_errors) = encoding_rs::WINDOWS_1251.encode(xhtml);
         assert!(!had_errors);
         let epub = make_epub(
@@ -659,11 +659,11 @@ mod tests {
         );
 
         let decoded = EpubAdapter.decode(&epub).expect("valid generated EPUB");
-        assert!(decoded.text.contains("# Привет, мир"));
-        assert!(decoded.text.contains("Текст **важен** & читается."));
-        assert!(decoded.text.contains("1. Первый пункт"));
-        assert!(decoded.text.contains("2. Второй пункт"));
-        assert!(!decoded.text.contains("Скрытый заголовок"));
+        assert!(decoded.text.contains("# Hello, world"));
+        assert!(decoded.text.contains("Text **matters** & is readable."));
+        assert!(decoded.text.contains("1. First item"));
+        assert!(decoded.text.contains("2. Second item"));
+        assert!(!decoded.text.contains("Hidden heading"));
     }
 
     #[test]

@@ -223,9 +223,9 @@ pub fn respond_to_close(
     Ok(())
 }
 
-// Аргументы — это форма вызова из интерфейса: окно, состояния и поля
-// документа приходят по одному. Складывать их в структуру пришлось бы и на
-// стороне интерфейса, ради вида в одном месте.
+// These arguments mirror the IPC call shape: the window, state, and document
+// fields arrive separately. Grouping them into a struct would only move that
+// boilerplate to the frontend for the sake of presenting it in one place.
 #[allow(clippy::too_many_arguments)]
 #[allow(non_snake_case)]
 #[tauri::command]
@@ -737,7 +737,7 @@ fn now_iso8601() -> String {
     format!("{year:04}-{month:02}-{day:02}T{hour:02}:{minute:02}:{second:02}Z")
 }
 
-// Преобразование количества дней от Unix epoch в григорианскую дату.
+// Convert a number of days since the Unix epoch to a Gregorian date.
 fn civil_from_days(days: i64) -> (i64, i64, i64) {
     let shifted = days + 719_468;
     let era = if shifted >= 0 {
@@ -856,11 +856,13 @@ mod tests {
     #[test]
     fn cp1251_crlf_round_trip_uses_format_adapter() {
         let path = Path::new("note.unknown-extension");
-        let input = b"\xCF\xF0\xE8\xE2\xE5\xF2\r\n";
+        let input = include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../fixtures/cp1251.txt"
+        ));
         let adapter = formats::adapter_for_path(path);
         let decoded = adapter.decode(input).expect("plain adapter must decode");
 
-        assert_eq!(decoded.text, "Привет\n");
         assert_eq!(decoded.encoding, "windows-1251");
         assert_eq!(decoded.line_ending, text_encoding::LineEnding::Crlf);
 

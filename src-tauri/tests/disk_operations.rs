@@ -37,7 +37,7 @@ fn fixtures_dir() -> PathBuf {
 }
 
 // =========================================================================
-// 1. Атомарность записи
+// 1. Atomic write
 // =========================================================================
 
 #[test]
@@ -45,7 +45,7 @@ fn test_atomic_write_truncation_and_clean_directory() {
     let dir = tempfile::tempdir().expect("failed to create temp dir");
     let target = dir.path().join("document.md");
 
-    // Записываем длинный текст
+    // Write long text.
     let long_text =
         b"This is a very long text occupying multiple blocks on disk and padding bytes...";
     atomic_write::write_atomic(&target, long_text).expect("initial write failed");
@@ -53,25 +53,25 @@ fn test_atomic_write_truncation_and_clean_directory() {
     let read_long = fs::read(&target).expect("read target failed");
     assert_eq!(read_long, long_text);
 
-    // Записываем короткий текст поверх существующего длинного
+    // Write short text over the existing long text.
     let short_text = b"Short";
     atomic_write::write_atomic(&target, short_text).expect("overwrite failed");
 
     let read_short = fs::read(&target).expect("read overwritten target failed");
     assert_eq!(
         read_short, short_text,
-        "Файл должен содержать ровно новое содержимое без хвоста старого"
+        "The file must contain exactly the new content without the old tail"
     );
     assert_eq!(read_short.len(), 5);
 
-    // Серия последовательных атомарных записей
+    // A series of sequential atomic writes.
     for i in 0..15 {
         let content = format!("Revision {i} with payload: {}", "x".repeat(i * 100));
         atomic_write::write_atomic(&target, content.as_bytes())
             .unwrap_or_else(|e| panic!("write revision {i} failed: {e}"));
     }
 
-    // Проверяем, что в папке лежит ровно один файл и нет мусорных временных файлов
+    // Verify that the directory contains exactly one file and no temporary debris.
     let mut files = Vec::new();
     for entry in fs::read_dir(dir.path()).expect("read_dir failed") {
         let entry = entry.expect("dir entry failed");
@@ -82,19 +82,19 @@ fn test_atomic_write_truncation_and_clean_directory() {
     assert_eq!(
         files.len(),
         1,
-        "В каталоге должен остаться ровно один файл, но найдено: {:?}",
+        "Exactly one file should remain in the directory, found: {:?}",
         files
     );
     assert_eq!(files[0], "document.md");
 }
 
 // =========================================================================
-// 2. Круговой прогон через реестр форматов на файлах из fixtures/
+// 2. Round trip through the format registry for files in fixtures/
 // =========================================================================
 
 #[test]
 fn test_round_trip_clean_fixtures() {
-    // Эталонные файлы без внутренних аномалий переводов строк должны совпадать байт в байт
+    // Reference files without internal line-ending anomalies must match byte-for-byte.
     let clean_fixtures = [
         ("empty.md", "utf-8", LineEnding::Lf, false),
         ("utf8-bom.md", "utf-8", LineEnding::Lf, true),
@@ -118,26 +118,26 @@ fn test_round_trip_clean_fixtures() {
 
         assert_eq!(
             decoded.encoding, expected_enc,
-            "{name}: неожиданная кодировка"
+            "{name}: unexpected encoding"
         );
         assert_eq!(
             decoded.line_ending, expected_eol,
-            "{name}: неожиданный перевод строк"
+            "{name}: unexpected line ending"
         );
-        assert_eq!(decoded.bom, expected_bom, "{name}: флаг BOM не совпадает");
+        assert_eq!(decoded.bom, expected_bom, "{name}: BOM flag does not match");
 
         let encoded_bytes = adapter
             .encode(&decoded.text, &decoded)
             .unwrap_or_else(|e| panic!("encode {name} failed: {e}"));
 
-        // Записываем во временную копию
+        // Write a temporary copy.
         let copy_path = temp_dir.path().join(name);
         atomic_write::write_atomic(&copy_path, &encoded_bytes).expect("write copy failed");
         let disk_copy = fs::read(&copy_path).expect("read copy failed");
 
         assert_eq!(
             raw_bytes, disk_copy,
-            "Байты {name} после кругового прогона и записи на диск должны совпадать на 100%"
+            "Bytes for {name} must match 100% after a round trip and disk write"
         );
     }
 }
@@ -146,7 +146,7 @@ fn test_round_trip_clean_fixtures() {
 fn test_round_trip_investigation_mixed_eol_and_cp1251() {
     let dir = fixtures_dir();
 
-    // 1. Исследование mixed-eol.md
+    // 1. Investigate mixed-eol.md.
     let mixed_path = dir.join("mixed-eol.md");
     let mixed_raw = fs::read(&mixed_path).expect("read mixed-eol.md failed");
     let mixed_adapter = formats::adapter_for_path(&mixed_path);
@@ -154,22 +154,22 @@ fn test_round_trip_investigation_mixed_eol_and_cp1251() {
         .decode(&mixed_raw)
         .expect("decode mixed-eol.md failed");
 
-    // mixed-eol.md содержит 2 строки CRLF и 2 строки LF.
-    // По правилу большинства (crlf >= lf) выбирается CRLF.
+    // mixed-eol.md contains two CRLF lines and two LF lines.
+    // The majority rule (crlf >= lf) selects CRLF.
     assert_eq!(mixed_decoded.line_ending, LineEnding::Crlf);
 
     let mixed_encoded = mixed_adapter
         .encode(&mixed_decoded.text, &mixed_decoded)
         .expect("encode mixed-eol.md failed");
 
-    // Исходный файл: 67 байт. Закодированный файл: 69 байт (+2 байта за счёт нормализации двух LF в CRLF).
+    // Source file: 67 bytes. Encoded file: 69 bytes (+2 bytes from normalizing two LF to CRLF).
     assert_eq!(mixed_raw.len(), 67);
     assert_eq!(mixed_encoded.len(), 69);
-    // Первое расхождение на байте 56 (0x38): исходный был LF (0x0A), стал CRLF (0x0D 0x0A).
+    // The first difference is at byte 56 (0x38): source LF (0x0A) becomes CRLF (0x0D 0x0A).
     assert_eq!(mixed_raw[56], 0x0A);
     assert_eq!(mixed_encoded[56], 0x0D);
 
-    // 2. Исследование cp1251.txt
+    // 2. Investigate cp1251.txt.
     let cp1251_path = dir.join("cp1251.txt");
     let cp1251_raw = fs::read(&cp1251_path).expect("read cp1251.txt failed");
     let cp1251_adapter = formats::adapter_for_path(&cp1251_path);
@@ -184,26 +184,25 @@ fn test_round_trip_investigation_mixed_eol_and_cp1251() {
         .encode(&cp1251_decoded.text, &cp1251_decoded)
         .expect("encode cp1251.txt failed");
 
-    // Здесь расхождения быть НЕ должно.
+    // There must be no difference here.
     //
-    // Раньше тест фиксировал расхождение в два байта и объяснял его
-    // нормализацией переводов строк. Объяснение было неверным: в самой
-    // фикстуре лежали случайно записанные последовательности из двух
-    // возвратов каретки подряд. Файл исправлен, и корректный CP1251 с CRLF
-    // обязан проходить круговой прогон байт в байт — это и есть обещание
-    // «сохранение байт в байт» из docs/FORMATS.md.
+    // The test used to record a two-byte difference and blame line-ending
+    // normalization. That explanation was wrong: the fixture itself contained
+    // accidental sequences of two consecutive carriage returns. The file is
+    // fixed, and valid CP1251 with CRLF must round-trip byte-for-byte—this is
+    // the “byte-for-byte preservation” promise in docs/FORMATS.md.
     assert!(
         !cp1251_raw.windows(3).any(|w| w == [0x0D, 0x0D, 0x0A]),
-        "в фикстуре снова появился двойной возврат каретки — она испорчена"
+        "the fixture contains a double carriage return again and is corrupted"
     );
     assert_eq!(
         cp1251_encoded, cp1251_raw,
-        "CP1251 с CRLF обязан проходить круговой прогон без единого изменённого байта"
+        "CP1251 with CRLF must round-trip without a single changed byte"
     );
 }
 
 // =========================================================================
-// 3. Правка текста с сохранением кодировки (CP1251)
+// 3. Edit text while preserving its encoding (CP1251)
 // =========================================================================
 
 #[test]
@@ -220,53 +219,53 @@ fn test_cp1251_editing_preserves_encoding_and_line_endings() {
     assert_eq!(decoded.encoding, "windows-1251");
     assert_eq!(decoded.line_ending, LineEnding::Crlf);
 
-    // Дописываем новую строку на кириллице
-    let appended_line = "Новая третья строка кириллицы.\n";
+    // Append a new line containing plain ASCII text.
+    let appended_line = "New third line in plain text.\n";
     let edited_text = format!("{}{appended_line}", decoded.text);
 
-    // Кодируем обратно с сохранением метаданных исходного документа
+    // Encode it again while preserving the source document metadata.
     let encoded = adapter
         .encode(&edited_text, &decoded)
         .expect("encode edited cp1251 failed");
 
-    // Сохраняем на настоящий диск через write_atomic
+    // Save to the real disk through write_atomic.
     let temp_dir = tempfile::tempdir().expect("tempdir failed");
     let target_file = temp_dir.path().join("saved_cp1251.txt");
     atomic_write::write_atomic(&target_file, &encoded).expect("write_atomic failed");
 
-    // Читаем сохранённый файл обратно с диска
+    // Read the saved file back from disk.
     let read_back_raw = fs::read(&target_file).expect("read back file failed");
 
-    // Декодируем и проверяем: файл остался в CP1251, с CRLF, а не стал UTF-8
+    // Decode and verify that the file stayed CP1251 with CRLF rather than becoming UTF-8.
     let re_decoded = adapter
         .decode(&read_back_raw)
         .expect("re-decode file failed");
     assert_eq!(
         re_decoded.encoding, "windows-1251",
-        "Файл обязан сохраниться в Windows-1251, а не молча стать UTF-8"
+        "The file must remain Windows-1251 rather than silently becoming UTF-8"
     );
     assert_eq!(
         re_decoded.line_ending,
         LineEnding::Crlf,
-        "Переводы строк обязаны остаться CRLF"
+        "Line endings must remain CRLF"
     );
     assert!(
-        re_decoded.text.contains("Новая третья строка кириллицы.\n"),
-        "Добавленная кириллическая строка должна корректно присутствовать в тексте"
+        re_decoded.text.contains("New third line in plain text.\n"),
+        "The appended line must be present in the text"
     );
 
-    // Проверяем байты добавленной строки в Windows-1251:
-    // 'Н' в CP1251 = 0xCD, 'о' = 0xEE, 'в' = 0xE2, 'а' = 0xE0, 'я' = 0xFF
+    // Check the appended line's Windows-1251 bytes. Its first five bytes are
+    // the single-byte ASCII sequence for "New t", not multibyte UTF-8.
     assert!(
         read_back_raw
             .windows(5)
-            .any(|w| w == [0xCD, 0xEE, 0xE2, 0xE0, 0xFF]),
-        "Байты на диске должны быть в однобайтовой кодировке CP1251, а не многобайтовым UTF-8"
+            .any(|w| w == [0x4E, 0x65, 0x77, 0x20, 0x74]),
+        "Disk bytes must use the single-byte CP1251 encoding, not multibyte UTF-8"
     );
 }
 
 // =========================================================================
-// 4. Наблюдатель и подавление собственных записей
+// 4. Watcher and suppression of own writes
 // =========================================================================
 
 #[test]
@@ -294,41 +293,41 @@ fn test_watcher_suppress_prevents_self_loop_and_allows_external() {
 
     watcher.watch("main", &watched_file);
 
-    // Небольшая пауза для инициализации дебаунсера notify
+    // Brief pause to initialize the notify debouncer.
     std::thread::sleep(Duration::from_millis(300));
 
-    // СЦЕНАРИЙ А: Собственная запись с предварительным suppress
+    // SCENARIO A: own write after suppression.
     watcher.suppress(&watched_file);
     atomic_write::write_atomic(&watched_file, b"# Modified by Self (Autosave)\n")
         .expect("atomic write failed");
 
-    // Ждём время дебаунса (в watcher.rs дебаунс равен 200 мс)
+    // Wait for the debounce interval (watcher.rs uses 200 ms).
     std::thread::sleep(Duration::from_millis(600));
 
     assert!(
         events.lock().unwrap().is_empty(),
-        "Запись после suppress не должна вызывать событие file-changed-externally, но получено: {:?}",
+        "A suppressed write must not emit file-changed-externally, but got: {:?}",
         events.lock().unwrap()
     );
 
-    // СЦЕНАРИЙ Б: Посторонняя запись без suppress (после истечения 1.5 с окна подавления)
+    // SCENARIO B: external write without suppression (after the 1.5 s suppression window).
     std::thread::sleep(Duration::from_millis(1600));
 
-    // Внешняя программа напрямую меняет файл на диске
+    // An external program changes the file directly on disk.
     atomic_write::write_atomic(&watched_file, b"# Modified Externally\n")
         .expect("external write failed");
 
-    // Ждём срабатывания дебаунсера notify
+    // Wait for the notify debouncer.
     std::thread::sleep(Duration::from_millis(800));
 
     let captured = events.lock().unwrap().clone();
     assert!(
         !captured.is_empty(),
-        "Посторонняя запись без suppress обязана вызвать событие file-changed-externally"
+        "An external unsuppressed write must emit file-changed-externally"
     );
     assert!(
         captured[0].contains("note_under_watch.md"),
-        "Payload события должен содержать имя изменённого файла"
+        "The event payload must contain the changed file name"
     );
 
     watcher.unwatch("main");
@@ -371,18 +370,18 @@ fn test_watcher_keeps_two_paths_in_one_window() {
     let captured = events.lock().unwrap().clone();
     assert!(
         captured.iter().any(|event| event.contains("first.md")),
-        "изменение первого файла должно прийти отдельным событием: {captured:?}"
+        "the first file change must arrive as a separate event: {captured:?}"
     );
     assert!(
         captured.iter().any(|event| event.contains("second.md")),
-        "изменение второго файла должно прийти отдельным событием: {captured:?}"
+        "the second file change must arrive as a separate event: {captured:?}"
     );
 
     watcher.unwatch("main");
 }
 
 // =========================================================================
-// 5. Большой файл (big-10k.md)
+// 5. Large file (big-10k.md)
 // =========================================================================
 
 #[test]
@@ -393,7 +392,7 @@ fn test_big_file_performance_and_round_trip() {
 
     assert!(
         raw_bytes.len() > 1_000_000,
-        "big-10k.md должен быть размером около 1 МБ, получено {} байт",
+        "big-10k.md should be about 1 MB, got {} bytes",
         raw_bytes.len()
     );
 
@@ -421,13 +420,10 @@ fn test_big_file_performance_and_round_trip() {
     let total_time = start.elapsed();
 
     let disk_copy = fs::read(&copy_path).expect("read big copy failed");
-    assert_eq!(
-        raw_bytes, disk_copy,
-        "Байты большого файла должны совпадать на 100%"
-    );
+    assert_eq!(raw_bytes, disk_copy, "Large-file bytes must match 100%");
 
     println!(
-        "Большой файл ({} байт): декодирование {:?}, кодирование {:?}, атомарная запись {:?}. Всего: {:?}",
+        "Large file ({} bytes): decode {:?}, encode {:?}, atomic write {:?}. Total: {:?}",
         raw_bytes.len(),
         decode_time,
         encode_time,
@@ -435,10 +431,10 @@ fn test_big_file_performance_and_round_trip() {
         total_time
     );
 
-    // Весь цикл чтения, разбора, кодирования и записи на диск должен занимать не более 1.5 секунды
+    // The full read, parse, encode, and disk-write cycle must take no more than 1.5 seconds.
     assert!(
         total_time < Duration::from_millis(1500),
-        "Операции с большим файлом должны укладываться в разумное время, затрачено: {:?}",
+        "Large-file operations must complete in a reasonable time, took: {:?}",
         total_time
     );
 }

@@ -203,10 +203,10 @@ mod tests {
             .add_paragraph(
                 docx_rs::Paragraph::new()
                     .style("Heading1")
-                    .add_run(docx_rs::Run::new().add_text("Заголовок")),
+                    .add_run(docx_rs::Run::new().add_text("Heading")),
             )
             .add_paragraph(
-                docx_rs::Paragraph::new().add_run(docx_rs::Run::new().add_text("Текст документа")),
+                docx_rs::Paragraph::new().add_run(docx_rs::Run::new().add_text("Document text")),
             )
             .pack(&mut archive);
         assert!(write_result.is_ok());
@@ -214,7 +214,7 @@ mod tests {
         let decoded = DocxAdapter
             .decode(archive.get_ref())
             .expect("valid generated DOCX");
-        assert!(decoded.text.contains("# Заголовок"));
-        assert!(decoded.text.contains("Текст документа"));
+        assert!(decoded.text.contains("# Heading"));
+        assert!(decoded.text.contains("Document text"));
     }
 }

@@ -15,8 +15,8 @@ const highlightDelimiter = { resolve: "Highlight", mark: "HighlightMark" };
 const commentDelimiter = { resolve: "Comment", mark: "CommentMark" };
 
 /**
- * Скобки, которые используются в расширенных inline-конструкциях. Lezer
- * разрешает такие разделители тем же проходом, что и стандартное `~~`.
+ * Brackets used by extended inline constructs. Lezer accepts these delimiters
+ * in the same pass as the standard `~~`.
  */
 const pairedInline = (config: {
   name: string;
@@ -40,7 +40,7 @@ const pairedInline = (config: {
           if (next !== config.open.charCodeAt(0) || cx.slice(pos, pos + width) !== config.open)
             return -1;
 
-          // Более длинная последовательность относится не к этой паре.
+          // A longer sequence belongs to a different pair.
           if (cx.slice(pos - 1, pos) === config.open[0] || cx.slice(pos + width, pos + width + 1) === config.open[0])
             return -1;
 
@@ -106,7 +106,7 @@ function endOfLine(cx: BlockContext, line: Line) {
   return cx.lineStart + line.text.length;
 }
 
-/** Блоки `$$ ... $$` собираются одним узлом, чтобы widget мог заменить их. */
+/** `$$ ... $$` blocks are collected as one node so the widget can replace them. */
 const MathBlockParser: BlockParser = {
   name: "MarknoteMathBlock",
   before: "FencedCode",
@@ -147,7 +147,7 @@ const MathBlockParser: BlockParser = {
       to = endOfLine(cx, line);
     }
 
-    // Незакрытая формула всё равно получает узел и остаётся редактируемой.
+    // An unclosed formula still gets a node and remains editable.
     cx.addElement(cx.elt("MathBlock", from, to, children));
     cx.nextLine();
     return true;
@@ -157,7 +157,7 @@ const MathBlockParser: BlockParser = {
 const calloutTypes = new Set(["note", "tip", "warning", "danger", "info", "success", "question", "quote", "example"]);
 const calloutRE = /^\s*>\s*\[!([A-Za-z]+)\][ \t]*(.*)$/;
 
-/** Расширяет обычную цитату узлом Callout с типом и первой строкой-заголовком. */
+/** Extends an ordinary quote with a Callout node containing its type and first heading line. */
 const CalloutParser: BlockParser = {
   name: "MarknoteCallout",
   before: "Blockquote",
@@ -265,7 +265,7 @@ const MarknoteBlocks: MarkdownConfig = {
   parseBlock: [MathBlockParser, CalloutParser, FootnoteDefinitionParser],
 };
 
-/** ==подсветка==, %%комментарий%%, $формула$, $$блок$$, > [!NOTE], [^1] */
+/** ==highlight==, %%comment%%, $formula$, $$block$$, > [!NOTE], [^1] */
 export const marknoteMarkdown: MarkdownExtension[] = [
   GFM,
   Highlight,

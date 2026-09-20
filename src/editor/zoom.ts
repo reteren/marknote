@@ -2,16 +2,16 @@ import { Compartment, StateEffect, type Extension } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { settingsState, updateSettings } from "../state/settings.svelte";
 
-/** Размеры выбраны так, чтобы не ломать рабочую колонку и оставаться читаемыми. */
+/** Values are chosen to keep the working column intact and remain readable. */
 const ZOOM_DEFAULT = 100;
 const ZOOM_MIN = 50;
 const ZOOM_MAX = 200;
 const ZOOM_STEP = 10;
 const ZOOM_STORAGE_KEY = "marknote.editor.zoom";
 
-/** Runtime масштаба принадлежит одному EditorView и переиспользуется его
- * состояниями вкладок. Сам отсек должен присутствовать в каждом состоянии,
- * иначе view.setState не сможет перенастроить масштаб после переключения. */
+/** The zoom runtime belongs to one EditorView and is reused by its tab states.
+ * The compartment itself must be present in every state, otherwise view.setState
+ * cannot reconfigure zoom after switching tabs. */
 export type ZoomRuntime = {
   compartment: Compartment;
   percent: number;
@@ -30,7 +30,7 @@ function readStoredZoom(): number {
     if (raw === null || raw === undefined) return ZOOM_DEFAULT;
     return clampZoom(Number(raw));
   } catch {
-    // localStorage может быть отключён политикой приватности WebView.
+    // localStorage may be disabled by the WebView privacy policy.
     return ZOOM_DEFAULT;
   }
 }
@@ -39,25 +39,24 @@ function storeZoom(percent: number): void {
   try {
     globalThis.localStorage?.setItem(ZOOM_STORAGE_KEY, String(percent));
   } catch {
-    // Запоминание необязательно и не должно мешать редактированию.
+    // Persistence is optional and must not interfere with editing.
   }
 }
 
 function getInitialZoom(): number {
-  // Единственное хранилище масштаба — settings.json. Раньше значение жило в
-  // localStorage, а в настройках лежала копия, которая ни на что не влияла:
-  // после перезапуска побеждал localStorage, и масштаб не переносился вместе
-  // с файлом настроек на другую машину.
+  // settings.json is the single source of zoom. Previously the value lived in
+  // localStorage while settings held an inert copy: after a restart localStorage
+  // won, and zoom did not travel with the settings file to another machine.
   if (settingsState.ready) return clampZoom(settingsState.settings.editor.zoomPercent);
-  // Запасной путь для запуска вне Tauri — в тестах и в обычном браузере, где
-  // настроек нет вовсе. Не мёртвый код: без него редактор там теряет масштаб.
+  // Fallback for running outside Tauri — in tests and an ordinary browser where
+  // settings do not exist at all. This is live code: without it the editor loses zoom there.
   return readStoredZoom();
 }
 
 export function zoomTheme(percent: number): Extension {
   const factor = percent / ZOOM_DEFAULT;
   return EditorView.theme({
-    // Меню и строка состояния не меняются: селектор ограничен этим редактором.
+    // The menu and status bar do not change: the selector is scoped to this editor.
     // `marknoteTheme` is installed after the settings compartment.  Include
     // the editor class in the zoom selectors so these calculated values win
     // over the base variable declaration without using !important.
@@ -71,7 +70,7 @@ export function zoomTheme(percent: number): Extension {
   });
 }
 
-/** Создаёт отсек масштаба до создания первого EditorState. */
+/** Creates the zoom compartment before the first EditorState. */
 export function createZoomRuntime(initialPercent?: number): ZoomRuntime {
   return {
     compartment: new Compartment(),
@@ -79,17 +78,17 @@ export function createZoomRuntime(initialPercent?: number): ZoomRuntime {
   };
 }
 
-/** Добавляет отсек масштаба в список расширений состояния. */
+/** Adds the zoom compartment to the state's extension list. */
 export function zoomRuntimeExtension(runtime: ZoomRuntime): Extension {
   return runtime.compartment.of(zoomTheme(runtime.percent));
 }
 
-/** Регистрирует заранее созданный runtime за view. */
+/** Registers a pre-created runtime for a view. */
 export function registerZoomRuntime(view: EditorView, runtime: ZoomRuntime): void {
   runtimes.set(view, runtime);
 }
 
-/** Синхронизирует отсек масштаба после setState. */
+/** Synchronizes the zoom compartment after setState. */
 export function reconfigureZoom(view: EditorView): void {
   const runtime = ensureRuntime(view);
   view.dispatch({
@@ -115,10 +114,10 @@ function applyZoom(view: EditorView, percent: number, syncSettings = true): void
   const runtime = ensureRuntime(view);
   const next = clampZoom(percent);
   runtime.percent = next;
-  // Запасной путь для запуска вне Tauri, см. getInitialZoom.
+  // Fallback for running outside Tauri; see getInitialZoom.
   storeZoom(next);
-  // Запись в настройки уже с задержкой (scheduleSave), поэтому серия нажатий
-  // Ctrl+= не превращается в серию записей на диск.
+  // Settings writes are already delayed (scheduleSave), so a series of Ctrl+=
+  // presses does not become a series of disk writes.
   if (syncSettings && settingsState.settings.editor.zoomPercent !== next) {
     updateSettings({ editor: { zoomPercent: next } });
   }
@@ -128,33 +127,33 @@ function applyZoom(view: EditorView, percent: number, syncSettings = true): void
   });
 }
 
-/** Подключает масштаб и восстанавливает значение из настроек (с fallback на localStorage). */
+/** Installs zoom and restores its value from settings (falling back to localStorage). */
 export function installZoom(view: EditorView): number {
   ensureRuntime(view);
   return getZoom(view);
 }
 
-/** Устанавливает точное значение масштаба редактора. */
+/** Sets the editor's exact zoom value. */
 export function setZoomPercent(view: EditorView, percent: number, syncSettings = true): void {
   applyZoom(view, percent, syncSettings);
 }
 
-/** Увеличивает кегль текста редактора на один шаг. */
+/** Increases the editor text size by one step. */
 export function zoomIn(view: EditorView): void {
   applyZoom(view, ensureRuntime(view).percent + ZOOM_STEP);
 }
 
-/** Уменьшает кегль текста редактора на один шаг. */
+/** Decreases the editor text size by one step. */
 export function zoomOut(view: EditorView): void {
   applyZoom(view, ensureRuntime(view).percent - ZOOM_STEP);
 }
 
-/** Возвращает масштаб к исходному значению и сохраняет это решение в настройках. */
+/** Restores the default zoom and persists that choice in settings. */
 export function resetZoom(view: EditorView): void {
   applyZoom(view, ZOOM_DEFAULT);
 }
 
-/** Возвращает текущий масштаб; полезно оболочке для состояния пункта меню. */
+/** Returns the current zoom; the shell uses it for the menu-item state. */
 export function getZoom(view: EditorView): number {
   return ensureRuntime(view).percent;
 }

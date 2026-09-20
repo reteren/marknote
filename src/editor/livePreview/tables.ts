@@ -177,7 +177,7 @@ function hideRowDelimitersAndGaps(
 ) {
   const hide = Decoration.replace({});
 
-  // 1. Скрываем все вертикальные черты таблицы (|)
+  // 1. Hide all vertical table bars (|).
   for (const delim of delimiters) {
     if (delim.to > delim.from) {
       ctx.add({ from: delim.from, to: delim.to, value: hide });
@@ -185,7 +185,7 @@ function hideRowDelimitersAndGaps(
     }
   }
 
-  // 2. Скрываем промежутки между разделителями и текстом ячейки (пробелы разметки)
+  // 2. Hide the gaps between separators and cell text (markup whitespace).
   if (delimiters.length > 1) {
     for (let i = 0; i < delimiters.length - 1; i++) {
       const dLeft = delimiters[i];
@@ -580,7 +580,7 @@ function initRowDrag(
   updateHighlights(srcBodyRowIdx, srcBodyRowIdx);
 }
 
-/** Виджет кнопки «Добавить строку снизу» (тонкая полоска во всю ширину с плюсом по центру) */
+/** “Add row below” button widget (a thin full-width strip with a centered plus). */
 export class TableAddRowWidget extends WidgetType {
   constructor(readonly tableFrom: number, readonly totalWidthEm: number = 0) {
     super();
@@ -609,8 +609,8 @@ export class TableAddRowWidget extends WidgetType {
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = "cm-marknote-table-btn cm-marknote-table-add-row-btn";
-    btn.title = "Добавить строку снизу";
-    btn.setAttribute("aria-label", "Добавить строку снизу");
+    btn.title = "Add row below";
+    btn.setAttribute("aria-label", "Add row below");
 
     const icon = document.createElement("span");
     icon.className = "cm-marknote-table-btn-icon";
@@ -634,7 +634,7 @@ export class TableAddRowWidget extends WidgetType {
   }
 }
 
-/** Виджет кнопки «Добавить столбец справа» (тонкая полоска во всю высоту с плюсом по центру) */
+/** “Add column right” button widget (a thin full-height strip with a centered plus). */
 export class TableAddColWidget extends WidgetType {
   constructor(
     readonly tableFrom: number,
@@ -657,8 +657,8 @@ export class TableAddColWidget extends WidgetType {
     const container = document.createElement("div");
     container.className = "cm-marknote-table-add-col-bar";
     trackTableEdgeProximity(container, "right");
-    container.title = "Добавить столбец справа";
-    container.setAttribute("aria-label", "Добавить столбец справа");
+    container.title = "Add column to the right";
+    container.setAttribute("aria-label", "Add column to the right");
     if (this.totalWidthEm > 0) {
       container.style.left = `calc(${this.totalWidthEm}em - 8px)`;
     }
@@ -670,8 +670,8 @@ export class TableAddColWidget extends WidgetType {
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = "cm-marknote-table-btn cm-marknote-table-add-col-btn";
-    btn.title = "Добавить столбец справа";
-    btn.setAttribute("aria-label", "Добавить столбец справа");
+    btn.title = "Add column to the right";
+    btn.setAttribute("aria-label", "Add column to the right");
     btn.textContent = "+";
 
     btn.addEventListener("mousedown", (e) => {
@@ -729,7 +729,7 @@ export class TableAddColWidget extends WidgetType {
   }
 }
 
-/** Виджет ручки перемещения строки (толстая линия-ручка на левом краю) */
+/** Row-move handle widget (a thick handle line at the left edge). */
 export class TableRowControlWidget extends WidgetType {
   constructor(
     readonly tableFrom: number,
@@ -755,8 +755,8 @@ export class TableRowControlWidget extends WidgetType {
 
     const handle = document.createElement("div");
     handle.className = "cm-marknote-table-row-handle";
-    handle.title = "Переместить строку";
-    handle.setAttribute("aria-label", "Переместить строку");
+    handle.title = "Move row";
+    handle.setAttribute("aria-label", "Move row");
 
     container.addEventListener("mousedown", (e) => {
       initRowDrag(e, view, this.tableFrom, this.rowIndex, this.totalRows, handle);
@@ -767,7 +767,7 @@ export class TableRowControlWidget extends WidgetType {
   }
 }
 
-/** Спейсер для выравнивания шапки с ручками строк */
+/** Spacer aligning the header with row handles. */
 export class TableColSpacerWidget extends WidgetType {
   eq(): boolean {
     return true;
@@ -780,7 +780,7 @@ export class TableColSpacerWidget extends WidgetType {
   }
 }
 
-/** Виджет ручки перемещения столбца (толстая линия-ручка над столбцом) */
+/** Column-move handle widget (a thick handle line above the column). */
 export class TableColControlWidget extends WidgetType {
   constructor(
     readonly tableFrom: number,
@@ -813,8 +813,8 @@ export class TableColControlWidget extends WidgetType {
 
     const handle = document.createElement("div");
     handle.className = "cm-marknote-table-col-handle";
-    handle.title = "Переместить столбец";
-    handle.setAttribute("aria-label", "Переместить столбец");
+    handle.title = "Move column";
+    handle.setAttribute("aria-label", "Move column");
 
     hitarea.addEventListener("mousedown", (e) => {
       initColDrag(e, view, this.tableFrom, this.colIndex, this.totalCols, handle);
@@ -826,7 +826,7 @@ export class TableColControlWidget extends WidgetType {
   }
 }
 
-/** Построитель визуального вида GFM-таблиц. */
+/** Visual builder for GFM tables. */
 export const tableBuilder: BlockBuilder = (ctx) => {
   if (ctx.node.name !== "Table") return false;
 
@@ -860,10 +860,10 @@ export const tableBuilder: BlockBuilder = (ctx) => {
     const rCells = rowCellList[rIdx];
     const rDelimiters = row.getChildren("TableDelimiter").sort((a, b) => a.from - b.from);
 
-    // Скрываем вертикальные черты и пробелы разметки в строке
+  // Hide vertical bars and markup whitespace in the row.
     hideRowDelimitersAndGaps(ctx, row, rDelimiters, rCells);
 
-    // Для строки шапки добавляем спейсер
+  // Add a spacer for the header row.
     if (isHeader) {
       ctx.add({
         from: row.from,
@@ -875,7 +875,7 @@ export const tableBuilder: BlockBuilder = (ctx) => {
       });
     }
 
-    // Для строк данных добавляем ручку перемещения строки
+  // Add a row-move handle for data rows.
     if (!isHeader) {
       const curIdx = bodyRowIdx++;
       ctx.add({
@@ -888,11 +888,11 @@ export const tableBuilder: BlockBuilder = (ctx) => {
       });
     }
 
-    // Оформляем ячейки строки
+  // Style the row's cells.
     for (const cell of rCells) {
       const col = cell.col;
 
-      // Для шапки добавляем ручку перемещения столбца
+      // Add a column-move handle for the header.
       if (isHeader) {
         ctx.add({
           from: cell.from,
@@ -907,7 +907,7 @@ export const tableBuilder: BlockBuilder = (ctx) => {
       addTableCell(ctx, cell.from, cell.to, col, alignments[col] ?? "left", widths[col] ?? 8, isHeader);
     }
 
-    // В шапке добавляем кнопку добавления столбца справа
+    // Add the add-column-right button to the header.
     if (isHeader) {
       ctx.add({
         from: row.to,
@@ -919,7 +919,7 @@ export const tableBuilder: BlockBuilder = (ctx) => {
       });
     }
 
-    // Класс строки
+    // Row class.
     const isLastRow = row === rows[rows.length - 1];
     const lineStart = ctx.view.state.doc.lineAt(row.from).from;
     ctx.add({
@@ -936,7 +936,7 @@ export const tableBuilder: BlockBuilder = (ctx) => {
     });
   }
 
-  // Скрываем строку-разделитель (синтаксическую строку Markdown)
+  // Hide the separator row (the Markdown syntax row).
   if (delimiter && delimiter.to > delimiter.from) {
     const hidden = Decoration.replace({});
     ctx.add({ from: delimiter.from, to: delimiter.to, value: hidden });
@@ -959,7 +959,7 @@ export const tableBuilder: BlockBuilder = (ctx) => {
     }),
   });
 
-  // Внизу таблицы добавляем кнопку добавления строки снизу
+  // Add the add-row-below button at the bottom of the table.
   const lastRow = rows[rows.length - 1];
   const addRowPos = lastRow ? lastRow.to : ctx.node.to;
   ctx.add({
@@ -1002,7 +1002,7 @@ function moveToCell(view: EditorView, backward: boolean): boolean {
     : cells[current + 1];
   if (!target) {
     if (!backward && current === cells.length - 1) {
-      // Tab на последней ячейке добавляет новую строку
+      // Tab in the last cell adds a new row.
       const text = view.state.doc.sliceString(table.from, table.to);
       const updated = addTableRow(text);
       view.dispatch({
@@ -1029,13 +1029,13 @@ function moveToCell(view: EditorView, backward: boolean): boolean {
   return true;
 }
 
-/** Табличная навигация по ячейкам, подключается владельцем плагина. */
+/** Table cell navigation, installed by the plugin owner. */
 export const tableKeymap: KeyBinding[] = [
   { key: "Tab", run: (view) => moveToCell(view, false) },
   { key: "Shift-Tab", run: (view) => moveToCell(view, true) },
 ];
 
-/** CSS для ячеек, разделителей, ручек и кнопок таблицы. */
+/** CSS for table cells, separators, handles, and buttons. */
 export const tableTheme = [
   tableInputHandler,
   EditorView.theme({
@@ -1091,7 +1091,8 @@ export const tableTheme = [
   ".cm-marknote-table-align-center": { textAlign: "center" },
   ".cm-marknote-table-align-right": { textAlign: "right" },
 
-  // Стили кнопок добавления строк и столбцов (тонкие полоски во всю длину/высоту с плюсом по центру)
+  // Styles for add-row and add-column buttons (thin full-length/full-height
+  // strips with a centered plus).
   ".cm-marknote-table-add-row-bar": {
     position: "absolute",
     top: "calc(100% - 8px)",
@@ -1209,8 +1210,8 @@ export const tableTheme = [
     transform: "translate(-50%, -50%) scale(1.1)",
   },
 
-  // Во время перетаскивания чужие ручки и кнопки не должны всплывать под
-  // курсором. Исходная ручка остаётся видимой для обратной связи.
+  // During a drag, other handles and buttons must not pop up under the pointer.
+  // The original handle remains visible as feedback.
   "&.cm-marknote-table-dragging .cm-marknote-table-add-row-bar, &.cm-marknote-table-dragging .cm-marknote-table-add-col-bar": {
     opacity: "0 !important",
     visibility: "hidden !important",
@@ -1222,7 +1223,7 @@ export const tableTheme = [
     pointerEvents: "none !important",
   },
 
-  // Стили ручек перемещения строк и столбцов (толстые линии, HOVER ONLY)
+  // Styles for row and column move handles (thick lines, HOVER ONLY).
   ".cm-marknote-table-row-controls": {
     position: "absolute",
     // Keep the hit area inside CodeMirror's horizontally clipped scroller;
@@ -1332,7 +1333,7 @@ export const tableTheme = [
     boxShadow: "0 0 6px rgba(94, 172, 199, 0.6)",
   },
 
-  // Подсветка перетаскиваемого столбца и строки акцентным цветом (#5EACC7)
+  // Highlight the dragged column and row with the accent color (#5EACC7).
   ".cm-marknote-table-cell.cm-marknote-col-dragging": {
     backgroundColor: "rgba(94, 172, 199, 0.16) !important",
   },

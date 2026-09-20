@@ -9,12 +9,11 @@ import { footnoteTheme, footnoteTooltip } from "./footnotes";
 import { orderedListNormalization } from "../keymap";
 
 export function livePreview(opts?: {
-  /** Жёсткий порог размера документа, перекрывающий настройку
-   *  livePreview.disableAboveBytes. Нужен тестам, чтобы не собирать
-   *  пятимегабайтный документ; в приложении не задаётся — иначе настройка
-   *  перестанет действовать, и человек не поймёт почему. */
+  /** Hard document-size limit overriding livePreview.disableAboveBytes.
+   *  Tests use it to avoid building a five-megabyte document; the app does not
+   *  set it, otherwise the setting would stop working and confuse users. */
   maxBytes?: number;
-  /** Отдаёт data-URL для картинки, относительной к документу. */
+  /** Returns a data URL for an image relative to the document. */
   resolveImage?: (src: string) => Promise<string>;
 }): Extension {
   return [

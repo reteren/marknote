@@ -120,8 +120,8 @@ export function resetDocument(
 }
 
 /**
- * Меняет только возможности формата, не трогая текст документа. Сохранённый
- * документ становится грязным: новый тип требует отдельного Save as.
+ * Changes only the format capabilities, leaving the document text untouched.
+ * A saved document becomes dirty because the new type requires a separate Save as.
  */
 export function setDocumentFormat(format: FormatCapabilities, target: DocumentState = documentState): void {
   const changed = target.format.id !== format.id;
@@ -176,7 +176,7 @@ export function markSaveFailed(target: DocumentState = documentState): void {
   if (!target.readonly) target.saveStatus = "unsaved";
 }
 
-/** Устанавливает конфликт с внешним изменением для текущего файла. */
+/** Marks an external-change conflict for the current file. */
 export function markExternalChange(path: string, target: DocumentState = documentState): boolean {
   if (target.path === null || !samePath(target.path, path)) return false;
   target.externalChange = "changed";
@@ -184,7 +184,7 @@ export function markExternalChange(path: string, target: DocumentState = documen
   return true;
 }
 
-/** Помечает удалённый файл, сохраняя текст и путь для последующего Save. */
+/** Marks a deleted file while keeping its text and path for a later Save. */
 export function markFileDeleted(path: string, target: DocumentState = documentState): boolean {
   if (target.path === null || !samePath(target.path, path)) return false;
   target.externalChange = "deleted";

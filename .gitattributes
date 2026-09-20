@@ -2,5 +2,5 @@
 *.png binary
 *.ico binary
 
-# Тестовые файлы хранятся байт в байт: в них проверяются кодировки и переводы строк
+# Test files are stored byte-for-byte: their encodings and line endings are checked.
 fixtures/** -text

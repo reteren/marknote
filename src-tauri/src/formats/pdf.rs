@@ -79,55 +79,55 @@ mod tests {
 
     #[test]
     fn decodes_real_pdf_fixture_extracting_plain_text() {
-        // Загружаем настоящий воспроизводимый PDF-документ из фикстур (src-tauri/tests/fixtures/sample.pdf).
-        // Документ сгенерирован без сторонних библиотек через generate_sample_pdf.py.
+        // Load the real, reproducible PDF fixture (src-tauri/tests/fixtures/sample.pdf).
+        // The document was generated without third-party libraries by generate_sample_pdf.py.
         let bytes = include_bytes!("../../tests/fixtures/sample.pdf");
         let decoded = PdfAdapter
             .decode(bytes)
-            .expect("валидный настоящий PDF должен успешно декодироваться");
+            .expect("the valid PDF fixture must decode successfully");
 
         let text = &decoded.text;
 
-        // 1. Проверяем наличие всех смысловых элементов документа:
-        // - Заголовок документа
+        // 1. Verify that all semantic document elements are present:
+        // - Document heading
         assert!(
             text.contains("MarkNote PDF Extraction Test"),
-            "заголовок документа должен быть извлечён"
+            "the document heading must be extracted"
         );
-        // - Первый абзац с переносом строки
+        // - First paragraph with a line break
         assert!(
             text.contains("This is the first paragraph of the test document."),
-            "первая строка первого абзаца должна быть извлечена"
+            "the first line of the first paragraph must be extracted"
         );
         assert!(
             text.contains("It has a line break inside the paragraph to verify extraction."),
-            "вторая строка первого абзаца с переносом должна быть извлечена"
+            "the second line of the first paragraph must be extracted"
         );
-        // - Второй абзац
+        // - Second paragraph
         assert!(
             text.contains("The second paragraph introduces an itemized list below:"),
-            "второй абзац должен присутствовать"
+            "the second paragraph must be present"
         );
-        // - Элементы списка
+        // - List items
         assert!(
             text.contains("- First item in the list"),
-            "первый пункт списка должен быть извлечён"
+            "the first list item must be extracted"
         );
         assert!(
             text.contains("- Second item in the list"),
-            "второй пункт списка должен быть извлечён"
+            "the second list item must be extracted"
         );
         assert!(
             text.contains("- Third item with additional text"),
-            "третий пункт списка должен быть извлечён"
+            "the third list item must be extracted"
         );
-        // - Заключительный абзац
+        // - Final paragraph
         assert!(
             text.contains("Final conclusion paragraph verifying text flow and ordering."),
-            "заключительный абзац должен присутствовать"
+            "the final paragraph must be present"
         );
 
-        // 2. Проверяем строгий порядок следования текста (порядок не должен быть нарушен):
+        // 2. Verify the strict text order (the order must not change):
         let pos_heading = text.find("MarkNote PDF Extraction Test").unwrap();
         let pos_p1_l1 = text.find("This is the first paragraph").unwrap();
         let pos_p1_l2 = text.find("It has a line break inside").unwrap();
@@ -145,24 +145,22 @@ mod tests {
         assert!(pos_item2 < pos_item3);
         assert!(pos_item3 < pos_conclusion);
 
-        // 3. Честная фиксация того, что ТЕРЯЕТСЯ при извлечении из PDF:
-        // - PDF — формат для печати, а не для разметки. Заголовок в нём — это лишь текст,
-        //   отрисованный шрифтом большего кегля (18pt против 12pt).
-        // - Семантическая структура Markdown (#, ##) отсутствует — извлекается чистый плоский текст.
+        // 3. Honestly record what is LOST when extracting from PDF:
+        // - PDF is a print format, not a markup format. Its heading is only text
+        //   rendered in a larger font (18pt rather than 12pt).
+        // - Markdown semantics (#, ##) are absent; extraction returns plain text.
         assert!(
             !text.contains("# MarkNote PDF Extraction Test"),
-            "PDF-адаптер отдаёт плоский текст без искусственного угадывания заголовков"
+            "the PDF adapter returns plain text without inventing headings"
         );
-        // - Форматирование шрифтов (размер 18pt/12pt, гарнитура Helvetica) полностью теряется.
-        // - Списки сохраняются как текст только благодаря символам дефиса '-', а не тегам разметки.
-        // - Координаты и геометрия вёрстки схлопываются в обычные переносы строк '\\n'.
+        // - Font formatting (18pt/12pt size, Helvetica family) is lost entirely.
+        // - Lists survive as text only through '-' characters, not markup tags.
+        // - Layout coordinates and geometry collapse into ordinary line breaks '\\n'.
         //
-        // Чего эта проверка НЕ доказывает, чтобы зелёный тест не читали шире,
-        // чем он есть: фикстура — простой несжатый PDF 1.4 с одним шрифтом
-        // Helvetica и текстом в операторах Tj. Настоящие документы из Word и
-        // вёрстки приходят со сжатыми потоками (FlateDecode), встроенными
-        // подмножествами шрифтов и кернингом через массивы TJ, где слова как
-        // раз и рискуют слипнуться. Такой документ надо проверять отдельно и
-        // на настоящем файле.
+        // This test does NOT prove more than stated: the fixture is a simple,
+        // uncompressed PDF 1.4 with one Helvetica font and text in Tj operators.
+        // Real Word and typeset documents use compressed streams (FlateDecode),
+        // embedded font subsets, and kerning through TJ arrays, where words may
+        // merge. Such a document must be tested separately with a real file.
     }
 }

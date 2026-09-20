@@ -50,7 +50,7 @@ describe("MenuBar keyboard and pointer behavior", () => {
     expect(document.querySelector(`[role="menu"][aria-label="${t("menu.file")}"]`)).toBeNull();
   });
 
-  it("прячет форматы обратно, когда курсор уходит с пункта New", async () => {
+  it("hides formats again when the pointer leaves the New item", async () => {
     render(MenuBar, { props: { formats: [format("markdown"), format("json")] } });
     const fileButton = document.querySelector<HTMLButtonElement>('[role="menubar"] button')!;
     await fireEvent.click(fileButton, { clientX: 80, clientY: 15, detail: 1 });
@@ -61,8 +61,8 @@ describe("MenuBar keyboard and pointer behavior", () => {
     await settle();
     expect(document.querySelector(".submenu-panel")).not.toBeNull();
 
-    // Список форматов оставался висеть, пока курсор гулял по соседним пунктам,
-    // и выглядело это так, будто он открылся сам по нажатию на File.
+    // The format list stayed open while the pointer moved across neighboring
+    // items, making it look as if File had opened it by itself.
     const newWindowItem = document.querySelector<HTMLElement>('[data-menu-item-id="file.newWindow"]')!;
     await fireEvent.mouseEnter(newWindowItem);
     await settle();

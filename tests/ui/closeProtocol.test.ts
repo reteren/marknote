@@ -22,11 +22,11 @@ vi.mock("@tauri-apps/api/window", () => ({
     close: vi.fn().mockResolvedValue(undefined),
   }),
 }));
-// Подписка на закрытие живёт на окне WEBVIEW, а не на окне как таковом:
-// Rust шлёт событие с целью webview_window, и до слушателей обычного окна оно
-// не доходит. Раньше здесь была подделка только для getCurrentWindow — тест
-// проходил, а программа закрывалась не спрашивая и через пять секунд. Подделка
-// не должна быть удобнее настоящего устройства, иначе она скрывает дефект.
+// The close listener belongs to the WEBVIEW window, not the window object:
+// Rust sends the event targeting webview_window, and ordinary-window listeners
+// never receive it. This used to mock only getCurrentWindow; the test passed
+// while the program closed without asking after five seconds. A mock must not
+// be more convenient than the real mechanism, or it hides the defect.
 vi.mock("@tauri-apps/api/webviewWindow", () => ({
   getCurrentWebviewWindow: () => ({
     setTitle: vi.fn().mockResolvedValue(undefined),

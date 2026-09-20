@@ -1,107 +1,107 @@
-# Архитектура
+# Architecture
 
 ---
 
-## 1. Общая схема
+## 1. Overview
 
 ```
-┌─────────────────────── процесс MarkNote ────────────────────────┐
+┌─────────────────────── MarkNote process ────────────────────────┐
 │                                                                 │
 │  Rust                                                           │
-│  ├─ main.rs          точка входа, single-instance, аргументы    │
-│  ├─ windows.rs       создание окон, маршрутизация открытия      │
-│  ├─ commands.rs      IPC-команды для фронтенда                  │
-│  ├─ watcher.rs       наблюдение за файлами на диске             │
-│  ├─ atomic_write.rs  запись через временный файл                │
-│  └─ formats/         адаптеры форматов                          │
-│         ↕ IPC (команды и события)                               │
-│  WebView2 · окно 1          WebView2 · окно 2                   │
-│  ├─ Svelte-оболочка         └─ то же самое                      │
+│  ├─ main.rs          entry point, single-instance, arguments    │
+│  ├─ windows.rs       window creation, open routing              │
+│  ├─ commands.rs      IPC commands for the frontend              │
+│  ├─ watcher.rs       watching files on disk                     │
+│  ├─ atomic_write.rs  writing through a temporary file           │
+│  └─ formats/         format adapters                            │
+│         ↕ IPC (commands and events)                             │
+│  WebView2 · window 1        WebView2 · window 2                 │
+│  ├─ Svelte shell             └─ same                            │
 │  ├─ CodeMirror 6                                                │
-│  │   ├─ живой предпросмотр                                      │
+│  │   ├─ live preview                                            │
 │  │   ├─ markdown + lezer                                        │
-│  │   └─ поиск, история, клавиши                                 │
-│  └─ меню, строка состояния, контекстное меню                    │
+│  │   └─ search, history, keybindings                            │
+│  └─ menus, status bar, context menu                             │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-Один процесс, несколько окон. Каждое окно — отдельный экземпляр WebView2, но
-рантайм общий, поэтому второе окно открывается заметно быстрее первого.
+One process, multiple windows. Each window is a separate WebView2 instance, but
+the runtime is shared, so the second window opens noticeably faster than the first.
 
 ---
 
-## 2. Почему такой стек
+## 2. Why this stack
 
-### Tauri вместо Electron
-Установщик около 5 МБ против 80+. Холодный старт в разы быстрее, потому что
-WebView2 уже загружен в системе. Для программы, смысл которой в быстром
-открытии файла, это решающий довод.
+### Tauri instead of Electron
+The installer is about 5 MB rather than 80+. Cold start is several times faster
+because WebView2 is already loaded on the system. For an application whose
+purpose is opening files quickly, that is decisive.
 
-### Tauri вместо чистого Rust с egui или Win32
-Живой предпросмотр — это верстка текста: смешанные шрифты, встроенные
-изображения, формулы, таблицы. Движок вёрстки в браузере уже есть и работает;
-писать свой — месяцы.
+### Tauri instead of pure Rust with egui or Win32
+Live preview is text layout: mixed fonts, embedded images, formulas, and tables.
+The browser already has a working layout engine; writing one would take months.
 
-### CodeMirror 6 вместо Monaco или собственного решения
-CodeMirror строит отображение через систему декораций. `Decoration.replace`
-убирает диапазон текста из отображения, не трогая документ, а
-`EditorView.atomicRanges` заставляет курсор перепрыгивать скрытое. Это ровно
-тот механизм, на котором живой предпросмотр делается честно. Monaco заточен
-под код и не даёт прятать части строки. Obsidian, к слову, тоже на CodeMirror 6.
+### CodeMirror 6 instead of Monaco or a custom solution
+CodeMirror builds its display through decorations. `Decoration.replace` removes a
+text range from the display without touching the document, while
+`EditorView.atomicRanges` makes the cursor jump over hidden content. This is the
+mechanism that makes live preview honest. Monaco is optimized for code and does
+not provide a way to hide parts of a line. Obsidian also uses CodeMirror 6.
 
-### `@lezer/markdown` вместо `markdown-it` или `remark`
-Парсер инкрементальный: правка одной буквы пересобирает только затронутую ветвь
-дерева, а не весь документ. При пересчёте декораций на каждое нажатие это
-разница между плавным вводом и подтормаживанием.
+### `@lezer/markdown` instead of `markdown-it` or `remark`
+The parser is incremental: changing one letter rebuilds only the affected branch
+of the tree rather than the whole document. When decorations are recalculated on
+every keystroke, that is the difference between smooth input and lag.
 
-### Svelte вместо React
-Вокруг CodeMirror нужны только меню, панель поиска и строка состояния. Svelte
-компилируется в прямые операции с DOM без рантайма и виртуального дерева — нет
-лишнего слоя между вводом и экраном.
+### Svelte instead of React
+Around CodeMirror we need only menus, the search panel, and the status bar. Svelte
+compiles to direct DOM operations without a runtime or virtual tree, so there is
+no unnecessary layer between input and the screen.
 
-### KaTeX вместо MathJax
-Рендерится синхронно и на порядок быстрее. Покрытия LaTeX хватает для заметок.
+### KaTeX instead of MathJax
+It renders synchronously and is an order of magnitude faster. Its LaTeX coverage
+is sufficient for notes.
 
 ---
 
-## 3. Живой предпросмотр
+## 3. Live preview
 
-Сердце проекта. Механика целиком на стороне CodeMirror.
+The heart of the project. The entire mechanism lives on the CodeMirror side.
 
-### Поток
+### Flow
 
 ```
-документ изменился или сдвинулся курсор
+document changed or the cursor moved
         ↓
 ViewPlugin.update()
         ↓
-обход syntaxTree в пределах view.visibleRanges
+walk syntaxTree within view.visibleRanges
         ↓
-для каждого узла: isNodeActive(node, selection)?
+for each node: isNodeActive(node, selection)?
         ↓                              ↓
-      да                              нет
+      yes                             no
         ↓                              ↓
-показать исходный текст      Decoration.replace на маркеры
-      + подсветка            + Decoration.mark на содержимое
-                             + Decoration.widget где нужен
-                               свой элемент (чекбокс, формула,
-                               изображение, линия)
+show source text             Decoration.replace on markers
+      + highlighting         + Decoration.mark on content
+                             + Decoration.widget where a custom
+                               element is needed (checkbox, formula,
+                               image, rule)
         ↓
-DecorationSet → отображение
+DecorationSet → display
 ```
 
-### Три типа декораций
+### Three decoration types
 
-| Тип | Где применяется |
+| Type | Where it is used |
 | --- | --- |
-| `Decoration.replace` | Прячет маркеры: `**`, `#`, `` ` ``, `==`, `$` |
-| `Decoration.mark` | Красит содержимое: жирный, курсив, цвет заголовка |
-| `Decoration.widget` | Вставляет свой элемент: чекбокс задачи, отрисованная формула, изображение, горизонтальная линия, иконка callout |
+| `Decoration.replace` | Hides markers: `**`, `#`, `` ` ``, `==`, `$` |
+| `Decoration.mark` | Styles content: bold, italic, heading color |
+| `Decoration.widget` | Inserts a custom element: task checkbox, rendered formula, image, horizontal rule, or callout icon |
 
-### Правило раскрытия
+### Reveal rule
 
-Вся логика в одной функции — иначе расхождения в поведении разных узлов
-неизбежны:
+All logic lives in one function; otherwise different node types inevitably
+drift in behavior:
 
 ```ts
 function isNodeActive(node: SyntaxNode, sel: EditorSelection): boolean {
@@ -109,128 +109,128 @@ function isNodeActive(node: SyntaxNode, sel: EditorSelection): boolean {
 }
 ```
 
-Границы включительные с обеих сторон: курсор, поставленный вплотную к `**`,
-уже раскрывает узел. Так ведёт себя Obsidian, и так удобнее править.
+Both boundaries are inclusive: a cursor placed directly next to `**` already
+reveals the node. This matches Obsidian and makes editing easier.
 
-Для заголовков, списков и цитат зона проверки расширяется до всей строки —
-их маркеры принадлежат строке, а не фрагменту текста.
+For headings, lists, and blockquotes, the check expands to the whole line because
+their markers belong to the line rather than to a text fragment.
 
-### Производительность
+### Performance
 
-- Обход только по `view.visibleRanges`, а не по всему документу.
-- Кэш отрисованных формул по исходному тексту — KaTeX не вызывается повторно.
-- Языки для блоков кода грузятся по требованию через
+- Walk only through `view.visibleRanges`, not the whole document.
+- Cache rendered formulas by source text so KaTeX is not called again.
+- Languages for code blocks load on demand through
   `@codemirror/language-data`.
-- Выше 5 МБ предпросмотр отключается целиком.
+- Above 5 MB, preview is disabled entirely.
 
-Ориентир: ввод символа в файле на 10 000 строк укладывается в один кадр,
-16 мс.
+Target: entering a character in a 10,000-line file fits in one frame,
+16 ms.
 
 ---
 
 ## 4. IPC
 
-Команды фронтенда к Rust:
+Frontend commands to Rust:
 
-| Команда | Аргументы | Возвращает |
+| Command | Arguments | Returns |
 | --- | --- | --- |
-| `open_file` | `path` | текст, кодировка, тип перевода строк, возможности формата |
-| `save_file` | `path`, `text` | результат |
-| `save_as` | `text`, `format_id`, предложенное имя | выбранный путь и итоговый тип |
-| `pick_file` | — | путь или отмена |
+| `open_file` | `path` | text, encoding, line-ending type, format capabilities |
+| `save_file` | `path`, `text` | result |
+| `save_as` | `text`, `format_id`, suggested name | selected path and resulting type |
+| `pick_file` | — | path or cancellation |
 | `open_in_new_window` | `path` | — |
-| `new_document` | `format_id` | заготовка текста и возможности формата |
-| `list_creatable_formats` | — | список типов для стартового экрана и меню `New` |
-| `format_for_extension` | `ext` | `format_id` и возможности |
-| `read_image` | `path` относительно документа | data-URL |
+| `new_document` | `format_id` | template text and format capabilities |
+| `list_creatable_formats` | — | type list for the start screen and `New` menu |
+| `format_for_extension` | `ext` | `format_id` and capabilities |
+| `read_image` | `path` relative to the document | data URL |
 | `reveal_in_explorer` | `path` | — |
 
-События Rust к фронтенду:
+Rust events to the frontend:
 
-| Событие | Смысл |
+| Event | Meaning |
 | --- | --- |
-| `file-changed-externally` | Файл изменён на диске |
-| `file-deleted` | Файл удалён или переименован |
-| `open-file-request` | Окно попросили открыть файл (из аргументов или проводника) |
-| `save-before-close` | Окно закрывается, нужно записать буфер |
+| `file-changed-externally` | File changed on disk |
+| `file-deleted` | File deleted or renamed |
+| `open-file-request` | Window was asked to open a file (from arguments or Explorer) |
+| `save-before-close` | Window is closing and the buffer must be written |
 
-Возможности формата, которые фронтенд получает при открытии:
+Format capabilities received by the frontend on open:
 
 ```ts
 type FormatCapabilities = {
   id: string;                 // "markdown", "json", "rtf"
-  label: string;              // "Markdown" — то, что видно в строке состояния
+  label: string;              // "Markdown" — shown in the status bar
   defaultExtension: string;   // "md"
-  extensions: string[];       // все расширения этого типа
-  editable: boolean;          // можно ли править
-  creatable: boolean;         // можно ли создать с нуля
-  livePreview: boolean;       // включать ли предпросмотр Markdown
-  autosave: boolean;          // можно ли сохранять без спроса
-  lossy: boolean;             // теряется ли что-то при сохранении
-  syntaxMode: string | null;  // подсветка для не-Markdown
-  template: string;           // заготовка нового документа, обычно пустая
+  extensions: string[];       // all extensions for this type
+  editable: boolean;          // whether it can be edited
+  creatable: boolean;         // whether it can be created from scratch
+  livePreview: boolean;       // whether to enable Markdown preview
+  autosave: boolean;          // whether it can be saved without prompting
+  lossy: boolean;             // whether saving loses anything
+  syntaxMode: string | null;  // highlighting for non-Markdown
+  template: string;           // template for a new document, usually empty
 };
 ```
 
-Фронтенд не знает про форматы ничего сверх этой структуры — вся логика в Rust.
-Стартовый экран, меню `File ▸ New`, список смены типа в строке состояния и
-фильтры в диалоге сохранения строятся из одного и того же списка, полученного
-от `list_creatable_formats`. Добавление нового формата — это одна запись в
-реестре на стороне Rust, фронтенд менять не нужно.
+The frontend knows nothing about formats beyond this structure; all logic is in
+Rust. The start screen, `File ▸ New` menu, type switcher in the status bar, and
+save-dialog filters are built from the same list returned by
+`list_creatable_formats`. Adding a format is one registry entry on the Rust side;
+the frontend does not need to change.
 
-### Состояние документа
+### Document state
 
 ```ts
 type DocumentState = {
-  path: string | null;        // null — документ ещё не сохранён
+  path: string | null;        // null — the document has not been saved yet
   format: FormatCapabilities;
   saveStatus: "unsaved" | "pending" | "saved" | "readonly";
   lastSavedAt: Date | null;
 };
 ```
 
-`path === null` — единственное условие, отключающее автосохранение независимо
-от формата. От этого же поля зависит вид кнопок `Save` и `Save as…`.
+`path === null` is the only condition that disables autosave regardless of format.
+The same field controls the appearance of the `Save` and `Save as…` buttons.
 
 ---
 
-## 5. Структура файлов
+## 5. File structure
 
 ```
 src/
-├─ main.ts                    точка входа
-├─ App.svelte                 каркас окна
+├─ main.ts                    entry point
+├─ App.svelte                 window shell
 ├─ editor/
-│  ├─ createEditor.ts         сборка экземпляра CodeMirror
+│  ├─ createEditor.ts         CodeMirror instance construction
 │  ├─ livePreview/
-│  │  ├─ plugin.ts            ViewPlugin, построение декораций
-│  │  ├─ isNodeActive.ts      правило раскрытия
-│  │  ├─ inline.ts            жирный, курсив, код, подсветка, комментарии
-│  │  ├─ blocks.ts            заголовки, списки, цитаты, callout
+│  │  ├─ plugin.ts            ViewPlugin, decoration construction
+│  │  ├─ isNodeActive.ts      reveal rule
+│  │  ├─ inline.ts            bold, italic, code, highlights, comments
+│  │  ├─ blocks.ts            headings, lists, blockquotes, callouts
 │  │  └─ widgets/
 │  │     ├─ Checkbox.ts
 │  │     ├─ Math.ts
 │  │     ├─ Image.ts
 │  │     └─ Hr.ts
-│  ├─ markdownExtensions.ts   ==подсветка==, %%комментарии%%, callout, сноски
-│  ├─ keymap.ts               горячие клавиши
-│  └─ theme.ts                тема CodeMirror
+│  ├─ markdownExtensions.ts   ==highlights==, %%comments%%, callouts, footnotes
+│  ├─ keymap.ts               keybindings
+│  └─ theme.ts                CodeMirror theme
 ├─ ui/
 │  ├─ MenuBar.svelte
-│  ├─ SaveControls.svelte     пометка состояния + кнопки Save и Save as
-│  ├─ StartScreen.svelte      выбор типа нового файла
-│  ├─ FormatPicker.svelte     список типов: стартовый экран, меню, строка состояния
+│  ├─ SaveControls.svelte     status indicator + Save and Save as buttons
+│  ├─ StartScreen.svelte      new-file type selection
+│  ├─ FormatPicker.svelte     type list: start screen, menu, status bar
 │  ├─ ContextMenu.svelte
 │  ├─ StatusBar.svelte
 │  ├─ FindPanel.svelte
-│  └─ Notice.svelte           полоса уведомлений сверху
+│  └─ Notice.svelte           top notification strip
 ├─ state/
-│  ├─ document.svelte.ts      путь, содержимое, тип, состояние сохранения
-│  ├─ formats.svelte.ts       список типов, полученный от Rust
-│  └─ autosave.ts             таймер и триггеры сохранения
+│  ├─ document.svelte.ts      path, content, type, save state
+│  ├─ formats.svelte.ts       type list received from Rust
+│  └─ autosave.ts             save timer and triggers
 └─ styles/
-   ├─ theme.css               токены оформления
-   └─ markdown.css            вид разметки
+   ├─ theme.css               design tokens
+   └─ markdown.css            markup appearance
 
 src-tauri/src/
 ├─ main.rs
@@ -238,9 +238,9 @@ src-tauri/src/
 ├─ commands.rs
 ├─ watcher.rs
 ├─ atomic_write.rs
-├─ encoding.rs                определение кодировки и переводов строк
+├─ encoding.rs                encoding and line-ending detection
 └─ formats/
-   ├─ mod.rs                  трейт FormatAdapter, реестр и диспетчер
+   ├─ mod.rs                  FormatAdapter trait, registry, and dispatcher
    ├─ markdown.rs
    ├─ plain.rs
    ├─ code.rs
@@ -250,67 +250,67 @@ src-tauri/src/
 
 ---
 
-## 6. Расширения синтаксиса Markdown
+## 6. Markdown syntax extensions
 
-`@lezer/markdown` не знает часть разметки Obsidian. Недостающее описывается
-как `MarkdownExtension` в `markdownExtensions.ts`:
+`@lezer/markdown` does not know some Obsidian markup. Missing syntax is described
+as a `MarkdownExtension` in `markdownExtensions.ts`:
 
-- `==подсветка==` — правило `InlineParser`, по образцу зачёркивания
-- `%%комментарий%%` — то же, с приглушённым стилем
-- `$формула$` и `$$блок$$` — правила для строчной и блочной математики
-- `> [!TYPE]` — надстройка над разбором цитаты: первая строка распознаётся как
-  заголовок callout
-- `[^1]` и `[^1]: текст` — сноски и их определения
+- `==highlight==` — an `InlineParser` rule modeled on strikethrough
+- `%%comment%%` — the same, with a muted style
+- `$formula$` and `$$block$$` — inline and block math rules
+- `> [!TYPE]` — an extension over blockquote parsing: the first line is
+  recognized as a callout heading
+- `[^1]` and `[^1]: text` — footnotes and their definitions
 
-Стандартом покрыты: заголовки, списки, задачи, таблицы, блоки кода, цитаты,
-ссылки, изображения, `**`, `*`, `~~`, `` ` ``.
+Covered by the standard parser: headings, lists, tasks, tables, code blocks,
+blockquotes, links, images, `**`, `*`, `~~`, and `` ` ``.
 
 ---
 
-## 7. Управление окнами
+## 7. Window management
 
-Аргументы командной строки приходят в `main.rs` при первом запуске и через
-`tauri-plugin-single-instance` при последующих.
+Command-line arguments arrive in `main.rs` on the first launch and through
+`tauri-plugin-single-instance` on subsequent launches.
 
 ```
-поступил путь к файлу
+file path received
         ↓
-уже открыт в каком-то окне? ──да──→ поднять окно, дать фокус
-        ↓ нет
-есть пустое нетронутое окно? ──да──→ загрузить в него
-        ↓ нет
-создать новое окно
+already open in a window? ──yes──→ raise the window and focus it
+        ↓ no
+an empty untouched window exists? ──yes──→ load it there
+        ↓ no
+create a new window
 ```
 
-Реестр открытых файлов живёт в `Mutex<HashMap<PathBuf, WindowLabel>>`.
-Пути перед сравнением канонизируются: без этого `C:\Dir\file.md` и
-`c:\dir\FILE.MD` дадут два окна на один файл.
+The open-file registry lives in `Mutex<HashMap<PathBuf, WindowLabel>>`.
+Paths are canonicalized before comparison; otherwise `C:\Dir\file.md` and
+`c:\dir\FILE.MD` would produce two windows for one file.
 
-Размер и позиция окна сохраняются через `tauri-plugin-window-state`. Это не
-настройка, а память о последнем состоянии — окно настроек по-прежнему не нужно.
+Window size and position are saved through `tauri-plugin-window-state`. This is
+not a setting but a memory of the last state; a settings window is still not
+needed.
 
 ---
 
-## 8. Известные места, где легко ошибиться
+## 8. Known pitfalls
 
-**Наблюдатель ловит собственную запись.** После каждого сохранения путь на
-секунду попадает в список игнорирования, иначе автосохранение уйдёт в цикл.
+**The watcher catches its own write.** After each save, the path enters an ignore
+list for one second; otherwise autosave would loop.
 
-**Курсор застревает в скрытой разметке.** Лечится только через
-`EditorView.atomicRanges`. Самодельная обработка стрелок сломается на выделении
-мышью, `Home`, `End` и `Ctrl+←`.
+**The cursor gets stuck in hidden markup.** This is fixed only through
+`EditorView.atomicRanges`. Hand-written arrow-key handling breaks mouse
+selection, `Home`, `End`, and `Ctrl+←`.
 
-**Виджеты пересоздаются на каждое обновление.** У классов-наследников
-`WidgetType` обязателен метод `eq()`, иначе изображения будут моргать при
-каждом нажатии клавиши.
+**Widgets are recreated on every update.** `WidgetType` subclasses must implement
+`eq()`, otherwise images will flicker on every keystroke.
 
-**Пути к изображениям.** Windows-разделители и пробелы в именах ломают
-`file://`. Изображения отдаются из Rust как data-URL — и проще, и безопаснее.
+**Image paths.** Windows separators and spaces in names break `file://`. Images
+are returned from Rust as data URLs, which is both simpler and safer.
 
-**Кодировка при сохранении.** Файл, открытый как CP1251, сохранённый в UTF-8
-без предупреждения — потерянные данные с точки зрения пользователя. Кодировка
-запоминается при открытии и применяется при записи.
+**Encoding on save.** A file opened as CP1251 and saved as UTF-8 without warning
+has lost data from the user's perspective. The encoding is remembered on open and
+applied on write.
 
-**Тёмный заголовок окна.** Windows 10 до 1809 не поддерживает
-`DWMWA_USE_IMMERSIVE_DARK_MODE`. Вызов оборачивается в проверку версии,
-иначе на старых сборках заголовок останется белым.
+**Dark title bar.** Windows 10 before 1809 does not support
+`DWMWA_USE_IMMERSIVE_DARK_MODE`. The call is guarded by a version check;
+otherwise the title bar remains white on older builds.

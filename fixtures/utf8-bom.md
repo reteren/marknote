@@ -1,3 +1,3 @@
-﻿# UTF-8 с BOM
+﻿# UTF-8 with BOM
 
-Кириллица.
+A café — non-ASCII.

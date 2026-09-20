@@ -211,8 +211,8 @@ function decorationRangesToArray(set: DecorationSet): Array<Range<Decoration>> {
 }
 
 /**
- * Чистая часть построения предпросмотра. Она принимает только состояние и
- * видимые диапазоны, поэтому легко проверяется в Node/Vitest без браузера.
+ * Pure part of preview construction. It accepts only state and visible ranges,
+ * so it can be tested easily in Node/Vitest without a browser.
  */
 export function buildDecorationSets(
   state: EditorState,
@@ -291,12 +291,12 @@ export const livePreviewPlugin = ViewPlugin.define<LivePreviewValue, LivePreview
   },
 );
 
-/** Фасад для тестов и интеграций, которым нужен текущий набор декораций. */
+/** Facade for tests and integrations that need the current decoration set. */
 export function previewDecorations(view: EditorView): DecorationSet {
   return view.plugin(livePreviewPlugin)?.decorations ?? Decoration.none;
 }
 
-/** Утилита для тестов: извлекает ranges без зависимости от DOM. */
+/** Test utility: extracts ranges without a DOM dependency. */
 export function decorationRanges(set: DecorationSet) {
   const ranges: Array<{ from: number; to: number; decoration: Decoration }> = [];
   set.between(0, Number.MAX_SAFE_INTEGER, (from, to, value) => {

@@ -60,8 +60,8 @@
   }
 
   function selectableItems(items: MenuItem[]): MenuItem[] {
-    // Подписи (kind: "label") — не команды: по ним не щёлкают и клавиатура
-    // их пропускает. Такая сейчас одна — текущий масштаб над пунктами View.
+    // Labels (kind: "label") are not commands: they are not clickable and the
+    // keyboard skips them. There is currently one — the current zoom above View items.
     return items.filter((item) => !item.separator && !item.disabled && item.kind !== "label");
   }
 
@@ -257,9 +257,9 @@
     if (item.submenu) {
       openSubmenu(item, node);
     } else {
-      // Ушли с пункта с подменю — подменю закрывается. Без этого список
-      // форматов оставался висеть, пока курсор гулял по соседним пунктам, и
-      // выглядело это так, будто он открылся сам по нажатию на File.
+      // Leaving an item with a submenu closes that submenu. Without this, the
+      // format list stayed open while the pointer moved across neighboring items,
+      // making it look as if File had opened it by itself.
       activeSubmenuId = null;
       activeSubmenuIndex = 0;
     }
@@ -406,10 +406,10 @@
   .save-controls .status-saved { color: var(--text-success); }
 
   .menu-popup {
-    /* Отступ в 4px не косметический: меню раскрывается так, что курсор
-       оказывается на 2px внутри рамки, и держится он именно на этом поле.
-       Если поле убрать, курсор попадёт сразу на первый пункт, тот получит
-       mouseenter — и подменю форматов снова начнёт выскакивать само. */
+    /* The 4px gap is not cosmetic: the menu opens with the pointer 2px inside
+       the border, and this field is what keeps it there. If removed, the pointer
+       lands directly on the first item, fires mouseenter, and the format submenu
+       starts popping open by itself again. */
     position: fixed;
     z-index: 30;
     display: flex;
@@ -429,7 +429,7 @@
   .shortcut { color: var(--text-faint); font-family: var(--font-mono); font-size: var(--font-size-mono); white-space: nowrap; }
   .submenu-arrow { color: var(--text-muted); font-size: 18px; line-height: 0.7; }
   :global([dir="rtl"]) .submenu-arrow { transform: scaleX(-1); }
-  /* Подпись, а не пункт: без наведения, без фокуса, тише обычного текста. */
+  /* A label, not an item: no hover, no focus, quieter than ordinary text. */
   .menu-caption {
     padding: 4px 9px 6px;
     color: var(--text-faint);

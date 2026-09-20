@@ -15,7 +15,7 @@ import { applyEditorSettings } from "../src/editor/settings";
 import { defaultSettings } from "../src/state/settings.svelte";
 import type { FormatCapabilities } from "../src/state/formats.svelte";
 
-/** Все 14 syntaxMode из src-tauri/src/formats/code.rs */
+/** All 14 syntaxMode values from src-tauri/src/formats/code.rs. */
 const codeRsSyntaxModes = [
   "yaml",
   "toml",

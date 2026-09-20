@@ -1,71 +1,73 @@
-# W46 — сборка и приёмка 1.0.3
+# W46 — build and acceptance of 1.0.3
 
-## Сборка и размеры
+## The build and the sizes
 
-`npm run tauri build` завершилась с кодом 0. Созданы
-`src-tauri/target/release/bundle/nsis/MarkNote_1.0.3_x64-setup.exe` и
-`src-tauri/target/release/marknote.exe`; у EXE `FileVersion` и
-`ProductVersion` равны `1.0.3`. `package.json` не менялся: сборка по-прежнему
-печатает его версию `1.0.2`, как и ожидалось при оставленном координатору файле.
+`npm run tauri build` finished with code 0. It produced
+`src-tauri/target/release/bundle/nsis/MarkNote_1.0.3_x64-setup.exe` and
+`src-tauri/target/release/marknote.exe`; the EXE has `FileVersion` and
+`ProductVersion` equal to `1.0.3`. `package.json` was not touched: the build
+still prints its version as `1.0.2`, as expected while that file was left to
+the coordinator.
 
-| Артефакт | До сборки | После сборки | Изменение |
+| Artifact | Before the build | After the build | Change |
 | --- | ---: | ---: | ---: |
-| NSIS 1.0.2 → 1.0.3 | 2 183 394 Б | 3 028 411 Б | +845 017 Б (+38,70%) |
-| `target/release/marknote.exe` | 6 642 176 Б | 6 899 712 Б | +257 536 Б (+3,88%) |
+| NSIS 1.0.2 → 1.0.3 | 2,183,394 B | 3,028,411 B | +845,017 B (+38.70%) |
+| `target/release/marknote.exe` | 6,642,176 B | 6,899,712 B | +257,536 B (+3.88%) |
 
-Размер EXE до сборки — замеревшийся в рабочем каталоге бинарник с датой
-14.09.2026 19:53; это сравнение с прежним EXE из каталога, не контрольная
-сборка 1.0.2. Размеры прямых release-архивов зависимостей после сборки:
+The "before" size of the EXE is the binary that was sitting in the working
+directory, dated 2026-09-14 19:53; this compares against that older EXE, not
+against a control build of 1.0.2. The sizes of the dependencies' own release
+archives after the build:
 
-| Крейт | `.rlib` | `.rmeta` |
+| Crate | `.rlib` | `.rmeta` |
 | --- | ---: | ---: |
-| `pdf-extract` | 3 934 002 Б | 905 109 Б |
-| `docx-rs` | 21 680 064 Б | 8 511 346 Б |
+| `pdf-extract` | 3,934,002 B | 905,109 B |
+| `docx-rs` | 21,680,064 B | 8,511,346 B |
 
-Это размеры входных архивов Cargo, не байты, попавшие в приложение. В
-`[profile.release]` включены LTO, один codegen unit и stripping; линкер
-выбрасывает и объединяет код. По единственной собранной конфигурации нельзя
-честно разложить прирост EXE/установщика между этими двумя крейтами: он также
-содержит изменения приложения. Надёжно измерен только суммарный прирост
-установщика и EXE, указанный выше; для причинной оценки по каждому крейту
-нужны контрольные сборки без каждого из них.
+Those are the sizes of Cargo's input archives, not of the bytes that ended up
+in the application. `[profile.release]` turns on LTO, a single codegen unit and
+stripping; the linker drops and merges code. From a single built configuration
+the growth of the EXE and the installer cannot honestly be split between these
+two crates: it also contains changes to the application itself. Only the total
+growth of the installer and the EXE given above is measured reliably; telling
+what each crate costs would need control builds without each of them.
 
-## Приёмка
+## Acceptance
 
-Выполнены два запуска `pwsh ... qa/acceptance.ps1 -Runs 1` на новом EXE:
-первый был загрязнён параллельным запуском другого агента и не считается
-приёмочным; по сообщению координатора помеху остановили, после чего выполнен
-один чистый повторный прогон. Его журнал:
-[`w46-clean-acceptance-1.0.3.jsonl`](w46-clean-acceptance-1.0.3.jsonl), снимки —
-[`shots/w46-clean`](shots/w46-clean). Чистый результат — 8/10,
-полностью зелёных прогонов 0/1.
+Two runs of `pwsh ... qa/acceptance.ps1 -Runs 1` were made against the new EXE.
+The first was polluted by another agent launching the program in parallel and
+does not count as acceptance; the coordinator reported the interference was
+stopped, after which one clean repeat run was made. Its journal is
+[`w46-clean-acceptance-1.0.3.jsonl`](w46-clean-acceptance-1.0.3.jsonl), the
+screenshots are in [`shots/w46-clean`](shots/w46-clean). The clean result is
+8/10, with 0/1 fully green runs.
 
-| Тест | Результат | Наблюдение |
+| Test | Result | Observation |
 | --- | --- | --- |
-| TC-01 | PASS | Окно `MarkNote`, 916×739, видимое |
-| TC-02 | PASS | `showcase.md — MarkNote`, 916×739, видимое |
-| TC-03 | PASS | `cp1251.txt — MarkNote`, 916×739, видимое |
-| TC-04 | PASS | Окно остаётся отзывчивым для несуществующего пути |
-| TC-05 | PASS | Повторный запуск того же файла оставил один процесс/окно |
-| TC-06 | PASS | Второй файл открыл второе окно в одном процессе |
-| TC-07 | PASS | `big-10k.md` открылся; процесс отвечал |
-| TC-08 | FAIL | Приложение отклонило PNG и показало toast `This file appears to be binary and cannot be opened as text.`; тест всё ещё ищет старую русскую строку. Это подтверждено снимком чистого прогона: [binary rejection](shots/w46-clean/run_001_08_binary_rejected.png). Сбой — устаревшее ожидание приёмочного скрипта, не отказ продукта. |
-| TC-09 | FAIL | Плитка Markdown нажата, `qa-unsaved` обнаружен в документе, затем отправлен `Alt+F4`; за 5 секунд `Save changes?` не появился, а процесс и окно исчезли (`processCount=0`). В чистом прогоне несохранённый документ закрылся без диалога; это дефект поведения закрытия, продукт не исправлял. |
-| TC-10 | PASS | На чистом прогоне `Ctrl+F` открыл панель поиска (`searchPanel=True`), процесс оставался жив, окно одно. |
+| TC-01 | PASS | Window `MarkNote`, 916×739, visible |
+| TC-02 | PASS | `showcase.md — MarkNote`, 916×739, visible |
+| TC-03 | PASS | `cp1251.txt — MarkNote`, 916×739, visible |
+| TC-04 | PASS | The window stays responsive for a path that does not exist |
+| TC-05 | PASS | Starting the same file again left one process and one window |
+| TC-06 | PASS | A second file opened a second window in the same process |
+| TC-07 | PASS | `big-10k.md` opened; the process responded |
+| TC-08 | FAIL | The application refused the PNG and showed the toast `This file appears to be binary and cannot be opened as text.`; the test still looks for the old Russian string. Confirmed by the screenshot from the clean run: [binary rejection](shots/w46-clean/run_001_08_binary_rejected.png). The failure is a stale expectation in the acceptance script, not a fault in the product. |
+| TC-09 | FAIL | The Markdown tile was clicked, `qa-unsaved` was found in the document, then `Alt+F4` was sent; `Save changes?` did not appear within 5 seconds and the process and window disappeared (`processCount=0`). In the clean run an unsaved document closed without a dialog; that is a defect in the close behaviour, and the product was not fixed here. |
+| TC-10 | PASS | On the clean run `Ctrl+F` opened the search panel (`searchPanel=True`), the process stayed alive, and there was one window. |
 
-TC-10, красный в загрязнённом запуске, прошёл после остановки посторонней
-приёмки; прежний красный результат недостоверен. Чистый прогон доказывает
-дефект TC-09, но одного повтора недостаточно для оценки его стабильности.
+TC-10, red in the polluted run, passed once the outside acceptance run was
+stopped; the earlier red result is not trustworthy. The clean run proves the
+TC-09 defect, but one repetition is not enough to judge how stable it is.
 
-Первый (загрязнённый) прогон создал 10 видимых окон; чистый — 11 (TC-06
-создаёт два окна). Всего за две приёмки было 24 запуска EXE и 21 видимое
-окно. Дополнительного ручного запуска не делал. После чистого прогона
-`marknote.exe` процессов нет.
+The first (polluted) run created 10 visible windows; the clean one, 11 (TC-06
+creates two). Across both acceptance runs there were 24 launches of the EXE and
+21 visible windows. No extra manual launch was made. After the clean run there
+are no `marknote.exe` processes left.
 
-## Чек-лист
+## Checklist
 
-В [`CHECKLIST.md`](CHECKLIST.md) приведены к текущим английским подписям
-закрывающий диалог, поиск и стартовый экран, добавлены ручные сценарии для
-смены типа с сохранением текста/курсора/undo, файловых сочетаний при фокусе в
-редакторе, обновления заголовка, масштаба, трёх пунктов Help и отказа для
-двоичного файла.
+In [`CHECKLIST.md`](CHECKLIST.md) the close dialog, the search and the start
+screen were brought in line with the current English labels, and manual
+scenarios were added for changing the file type while keeping text, cursor and
+undo, for the file shortcuts while the editor has focus, for the title update,
+the zoom, the three Help items and the refusal of a binary file.

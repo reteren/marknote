@@ -2,9 +2,10 @@
 
 ## State API
 
-**Статус W104:** состояние вкладок и прокси `documentState` подключены (W99),
-а сохранение `EditorState` при переключении реализовано (W101). Ниже оставлены
-рабочие детали контракта; новые хранилища для текста не заводятся.
+**W104 status:** the tab state and the `documentState` proxy are wired in
+(W99), and keeping the `EditorState` across a switch is implemented (W101). The
+working details of the contract are left below; no new store for the text is
+being introduced.
 
 `src/state/workspace.svelte.ts` owns one reactive workspace with a stable
 one-or-more-tab invariant, lifecycle operations, and display labels.  `documentState`
@@ -22,9 +23,9 @@ tab.
 
 ## Closing dirty tabs
 
-**Статус W104:** инвариант последней вкладки и запрос решения для одной грязной
-вкладки подключены; сводный протокол для нескольких грязных вкладок остаётся в
-работе у App/UI.
+**W104 status:** the last-tab invariant and asking for a decision about one
+dirty tab are wired in; the aggregated protocol for several dirty tabs is still
+being worked on in App/UI.
 
 `closeTab` refuses to remove the final tab, preserving the contract that a
 window never has zero tabs.  The tab UI should run the existing save/discard/
@@ -36,11 +37,11 @@ an App/UI responsibility so no policy is silently changed in state.
 
 ## Rust watcher and open-file registry
 
-**Статус W104:** структура многовкладочного наблюдения уже переведена на наборы
-путей (`watched: HashMap<String, HashSet<PathBuf>>`) и реестр владельцев файла
-(`open_files: HashMap<PathBuf, HashSet<String>>`). Окончательная маршрутизация и
-приёмка событий между вкладками всё ещё в работе, поэтому пункт не считается
-закрытым.
+**W104 status:** the structure of multi-tab watching has already moved to sets
+of paths (`watched: HashMap<String, HashSet<PathBuf>>`) and a registry of file
+owners (`open_files: HashMap<PathBuf, HashSet<String>>`). The final routing and
+the acceptance of events between tabs are still in work, so this item is not
+considered closed.
 
 `src-tauri/src/watcher.rs` keeps one native watch per directory root and emits
 the changed path; the autosave layer matches it against tab documents, while

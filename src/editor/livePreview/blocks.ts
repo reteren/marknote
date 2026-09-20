@@ -50,12 +50,11 @@ function children(node: SyntaxNode, name: string) {
 }
 
 /**
- * Одна-две черты или один-два знака равно под строкой текста — это начало
- * списка или просто набранный знак, а не подчёркивание заголовка. Предпросмотр
- * не делает из такой пары заголовок: иначе строка сверху внезапно становится
- * крупной и жирной, а сам знак прячется под разметку и пропадает с экрана.
- * Полноценное подчёркивание из трёх и более знаков остаётся заголовком, как в
- * CommonMark и Obsidian.
+ * One or two dashes or equals signs below a text line indicate a list or simply
+ * a typed character, not a heading underline. The preview does not turn such a
+ * pair into a heading: otherwise the line above suddenly becomes large and bold,
+ * while the marker hides under markup and disappears from the screen. A complete
+ * underline of three or more marks remains a heading, as in CommonMark and Obsidian.
  */
 function isShortSetextUnderline(node: SyntaxNode, state: EditorState): boolean {
   if (node.name !== "SetextHeading1" && node.name !== "SetextHeading2") return false;
@@ -112,7 +111,7 @@ function nestedListGuide(
   return specs;
 }
 
-/** Построение заголовков, списков, цитат и блочных виджетов. */
+/** Builds headings, lists, quotes, and block widgets. */
 export function decorationsForBlockNode(
   node: SyntaxNode,
   active: boolean,
@@ -192,9 +191,9 @@ export function decorationsForBlockNode(
       return [mark(node.from, node.to, "cm-marknote-math-source")];
     }
     if (active) return [mark(node.from, node.to, "cm-marknote-math-source")];
-    // Блок из нескольких строк рисует поле состояния (blockMath.ts): замена,
-    // перекрывающая перевод строки, из плагина вида запрещена и роняет
-    // обновление редактора.
+    // A multiline block is rendered by the state field (blockMath.ts): a
+    // replacement covering a line break is forbidden in a view plugin and
+    // crashes editor updates.
     if (spansSeveralLines(state, node)) return [];
     return [{
       from: node.from,

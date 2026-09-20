@@ -36,7 +36,7 @@ function hasWidget(set: ReturnType<typeof buildDecorationSets>["decorations"], f
 }
 
 describe("MarkNote Markdown extensions", () => {
-  it("разбирает все новые inline-конструкции с точными позициями", () => {
+  it("parses all new inline constructs with exact positions", () => {
     const doc = "==hi== %%comment%% $x^2$ [^ref]";
     for (const name of ["Highlight", "Comment", "InlineMath", "FootnoteReference"]) {
       expect(nodes(doc, name), name).toHaveLength(1);
@@ -47,7 +47,7 @@ describe("MarkNote Markdown extensions", () => {
     expect(nodes(doc, "FootnoteReference")[0]).toEqual({ from: 25, to: 31 });
   });
 
-  it("разбирает блок формулы, callout и определение сноски", () => {
+  it("parses a formula block, callout, and footnote definition", () => {
     const doc = "$$\nx^2\n$$\n\n> [!WARNING] Be careful\n> body\n\n[^ref]: Reference text";
     expect(nodes(doc, "MathBlock")).toEqual([{ from: 0, to: 9 }]);
     expect(nodes(doc, "Callout")).toEqual([{ from: 12, to: 41 }]);
@@ -57,7 +57,7 @@ describe("MarkNote Markdown extensions", () => {
     expect(nodes(doc, "FootnoteDefinition")).toEqual([{ from: 43, to: 65 }]);
   });
 
-  it("не превращает одну-две черты или знака равно Setext в заголовок предпросмотра", () => {
+  it("does not turn one or two Setext dashes or equals signs into a preview heading", () => {
     for (const underline of ["-", "--", " - ", " -- ", "=", "==", " = ", " == "]) {
       const doc = `plain\n${underline}`;
       const level = /=/.test(underline) ? 1 : 2;
@@ -65,7 +65,7 @@ describe("MarkNote Markdown extensions", () => {
       expect(heading, underline).toBeTruthy();
       const result = buildDecorationSets(state(doc, 0), [{ from: 0, to: doc.length }]);
       expect(hasRange(result.decorations, heading.from, heading.to, `cm-marknote-heading cm-marknote-heading-${level}`), underline).toBe(false);
-      // Сам знак остаётся на экране: его не прячут как разметку заголовка.
+      // The marker remains on screen instead of being hidden as heading markup.
       expect(decorationRanges(result.decorations).some((range) => range.from >= heading.from && range.to <= heading.to && range.decoration.spec.widget === undefined && range.decoration.spec.class === undefined), underline).toBe(false);
     }
 
@@ -77,17 +77,17 @@ describe("MarkNote Markdown extensions", () => {
     }
   });
 
-  it("рендерит MathBlock вне блока и раскрывает его под курсором", () => {
+  it("renders MathBlock outside the block and reveals it under the cursor", () => {
     for (const doc of ["$$\nx^2\n$$\n", "before\n$$\nx^2\n$$", "before\n$$\nx^2\n$$\n", "before\n$$\nx^2\n$$\nafter"]) {
       const math = nodes(doc, "MathBlock")[0];
       expect(math, doc).toBeTruthy();
       if (!math) continue;
-      // «Снаружи» — это другая строка: курсор на строке с `$$` раскрывает
-      // блок, иначе только что набранные знаки сразу прятались бы под виджет.
+      // “Outside” means another line: a cursor on the `$$` line reveals the
+      // block, otherwise newly typed signs would immediately hide under the widget.
       const outsideAnchor = math.to < doc.length ? math.to + 1 : math.from - 1;
       if (outsideAnchor < 0) continue;
-      // Многострочный блок рисует поле состояния: замена, перекрывающая
-      // перевод строки, из плагина вида роняет редактор (см. blockMath.ts).
+      // A multiline block is rendered by the state field: a view-plugin
+      // replacement covering a line break crashes the editor (see blockMath.ts).
       const outsideState = state(doc, outsideAnchor);
       const outsideField: Array<{ from: number; to: number }> = [];
       blockMathDecorations(outsideState).between(0, doc.length, (from, to) => outsideField.push({ from, to }));
@@ -103,19 +103,19 @@ describe("MarkNote Markdown extensions", () => {
     }
   });
 
-  it("рендерит строчную формулу вне неё", () => {
+  it("renders an inline formula outside it", () => {
     const doc = "before $x^2$ after";
     const math = nodes(doc, "InlineMath")[0];
     expect(hasWidget(buildDecorationSets(state(doc, 0), [{ from: 0, to: doc.length }]).decorations, math.from, math.to, "MathWidget")).toBe(true);
   });
 
-  it("распознаёт все типы Obsidian callout", () => {
+  it("recognizes all Obsidian callout types", () => {
     for (const type of ["note", "tip", "warning", "danger", "info", "success", "question", "quote", "example"]) {
       expect(nodes(`> [!${type.toUpperCase()}] Title`, "Callout"), type).toHaveLength(1);
     }
   });
 
-  it("учитывает включительные границы курсора и выделения", () => {
+  it("honors inclusive cursor and selection boundaries", () => {
     const doc = "a **x** b";
     const node = syntaxTree(state(doc)).topNode.getChild("Paragraph")!.getChild("StrongEmphasis")!;
     expect([1, 2, 3, 6, 8].map((anchor) => isNodeActive(node, EditorSelection.single(anchor), state(doc).doc))).toEqual([
@@ -130,7 +130,7 @@ describe("MarkNote Markdown extensions", () => {
     expect(isNodeActive(node, EditorSelection.create([EditorSelection.range(0, 3)]), state(doc).doc)).toBe(true);
   });
 
-  it("скрывает маркеры снаружи и раскрывает узел под курсором", () => {
+  it("hides markers outside and reveals the node under the cursor", () => {
     const doc = "prefix **bold** suffix";
     const outside = state(doc, 0);
     const hidden = buildDecorationSets(outside, [{ from: 0, to: doc.length }]);
@@ -144,7 +144,7 @@ describe("MarkNote Markdown extensions", () => {
     expect(hasRange(shown.decorations, 9, 13, "cm-marknote-bold")).toBe(true);
   });
 
-  it("строит вложенные декорации и atomic ranges", () => {
+  it("builds nested decorations and atomic ranges", () => {
     const doc = "x **bold *and italic* inside** y";
     const result = buildDecorationSets(state(doc, 0), [{ from: 0, to: doc.length }]);
     expect(hasRange(result.decorations, 2, 4)).toBe(true);
@@ -154,7 +154,7 @@ describe("MarkNote Markdown extensions", () => {
     expect(result.atomicRanges.size).toBeGreaterThan(0);
   });
 
-  it("строит блочные виджеты и раскрывает их по строке", () => {
+  it("builds block widgets and reveals them by line", () => {
     const heading = "x\n# Heading";
     const headingNode = nodes(heading, "ATXHeading1")[0];
     expect(hasRange(buildDecorationSets(state(heading, 0), [{ from: 0, to: heading.length }]).decorations, headingNode.from, headingNode.from + 1)).toBe(true);
@@ -182,7 +182,7 @@ describe("MarkNote Markdown extensions", () => {
     expect(hasWidget(buildDecorationSets(state(hr, 0), [{ from: 0, to: hr.length }]).decorations, hrNode.from, hrNode.to, "HrWidget")).toBe(true);
   });
 
-  it("полностью скрывает комментарий и заменяет формулу виджетом", () => {
+  it("fully hides a comment and replaces a formula with a widget", () => {
     const doc = "x %%hidden%% $a + b$";
     const result = buildDecorationSets(state(doc, 0), [{ from: 0, to: doc.length }]);
     const comment = nodes(doc, "Comment")[0];
@@ -191,47 +191,48 @@ describe("MarkNote Markdown extensions", () => {
     expect(hasWidget(result.decorations, math.from, math.to, "MathWidget")).toBe(true);
   });
 
-  it("отключает предпросмотр после maxBytes", () => {
+  it("disables preview after maxBytes", () => {
     const result = buildDecorationSets(state("**large**"), [{ from: 0, to: 9 }], { maxBytes: 1 });
     expect(result.disabled).toBe(true);
     expect(result.decorations.size).toBe(0);
     expect(result.atomicRanges.size).toBe(0);
   });
 
-  it("отображает чекбокс даже когда курсор находится на той же строке в тексте задачи", () => {
+  it("shows a checkbox even when the cursor is on the task text line", () => {
     const task = "- [ ] Hello world";
     const taskMark = nodes(task, "TaskMarker")[0];
     expect(taskMark).toBeDefined();
 
-    // 1. Курсор в тексте задачи ("Hello") — чекбокс остаётся отрендеренным виджетом
+    // 1. Cursor in task text ("Hello"): the checkbox remains a rendered widget.
     const cursorInText = 10; // "- [ ] Hell|o world"
     const resultCursor = buildDecorationSets(state(task, cursorInText), [{ from: 0, to: task.length }]);
     expect(hasWidget(resultCursor.decorations, taskMark.from, taskMark.to, "CheckboxWidget")).toBe(true);
 
-    // 2. Сразу после маркера на позиции 6 ("- [ ] |Hello world") — чекбокс отображается
+    // 2. Immediately after the marker at position 6 ("- [ ] |Hello world"): checkbox is shown.
     const resultAfterMarker = buildDecorationSets(state(task, 6), [{ from: 0, to: task.length }]);
     expect(hasWidget(resultAfterMarker.decorations, taskMark.from, taskMark.to, "CheckboxWidget")).toBe(true);
 
-    // 3. Даже при режиме revealMarkup: "line" чекбокс остаётся виджетом, когда курсор в тексте
+    // 3. Even with revealMarkup: "line", the checkbox remains a widget when the cursor is in text.
     const resultLineMode = buildDecorationSets(state(task, cursorInText), [{ from: 0, to: task.length }], { revealMarkup: "line" });
     expect(hasWidget(resultLineMode.decorations, taskMark.from, taskMark.to, "CheckboxWidget")).toBe(true);
 
-    // 4. При выделении внутри диапазона маркера ([ ]) разметка раскрывается в текст
+    // 4. A selection inside the marker range ([ ]) reveals the markup as text.
     const selectInside = EditorState.create({
       doc: task,
-      selection: EditorSelection.single(3), // курсор внутри "[ ]" между "[" и " "
+      selection: EditorSelection.single(3), // cursor inside "[ ]" between "[" and " "
       extensions: language.extension,
     });
     const resultInside = buildDecorationSets(selectInside, [{ from: 0, to: task.length }]);
     expect(hasWidget(resultInside.decorations, taskMark.from, taskMark.to, "CheckboxWidget")).toBe(false);
 
-    // 5. При стирании символов (удаление пробела после ']' -> "- [ ]") узел TaskMarker отсутствует и остаётся чистый текст
+    // 5. After deleting characters (removing the space after ']' -> "- [ ]"),
+    // TaskMarker is absent and plain text remains.
     const erasedSpace = "- [ ]";
     expect(nodes(erasedSpace, "TaskMarker")).toHaveLength(0);
     const resultErased = buildDecorationSets(state(erasedSpace, 3), [{ from: 0, to: erasedSpace.length }]);
     expect(hasWidget(resultErased.decorations, 2, 5, "CheckboxWidget")).toBe(false);
 
-    // При удалении скобок -> "- [ hello" TaskMarker отсутствует
+    // After deleting the brackets -> "- [ hello", TaskMarker is absent.
     const erasedBrackets = "- [ hello";
     expect(nodes(erasedBrackets, "TaskMarker")).toHaveLength(0);
   });

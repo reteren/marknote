@@ -1,7 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 
 export type DocumentImageResolver = ((src: string) => Promise<string>) & {
-  /** Обновляет базовый путь и забывает результаты предыдущего документа. */
+  /** Updates the base path and discards results from the previous document. */
   setDocumentPath(path: string | null): void;
 };
 
@@ -18,9 +18,9 @@ function errorMessage(error: unknown): string {
 }
 
 /**
- * Создаёт resolver изображений для одного открытого документа.
- * Успешные и неуспешные обращения к одному src разделяют один Promise,
- * поэтому пересборка декораций не вызывает Rust повторно.
+ * Creates an image resolver for one open document.
+ * Successful and failed requests for the same src share one Promise, so
+ * rebuilding decorations does not call Rust again.
  */
 export function createImageResolver(documentPath: string | null): DocumentImageResolver {
   let currentPath = documentPath;
@@ -55,4 +55,3 @@ export function createImageResolver(documentPath: string | null): DocumentImageR
 
   return resolveImage;
 }
-

@@ -890,13 +890,13 @@ export function createActions(dependencies: ActionsDependencies = {}): AppAction
   const openReplace = (view = getView()): ActionResult => command(view, searchCommands.openReplace);
   const openLink = async (url: string): Promise<ActionResult> => {
     if (!url || !dialogs.openLink) return false;
-    // Ссылка приходит из документа, а документ пользователь получил извне.
-    // Схемы проверяются белым списком в одном месте на весь проект: data:,
-    // file: и vbscript: открывать нельзя, а перечислить всё опасное чёрным
-    // списком невозможно.
+    // The link comes from the document, and the user may have received that
+    // document from an untrusted source. Schemes are checked against one
+    // project-wide allowlist: data:, file:, and vbscript: must not open, while
+    // enumerating every dangerous scheme on a blocklist is impossible.
     const href = safeLinkHref(url);
     if (href === null) {
-      notify(`Ссылка не открыта: небезопасный адрес ${url}`);
+      notify(`Link not opened: unsafe address ${url}`);
       return false;
     }
     try {

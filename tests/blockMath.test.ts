@@ -1,8 +1,8 @@
-// Блок `$$ … $$` занимает несколько строк, и замена такого диапазона из
-// плагина вида запрещена: CodeMirror бросает RangeError и перестаёт обновлять
-// редактор — документ застывает, а формула остаётся сырой. Эти проверки
-// держат разделение: многострочный блок рисует поле состояния, однострочный —
-// плагин, и ни один из них не отдаёт запрещённую замену.
+// A `$$ … $$` block spans multiple lines, and a replacement for that range is
+// forbidden from a view plugin: CodeMirror throws RangeError and stops updating
+// the editor, freezing the document with a raw formula. These checks preserve
+// the split: a multiline block is rendered by a state field, a single-line one
+// by the plugin, and neither returns a forbidden replacement.
 
 import { defineLanguageFacet, Language } from "@codemirror/language";
 import { EditorState, EditorSelection } from "@codemirror/state";
@@ -40,36 +40,36 @@ function fieldRanges(editorState: EditorState) {
   return ranges;
 }
 
-describe("блок формулы", () => {
+describe("formula block", () => {
   const doc = "text\n\n$$\nx^2\n$$\n\nafter";
   const cursorAfter = doc.length;
 
-  it("рисуется полем состояния, а плагин не отдаёт замену через перевод строки", () => {
+  it("is rendered by a state field, while the plugin returns no line-break replacement", () => {
     const editorState = state(doc, cursorAfter);
     expect(fieldRanges(editorState)).toEqual([{ from: 6, to: 15 }]);
     expect(replacementsCrossingLineBreak(editorState)).toEqual([]);
   });
 
-  it("не отдаёт замену и у незакрытого блока, пока его дописывают", () => {
-    // `$$` + перевод строки: именно на этом сочетании редактор падал.
+  it("returns no replacement for an unclosed block while it is being typed", () => {
+    // `$$` + line break: this exact combination used to crash the editor.
     for (const unfinished of ["$$\n", "$$\nx^2\n", "text\n\n$$\n"]) {
       const editorState = state(unfinished, unfinished.length);
       expect(replacementsCrossingLineBreak(editorState)).toEqual([]);
     }
   });
 
-  it("раскрывается в разметку, пока курсор на любой его строке", () => {
+  it("reveals markup while the cursor is on any of its lines", () => {
     for (const anchor of [6, 9, 12, 15]) {
       expect(fieldRanges(state(doc, anchor))).toEqual([]);
     }
   });
 
-  it("молчит, когда предпросмотр или формулы выключены", () => {
+  it("is silent when preview or formulas are disabled", () => {
     expect(fieldRanges(state(doc, cursorAfter, { renderFormulas: false }))).toEqual([]);
     expect(fieldRanges(state(doc, cursorAfter, { enabled: false }))).toEqual([]);
   });
 
-  it("не flatten-ит большой документ перед отключением формул по лимиту", () => {
+  it("does not flatten a large document before disabling formulas at the limit", () => {
     const editorState = state("x".repeat(1024), 0, { disableAboveBytes: 1023 });
     const toString = vi.spyOn(editorState.doc, "toString");
 

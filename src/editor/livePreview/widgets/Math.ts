@@ -6,9 +6,9 @@ const renderedMath = new Map<string, string>();
 let katexLoader: Promise<KatexApi> | null = null;
 const MAX_RENDERED_MATH = 256;
 
-// Формулы в заметках обычно намного меньше этих значений. Они оставляют
-// запас для длинных выражений, но не дают документу развернуть WebView в
-// гигантский элемент или зациклить макрорасширение.
+// Formulas in notes are usually much shorter than these values. They leave room
+// for long expressions without letting a document expand WebView into a giant
+// element or loop through macro expansion.
 const KATEX_MAX_SIZE_EM = 100;
 const KATEX_MAX_EXPAND = 1_000;
 
@@ -18,8 +18,8 @@ function escapeHtml(value: string) {
 
 function loadKatex(): Promise<KatexApi> {
   if (!katexLoader) {
-    // Движок и его шрифты со стилями попадают в отдельный чанк и грузятся
-    // только при фактическом появлении формулы в предпросмотре.
+    // The engine and its styled fonts are kept in a separate chunk and loaded
+    // only when a formula actually appears in the preview.
     katexLoader = Promise.all([import("katex"), import("katex/dist/katex.min.css")]).then(([module]) => module.default);
   }
   return katexLoader;
@@ -58,7 +58,7 @@ function renderMath(source: string, displayMode: boolean, katex: KatexApi): stri
   return html;
 }
 
-/** Виджет формулы с ленивой загрузкой KaTeX и кэшем по исходному тексту. */
+/** Formula widget with lazy KaTeX loading and a cache keyed by source text. */
 export class MathWidget extends WidgetType {
   constructor(
     readonly source: string,
@@ -72,9 +72,9 @@ export class MathWidget extends WidgetType {
   }
 
   /**
-   * Щелчок по отрисованной формуле должен ставить курсор в неё, иначе формулу
-   * нельзя исправить — только удалить целиком. Курсор внутри блока раскрывает
-   * его в разметку `$$ … $$`.
+   * Clicking a rendered formula must place the cursor in it; otherwise it can
+   * only be deleted as a whole, not edited. A cursor inside the block reveals
+   * its `$$ … $$` markup.
    */
   ignoreEvent(): boolean {
     return false;
@@ -83,7 +83,7 @@ export class MathWidget extends WidgetType {
   toDOM(_view: EditorView): HTMLElement {
     const element = document.createElement(this.displayMode ? "div" : "span");
     element.className = `cm-marknote-math${this.displayMode ? " cm-marknote-math-display" : ""}`;
-    // Пока KaTeX и его CSS грузятся, оставляем редактируемый исходник на месте.
+    // Keep the editable source in place while KaTeX and its CSS load.
     element.textContent = this.source;
 
     void loadKatex().then(
@@ -91,7 +91,7 @@ export class MathWidget extends WidgetType {
         element.innerHTML = renderMath(this.source, this.displayMode, katex);
       },
       () => {
-        // При сбое динамического импорта исходный текст остаётся видимым.
+        // If the dynamic import fails, the source text remains visible.
       },
     );
     return element;

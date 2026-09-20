@@ -1,218 +1,150 @@
-# Аудит горячих клавиш MarkNote
+# MarkNote keyboard shortcut audit
 
-Аудит соответствия реализации горячих клавиш спецификации (`docs/SPEC.md`, раздел 8), коду редактора (`src/editor/keymap.ts`, `src/editor/livePreview/tables.ts`, `src/editor/search.ts`), модели меню (`src/ui/menuModel.ts`) и обработчикам действий (`src/state/actions.ts`, `src/App.svelte`).
+This audit compares the implemented shortcuts with the specification
+(`docs/SPEC.md`, section 8), editor code (`src/editor/keymap.ts`,
+`src/editor/livePreview/tables.ts`, `src/editor/search.ts`), the menu model
+(`src/ui/menuModel.ts`), and action handlers (`src/state/actions.ts`,
+`src/App.svelte`).
 
 ---
 
-## 1. Сводная таблица сверки
+## 1. Comparison summary
 
-| Сочетание | SPEC (раздел 8) | Редактор (keymap.ts / tables.ts / search.ts) | Меню (menuModel.ts / actions.ts / App.svelte) | Вердикт |
+| Shortcut | Specification | Editor implementation | Menu / action implementation | Verdict |
 | :--- | :--- | :--- | :--- | :--- |
-| **Ctrl+N** | Новый документ в новом окне, Markdown (`SPEC.md:443`) | `Mod-n` → `handlers.newDocument` (`keymap.ts:376`), открывает пустое окно через `open_new_window` | `file.newWindow` («New Window»), подпись `Ctrl+N` (`menuModel.ts:97`), вызывает тот же action | **ИСПРАВЛЕНО** (`2026-09-16`): клавиша и меню создают новое пустое Markdown-окно, текущий документ не меняется. |
-| **Ctrl+Shift+N** | Новый документ с выбором типа (`SPEC.md:444`) | `Mod-Shift-n` → `handlers.newDocumentWithPicker` (`keymap.ts:377`), передаёт `dialogs.chooseFormat` и открывает новое окно выбранного типа | `file.new` («New ▸»), подпись `Ctrl+Shift+N` (`menuModel.ts:96`), подменю вызывает тот же action | **ИСПРАВЛЕНО** (`2026-09-16`): выбор типа и создание окна используют общий путь; возможный перехват WebView2 остаётся платформенным ограничением. |
-| **Ctrl+O** | Открыть файл (`SPEC.md:445`) | `Mod-o` → `handlers.openFile` (`keymap.ts:378`, `actions.ts:318, 555`) | `file.open` («Open…»), подпись `Ctrl+O` (`menuModel.ts:99`, `App.svelte:531`) | **Совпадает** (`SPEC.md:445`, `keymap.ts:378`, `menuModel.ts:99`) |
-| **Ctrl+S** | Сохранить немедленно (`SPEC.md:446`) | `Mod-s` → `handlers.save` (`keymap.ts:379`, `actions.ts:348, 559`) | `file.save` («Save»), подпись `Ctrl+S` (`menuModel.ts:101`, `App.svelte:532`) | **Совпадает** (`SPEC.md:446`, `keymap.ts:379`, `menuModel.ts:101`) |
-| **Ctrl+Shift+S** | Сохранить как (`SPEC.md:447`) | `Mod-Shift-s` → `handlers.saveAs` (`keymap.ts:380`, `actions.ts:333, 563`) | `file.saveAs` («Save As…»), подпись `Ctrl+Shift+S` (`menuModel.ts:102`, `App.svelte:533`) | **Совпадает** (`SPEC.md:447`, `keymap.ts:380`, `menuModel.ts:102`) |
-| **Ctrl+W** | Закрыть окно (`SPEC.md:448`) | `Mod-w` → `handlers.closeWindow` (`keymap.ts:381`, `actions.ts:567`) | `file.close` («Close»), подпись `Ctrl+W` (`menuModel.ts:104`, `App.svelte:534`) | **Совпадает** (`SPEC.md:448`, `keymap.ts:381`, `menuModel.ts:104`) |
-| **Ctrl+Z** | Отменить (`SPEC.md:453`) | `Mod-z` → `undo` (`keymap.ts:446`) | `edit.undo` («Undo»), подпись `Ctrl+Z` (`menuModel.ts:113`, `App.svelte:536`) | **Совпадает** (`SPEC.md:453`, `keymap.ts:446`, `menuModel.ts:113`) |
-| **Ctrl+Shift+Z** | Повторить (`SPEC.md:454`) | `Mod-Shift-z` → `redo` (`keymap.ts:447`) | `edit.redo` («Redo»), подпись `Ctrl+Shift+Z / Ctrl+Y` (`menuModel.ts:114`, `App.svelte:537`) | **Совпадает** (`SPEC.md:454`, `keymap.ts:447`, `menuModel.ts:114`) |
-| **Ctrl+Y** | Повторить (`SPEC.md:454`) | `Mod-y` → `redo` (`keymap.ts:448`) | `edit.redo` («Redo»), подпись `Ctrl+Shift+Z / Ctrl+Y` (`menuModel.ts:114`, `App.svelte:537`) | **Совпадает** (`SPEC.md:454`, `keymap.ts:448`, `menuModel.ts:114`) |
-| **Ctrl+X** | Вырезать (`SPEC.md:455`) | Встроено в CodeMirror / Webview clipboard (`keymap.ts:478`) | `edit.cut` («Cut»), подпись `Ctrl+X` (`menuModel.ts:116`, `App.svelte:538`) | **Совпадает** (`SPEC.md:455`, `keymap.ts:478`, `menuModel.ts:116`) |
-| **Ctrl+C** | Копировать (`SPEC.md:455`) | Встроено в CodeMirror / Webview clipboard (`keymap.ts:478`) | `edit.copy` («Copy»), подпись `Ctrl+C` (`menuModel.ts:117`, `App.svelte:539`) | **Совпадает** (`SPEC.md:455`, `keymap.ts:478`, `menuModel.ts:117`) |
-| **Ctrl+V** | Вставить (`SPEC.md:455`) | Встроено в CodeMirror / Webview clipboard (`keymap.ts:478`) | `edit.paste` («Paste»), подпись `Ctrl+V` (`menuModel.ts:118`, `App.svelte:540`) | **Совпадает** (`SPEC.md:455`, `keymap.ts:478`, `menuModel.ts:118`) |
-| **Ctrl+Shift+V** | Вставить как простой текст (`SPEC.md:456`) | `Mod-Shift-v` → `pastePlainText` (`keymap.ts:460`) | `edit.pastePlainText` («Paste as Plain Text»), подпись `Ctrl+Shift+V` (`menuModel.ts:119`, `App.svelte:547`) | **Совпадает** (`SPEC.md:456`, `keymap.ts:460`, `menuModel.ts:119`) |
-| **Ctrl+A** | Выделить всё (`SPEC.md:457`) | Встроено в `defaultKeymap` CodeMirror (`keymap.ts:478`) | `edit.selectAll` («Select All»), подпись `Ctrl+A` (`menuModel.ts:120`, `App.svelte:541`) | **Совпадает** (`SPEC.md:457`, `keymap.ts:478`, `menuModel.ts:120`) |
-| **Ctrl+D** | Удалить строку (`SPEC.md:458`) | `Mod-d` → `deleteLine` (`keymap.ts:455`) | `edit.deleteLine` («Delete Line»), подпись `Ctrl+D` (`menuModel.ts:125`, `App.svelte:542`) | **Совпадает** (`SPEC.md:458`, `keymap.ts:455`, `menuModel.ts:125`) |
-| **Alt+↑** | Переместить строку вверх (`SPEC.md:459`) | `Alt-ArrowUp` → `moveLineUp` (`keymap.ts:456`) | `edit.moveLineUp` («Move Line Up»), подпись `Alt+↑` (`menuModel.ts:126`, `App.svelte:543`) | **Совпадает** (`SPEC.md:459`, `keymap.ts:456`, `menuModel.ts:126`) |
-| **Alt+↓** | Переместить строку вниз (`SPEC.md:459`) | `Alt-ArrowDown` → `moveLineDown` (`keymap.ts:457`) | `edit.moveLineDown` («Move Line Down»), подпись `Alt+↓` (`menuModel.ts:127`, `App.svelte:544`) | **Совпадает** (`SPEC.md:459`, `keymap.ts:457`, `menuModel.ts:127`) |
-| **Ctrl+B** | Жирный (`SPEC.md:464`) | `Mod-b` → `toggleWrapper("**", "**")` (`keymap.ts:452`) | `format.bold` в контекстном меню вызывает общий action | **ИСПРАВЛЕНО** (`2026-09-16`): меню снимает маркеры тем же toggle, что и клавиша. |
-| **Ctrl+I** | Курсив (`SPEC.md:465`) | `Mod-i` → `toggleWrapper("*", "*")` (`keymap.ts:453`) | `format.italic` в контекстном меню вызывает общий action | **ИСПРАВЛЕНО** (`2026-09-16`): меню снимает маркеры тем же toggle, что и клавиша. |
-| **Ctrl+E** | Код (`SPEC.md:466`) | `Mod-e` → `toggleWrapper("`", "`")` (`keymap.ts:454`) | `format.code` в контекстном меню вызывает общий action | **ИСПРАВЛЕНО** (`2026-09-16`): меню снимает маркеры тем же toggle, что и клавиша. |
-| **Ctrl+K** | Ссылка (`SPEC.md:467`) | `Mod-k` → `toggleLink` (`keymap.ts:458`) | `format.link` в контекстном меню, подпись `Ctrl+K` (`menuModel.ts:164`, `App.svelte:553`) | **Совпадает** (`SPEC.md:467`, `keymap.ts:458`, `menuModel.ts:164`) |
-| **Ctrl+1 … Ctrl+6** | Заголовок уровня 1..6 (`SPEC.md:468`) | `Mod-1` … `Mod-6` → `headingCommand(1..6)` (`keymap.ts:462`) | `format.heading1..6` в контекстном меню, подписи `Ctrl+1` … `Ctrl+6` (`menuModel.ts:172`, `App.svelte:554-559`) | **Совпадает** (`SPEC.md:468`, `keymap.ts:462`, `menuModel.ts:172`) |
-| **Ctrl+0** (Заголовок) | Убрать заголовок (`SPEC.md:469`) | `Mod-0` → `headingCommand(0)` (`keymap.ts:463`). При наличии заголовка снимает `#` и перехватывает событие (`keymap.ts:325`) | `format.clearHeading` в контекстном меню, подпись `Ctrl+0` (`menuModel.ts:175`, `App.svelte:560`) | **Совпадает** (приоритет над масштабом соблюдён в keymap) |
-| **Ctrl+Shift+K** | Блок кода (`SPEC.md:470`) | `Mod-Shift-k` → `toggleCodeBlock` (`keymap.ts:459`), оборачивает или разворачивает выделение | `format.codeBlock` в контекстном меню вызывает общий action (`App.svelte`) | **ИСПРАВЛЕНО** (`2026-09-16`): меню и клавиша одинаково обрабатывают выделение. |
-| **Tab** | Уровень вложенности списка (`SPEC.md:471`) | Вне таблицы: `indent` списка на 4 пробела (`keymap.ts:449`). В таблице: перехватывается `tableKeymap` (`tables.ts:136`, `createEditor.ts:328`) → переход к следующей ячейке | В меню отсутствует (в контекстном меню есть `format.list` без сочетания, `menuModel.ts:177`) | **РАСХОЖДЕНИЕ СО SPEC**: Переход по ячейкам таблицы перехватывает Tab раньше списка, но не описан в разделе 8 SPEC. |
-| **Shift+Tab** | Уровень вложенности списка (`SPEC.md:471`) | Вне таблицы: `outdent` списка (`keymap.ts:450`). В таблице: перехватывается `tableKeymap` (`tables.ts:137`, `createEditor.ts:328`) → переход к предыдущей ячейке | В меню отсутствует | **РАСХОЖДЕНИЕ СО SPEC**: Переход к предыдущей ячейке таблицы не задокументирован в разделе 8 SPEC. |
-| **Ctrl+F** | Поиск (`SPEC.md:476`) | `Mod-f` → `handlers.openSearch` (`keymap.ts:382`), `searchCommands.openSearch` (`search.ts:417`), глобально в `FindPanel.svelte:229` | `edit.find` («Find…»), подпись `Ctrl+F` (`menuModel.ts:122`, `App.svelte:545`) | **Совпадает** (`SPEC.md:476`, `keymap.ts:382`, `menuModel.ts:122`) |
-| **Ctrl+H** | Замена (`SPEC.md:477`) | `Mod-h` → `handlers.openReplace` (`keymap.ts:383`), `searchCommands.openReplace` (`search.ts:418`), глобально в `FindPanel.svelte:233` | `edit.replace` («Replace…»), подпись `Ctrl+H` (`menuModel.ts:123`, `App.svelte:546`) | **Совпадает** (`SPEC.md:477`, `keymap.ts:383`, `menuModel.ts:123`) |
-| **Ctrl+G** | Перейти к строке (`SPEC.md:478`) | `Mod-g` → `handlers.goToLine` (`keymap.ts:384`, `actions.ts:570`) | Диалог перехода к строке подключён в `App.svelte`, обработчик передан в `createActions` | **ИСПРАВЛЕНО** (`2026-09-16`): Ctrl+G открывает диалог, Enter переходит к началу строки и прокручивает её в центр. |
-| **Ctrl+Home / Ctrl+End** | В начало и конец документа (`SPEC.md:479`) | Встроено в CodeMirror `defaultKeymap` (`Mod-Home` / `Mod-End`) + физические коды (`keymap.ts:420-421, 478`) | Отсутствует в меню; есть в справке `HelpDialog.svelte:35` | **Совпадает** (`SPEC.md:479`, `keymap.ts:478`) |
-| **Ctrl+± (Ctrl++ / Ctrl+=)** | Масштаб (увеличение) (`SPEC.md:480`) | `Mod-+` и `Mod-=` → `handlers.zoomIn` (`keymap.ts:385-386`, `App.svelte:152`) | `view.zoomIn` («Zoom In»), подпись `Ctrl+±` (`menuModel.ts:134`, `App.svelte:567`) | **Совпадает** (`SPEC.md:480`, `keymap.ts:385`, `menuModel.ts:134`) |
-| **Ctrl+-** | Масштаб (уменьшение) (входит в `Ctrl+±`, `SPEC.md:480`) | `Mod--` → `handlers.zoomOut` (`keymap.ts:387`, `App.svelte:155`) | `view.zoomOut` («Zoom Out») подписан как `Ctrl+-` (`menuModel.ts:135`) | **ИСПРАВЛЕНО** (`2026-09-16`): подпись Zoom Out соответствует физической клавише уменьшения. |
-| **Ctrl+0** (Масштаб) | Сброс масштаба, уступает заголовку (`SPEC.md:481`) | `Mod-0` → `handlers.resetZoom` (`keymap.ts:388`). Срабатывает, только если строка не является заголовком (`keymap.ts:325`) | `view.resetZoom` («Reset Zoom»), подпись `Ctrl+0` (`menuModel.ts:136`, `App.svelte:569`) | **Совпадает** (конфликт разрешён в пользу заголовка) |
-| **Ctrl+,** | Открыть настройки (`SPEC.md:443-445`) | Глобальный обработчик окна использует физический код `Comma` | `file.settings` («Settings…»), подпись `Ctrl+,` (`menuModel.ts:106`) | **ИСПРАВЛЕНО** (`2026-09-16`): сочетание добавлено в SPEC и работает независимо от раскладки. |
-| **F3 / Shift-F3** | В SPEC отсутствует (SPEC 7 упоминает только `Enter`/`Shift+Enter`) | Зарегистрированы в `search.ts:419-420` (`searchCommands.findNext / findPrevious`) | Отсутствует в меню | **РАСХОЖДЕНИЕ**: Реализовано в поиске редактора, но не описано в SPEC. |
-| **Ctrl+P** | В SPEC отсутствует | В keymap и коде приложения отсутствует | В меню отсутствует | **КОНФЛИКТ С WEBVIEW2**: По умолчанию перехватывается WebView2 и открывает окно печати Windows / Chromium. |
+| **Ctrl+N** | New Markdown document in a new window | `Mod-n` → `handlers.newDocument` → `open_new_window` | `file.newWindow`, label `Ctrl+N` | **Fixed (2026-09-16):** both create a new empty Markdown window without changing the current document. |
+| **Ctrl+Shift+N** | New document with type picker | `Mod-Shift-n` → `newDocumentWithPicker` | `file.new` / `Ctrl+Shift+N` and its format submenu | **Fixed (2026-09-16):** the picker and new-window path are shared; WebView2 interception remains platform-dependent. |
+| **Ctrl+O** | Open a file | `Mod-o` → `handlers.openFile` | `file.open` / `Ctrl+O` | **Matches** the specification and source locations. |
+| **Ctrl+S** | Save immediately | `Mod-s` → `handlers.save` | `file.save` / `Ctrl+S` | **Matches.** |
+| **Ctrl+Shift+S** | Save as | `Mod-Shift-s` → `handlers.saveAs` | `file.saveAs` / `Ctrl+Shift+S` | **Matches.** |
+| **Ctrl+W** | Close the window | `Mod-w` → `handlers.closeWindow` | `file.close` / `Ctrl+W` | **Matches.** |
+| **Ctrl+Z** | Undo | `Mod-z` → `undo` | `edit.undo` / `Ctrl+Z` | **Matches.** |
+| **Ctrl+Shift+Z**, **Ctrl+Y** | Redo | `Mod-Shift-z` and `Mod-y` → `redo` | `edit.redo` / both labels | **Matches.** |
+| **Ctrl+X**, **Ctrl+C**, **Ctrl+V** | Cut, copy, paste | CodeMirror/WebView clipboard | Corresponding Edit menu entries | **Matches.** |
+| **Ctrl+Shift+V** | Paste as plain text | `pastePlainText` | `edit.pastePlainText` / `Ctrl+Shift+V` | **Matches.** |
+| **Ctrl+A** | Select all | CodeMirror default keymap | `edit.selectAll` / `Ctrl+A` | **Matches.** |
+| **Ctrl+D** | Delete line | `deleteLine` | `edit.deleteLine` / `Ctrl+D` | **Matches.** |
+| **Alt+↑**, **Alt+↓** | Move line up/down | `moveLineUp` / `moveLineDown` | Corresponding Edit menu entries | **Matches.** |
+| **Ctrl+B**, **Ctrl+I**, **Ctrl+E** | Bold, italic, code | `toggleWrapper` for each delimiter | Context-menu actions use the same toggle | **Fixed (2026-09-16):** menu actions also unwrap existing markers. |
+| **Ctrl+K** | Link | `toggleLink` | `format.link` / `Ctrl+K` | **Matches.** |
+| **Ctrl+1 … Ctrl+6** | Heading levels 1–6 | `headingCommand(1..6)` | Heading context-menu entries | **Matches.** |
+| **Ctrl+0** (heading) | Remove heading | `headingCommand(0)` consumes the event only when a heading is removed | `format.clearHeading` / `Ctrl+0` | **Matches:** heading removal takes priority over zoom reset. |
+| **Ctrl+Shift+K** | Code block | `toggleCodeBlock` | `format.codeBlock` uses the shared action | **Fixed (2026-09-16):** menu and keyboard wrap or unwrap the same selection. |
+| **Tab**, **Shift+Tab** | List indentation | List indent/outdent outside tables; table keymap moves between cells | No global menu shortcut | **Specification gap:** table-cell movement is not described in section 8. |
+| **Ctrl+F**, **Ctrl+H** | Find, replace | Search commands and global FindPanel handlers | `edit.find` / `edit.replace` | **Matches.** |
+| **Ctrl+G** | Go to line | `handlers.goToLine` | Dialog is wired through `App.svelte` | **Fixed (2026-09-16):** Enter moves to the beginning of the requested line and centers it. |
+| **Ctrl+Home**, **Ctrl+End** | Document start/end | CodeMirror default keymap | Not in the menu; present in Help | **Matches.** |
+| **Ctrl++**, **Ctrl+=** | Zoom in | `handlers.zoomIn` | `view.zoomIn` | **Matches.** |
+| **Ctrl+-** | Zoom out | `handlers.zoomOut` | `view.zoomOut` / `Ctrl+-` | **Fixed (2026-09-16):** the label reflects the physical key. |
+| **Ctrl+0** (zoom) | Reset zoom, after heading removal | `handlers.resetZoom` runs when heading removal returns false | `view.resetZoom` / `Ctrl+0` | **Matches:** the heading conflict is resolved in favor of heading removal. |
+| **Ctrl+,** | Open settings | Window-level handler uses physical code `Comma` | `file.settings` / `Ctrl+,` | **Fixed (2026-09-16):** added to the specification and layout-independent. |
+| **F3**, **Shift+F3** | Not in the specification | Registered by `search.ts` as next/previous match | Not in the menu | **Specification gap:** useful search navigation exists but is undocumented. |
+| **Ctrl+P** | Not in the specification | Not intercepted | Not in the menu | **WebView2 conflict:** Chromium/WebView2 may open the Windows print dialog. |
 
 ---
 
-## 2. Список расхождений (отсортирован по вероятности столкновения)
+## 2. Findings, ordered by collision likelihood
 
-### 1. Критическое: `Ctrl+N` и пункт меню «New Window» ведут себя по-разному и нарушают SPEC
-- **Статус:** ✅ Исправлено 2026-09-16: клавиша и меню используют открытие нового пустого Markdown-окна через общий action.
-- **Вероятность столкновения:** 100% (базовое действие любого текстового редактора).
-- **Файлы и строки:**
-  - `docs/SPEC.md:443`, `docs/SPEC.md:352-355` — обещано: создание нового пустого документа в **новом окне**, Markdown по умолчанию.
-  - `src/ui/menuModel.ts:97` — пункт меню `file.newWindow` («New Window») подписан горячей клавишей `Ctrl+N`.
-  - `src/editor/keymap.ts:376` — сочетание `Mod-n` привязано к `handlers.newDocument`.
-  - `src/state/actions.ts:285-296, 547-550` — `handlers.newDocument` вызывает `actions.newDocument(markdownFormat.id)`, которая вызывает IPC `new_document` и перезаписывает текст в **текущем окне** (`replaceEditorText`), уничтожая открытый несохранённый документ или заменяя его без открытия нового окна.
-  - `src/App.svelte:523-530` — по клику на пункт меню `file.newWindow` выполняется `handleMenuAction`:
-    - если у текущего документа есть путь (`documentState.path`), вызывается `open_in_new_window` с путём **текущего файла** (открывается дубликат текущего документа в новом окне, а не новый пустой документ);
-    - если документ несохранён (`!documentState.path`), вызывается `createNewDocument(markdown)` в **текущем окне**.
-- **Суть проблемы:** Нажатие `Ctrl+N` затирает текущий документ вместо открытия нового окна. Клик по меню «New Window» открывает копию текущего файла. Пункт меню и сочетание клавиш рассинхронизированы между собой и оба расходятся со спецификацией.
+### 1. Ctrl+N and “New Window”
 
----
+This was formerly a critical mismatch: the keyboard command replaced the
+current document, while the menu opened a copy of the current file or reused
+the current window for an unsaved document. It was fixed on 2026-09-16.
+Both paths now use the common action to open a new empty Markdown window, and
+the current document remains unchanged.
 
-### 2. Критическое: `Ctrl+Shift+N` падает с ошибкой в редакторе, а в меню ведёт себя иначе
-- **Статус:** ✅ Исправлено 2026-09-16: picker передан в actions, а выбранный формат передаётся в новое окно через общий IPC-маршрут.
-- **Вероятность столкновения:** Очень высокая (пользователь нажимает сочетание, указанное прямо напротив «File ▸ New»).
-- **Файлы и строки:**
-  - `docs/SPEC.md:444` — обещано: «Новый документ с выбором типа» (в новом окне согласно п. 6.2).
-  - `src/ui/menuModel.ts:96` — пункт `file.new` («New ▸») подписан как `Ctrl+Shift+N` и содержит подменю типов файлов `newFormats`.
-  - `src/editor/keymap.ts:377` — сочетание `Mod-Shift-n` привязано к `handlers.newDocumentWithPicker`.
-  - `src/state/actions.ts:298-307, 551-554` — `newDocumentWithPicker` проверяет `if (!dialogs.chooseFormat) return unavailable("Format picker is unavailable")`.
-  - `src/App.svelte:128-161` — фабрика `createActions({...})` передаёт `dialogs: { showHelp, openLink, openImage }`, но **не передаёт `chooseFormat`**.
-  - `src/App.svelte:517-521` — клик мышью по подпункту меню `file.new.<format>` создаёт документ в **текущем окне** (`createNewDocument(format)`), а не в новом.
-- **Суть проблемы:** При нажатии `Ctrl+Shift+N` в фокусе редактора пользователь получает всплывающее уведомление об ошибке: *"Format picker is unavailable"*. При клике мышью в меню документ создаётся в текущем окне, а не в новом. Кроме того, в среде WebView2 `Ctrl+Shift+N` является системным сочетанием вызова окна InPrivate.
+### 2. Ctrl+Shift+N and the format picker
 
----
+This was formerly a critical mismatch: the keyboard path reported “Format
+picker is unavailable” because the picker was not passed to the action factory,
+while a menu click created the document in the current window. It was fixed on
+2026-09-16 by passing the picker and sharing the new-window IPC path.
+WebView2 may still reserve this combination for an InPrivate window before the
+DOM receives it.
 
-### 3. Высокая: `Ctrl+G` («Перейти к строке») не был подключён
-- **Статус:** ✅ Исправлено 2026-09-16: добавлен диалог номера строки и подключён обработчик `goToLine`.
-- **Вероятность столкновения:** Высокая (стандартное сочетание для перехода по коду/заметке, явно обещанное в SPEC и справочном окне).
-- **Файлы и строки:**
-  - `docs/SPEC.md:478` — обещано в таблице: `Ctrl+G` — «Перейти к строке».
-  - `src/ui/HelpDialog.svelte:43` — включено в список пользовательской справки: `{ keys: "Ctrl+G", actionKey: "help.action.goToLine" }`.
-  - `src/editor/keymap.ts:384` — `["Mod-g", handlers.goToLine]` зарегистрировано в `externalBindings`.
-  - `src/state/actions.ts:51, 570` — `goToLine: () => invokeUi(dependencies.goToLine, notify)`.
-  - `src/App.svelte` — `createActions` получает `goToLine`; диалог принимает номер строки, закрывается по Escape, а Enter ставит курсор в начало строки и прокручивает её.
-  - `src/ui/menuModel.ts` — пункт в меню полностью отсутствует.
-- **Суть исправления:** Команда подключена к диалогу перехода к строке; номера за пределами документа ограничиваются последней строкой.
+### 3. Ctrl+G
 
----
+The go-to-line action was formerly missing from the editor wiring. It was
+fixed on 2026-09-16: `HelpDialog.svelte`, `keymap.ts`, `actions.ts`, and the
+line-number dialog now share the command. Out-of-range numbers are clamped to
+the last line.
 
-### 4. Высокая: Опечатка подписи в меню для `View ▸ Zoom Out` (`Ctrl+±` вместо `Ctrl+-`)
-- **Статус:** ✅ Исправлено 2026-09-16: подпись изменена на `Ctrl+-`.
-- **Вероятность столкновения:** Высокая (любой пользователь, открывший меню View).
-- **Файлы и строки:**
-  - `docs/SPEC.md:480` — `Ctrl+±` — общее обозначение масштабирования (увеличение `+`, уменьшение `-`).
-  - `src/editor/keymap.ts:385-387` — `Mod-+` и `Mod-=` вызывают `zoomIn`, а `Mod--` вызывает `zoomOut`.
-  - `src/ui/menuModel.ts:134-135`:
-    - `item("view.zoomIn", t("menu.zoomIn"), "Ctrl+±")`
-    - `item("view.zoomOut", t("menu.zoomOut"), "Ctrl+±")`
-- **Суть проблемы:** Пункт «Zoom Out» в меню подписан как `Ctrl+±` вместо `Ctrl+-`. Пользователь дезориентирован, видя одинаковый хоткей на увеличение и уменьшение.
+### 4. View → Zoom Out label
 
----
+The menu formerly showed `Ctrl+±` for both zoom directions even though the
+implementation uses `Mod--` for zoom out. The label was corrected to
+`Ctrl+-` on 2026-09-16.
 
-### 5. Средняя: Перехват системного диалога печати `Ctrl+P` в WebView2
-- **Вероятность столкновения:** Средняя (привычка пользователей Obsidian вызывать Quick Switcher по `Ctrl+P` или печать документа).
-- **Файлы и строки:**
-  - `docs/SPEC.md` — печать не предусмотрена и в горячих клавишах отсутствует.
-  - `src/editor/keymap.ts` — сочетание `Ctrl+P` никак не перехватывается и не блокируется.
-  - `src-tauri/src/windows.rs:360-394` — акселераторы WebView2 не фильтруются.
-- **Суть проблемы:** При нажатии `Ctrl+P` браузерный движок WebView2 открывает стандартный диалог печати Chromium/Windows прямо поверх приложения, что выглядит как дефект сборки оболочки.
+### 5. Ctrl+P
 
----
+Printing is not a MarkNote feature and is absent from the specification and
+keymap. An unfiltered WebView2 accelerator can nevertheless open the Chromium
+or Windows print dialog. The host should eventually disable this accelerator
+through `ICoreWebView2Controller::put_IsAcceleratorKeyEnabled` or a window-level
+`preventDefault()`.
 
-### 6. Средняя: Горячая клавиша `Ctrl+,` (Настройки) не описана в SPEC и не работает на русской раскладке
-- **Статус:** ✅ Исправлено 2026-09-16: добавлено в SPEC, обработчик использует `event.code === "Comma"`.
-- **Вероятность столкновения:** Средняя (часто используется для открытия настроек).
-- **Файлы и строки:**
-  - `docs/SPEC.md:352-360, 438-483` — пункт настроек и сочетание `Ctrl+,` не упоминаются ни в составе меню File (п. 6.2), ни в горячих клавишах (раздел 8).
-  - `src/ui/menuModel.ts:106` — пункт `file.settings` подписан как `Ctrl+,`.
-  - `src/editor/keymap.ts:375-391, 393-422` — в keymap редактора `Mod-,` не зарегистрирован, в `physicalCodeNames` физический код `Comma` отсутствует.
-  - `src/App.svelte:594-598`:
-    ```ts
-    function handleWindowKeydown(event: KeyboardEvent): void {
-       if ((event.ctrlKey || event.metaKey) && event.code === "Comma") {
-        event.preventDefault();
-        settingsOpen = true;
-      }
-    }
-    ```
-- **Суть проблемы:**
-  1. Реализация есть, но спецификация о ней умалчивает.
-  2. Проверка использует физический код `event.code === "Comma"`, поэтому на нелатинских раскладках (например, русской) сочетание работает.
+### 6. Ctrl+,
+
+The setting shortcut was formerly absent from the specification and depended
+on the keyboard layout. It was fixed on 2026-09-16 by using
+`event.code === "Comma"` and documenting the shortcut.
+
+### 7. F3 and Shift+F3
+
+`src/editor/search.ts` registers F3 for the next match and Shift+F3 for the
+previous match, while the specification only documents Enter and
+Shift+Enter inside the search panel. The behavior is useful and working, but
+the specification should mention it.
+
+### 8. Ctrl+Shift+K toggle behavior
+
+The shared `toggleCodeBlock` implementation wraps selected lines in triple
+backticks and removes the wrapper when it is already present. Menu and keyboard
+commands use this same function; the mismatch was fixed on 2026-09-16.
+
+### 9. Ctrl+B, Ctrl+I, and Ctrl+E toggle behavior
+
+`toggleWrapper` removes existing bold, italic, or code markers when the
+shortcut is applied again. Menu actions and the editor keymap use the same
+implementation; this was fixed on 2026-09-16.
+
+### 10. Tab priority inside tables
+
+The table keymap is mounted before the general keymap. Inside a table,
+`moveToCell` handles Tab and Shift+Tab; outside a table, list indent/outdent
+handles them. The behavior is intentional, but section 8 currently describes
+Tab only as list indentation.
 
 ---
 
-### 7. Средняя: Не описанные в спецификации клавиши поиска `F3` / `Shift-F3`
-- **Вероятность столкновения:** Средняя (типичный хоткей навигации по совпадениям поиска в Windows).
-- **Файлы и строки:**
-  - `docs/SPEC.md:427, 476-477` — описаны только `Enter` и `Shift+Enter` внутри поисковой панели.
-  - `src/editor/search.ts:419-420` — в `marknoteSearch` зарегистрированы:
-    - `{ key: "F3", run: searchCommands.findNext }`
-    - `{ key: "Shift-F3", run: searchCommands.findPrevious }`
-- **Суть проблемы:** Поведение полезное и рабочее, но отсутствует в `docs/SPEC.md`.
+## 3. Handler conflicts and platform accelerators
 
----
+### 3.1 Internal conflicts
 
-### 8. Низкая: Различие логики `Ctrl+Shift+K` в меню и по клавише
-- **Статус:** ✅ Исправлено 2026-09-16: меню вызывает экспортированный `toggleCodeBlock` из `keymap.ts`, поэтому выделение оборачивается и разворачивается тем же кодом, что и по клавише.
-- **Вероятность столкновения:** Низкая-средняя (при форматировании блоков кода через контекстное меню).
-- **Файлы и строки:**
-  - `docs/SPEC.md:470` — `Ctrl+Shift+K` — «Блок кода».
-  - `src/editor/keymap.ts:343-360, 459` — функция `toggleCodeBlock`: оборачивает текущее выделение строками с тройными обратными кавычками ```` ``` ````, а если блок уже обёрнут — снимает обрамление.
-  - `src/App.svelte:526, 562` — обработчики `insert-code-block` и `format.codeBlock` вызывают общий action, использующий `toggleCodeBlock`.
-- **Суть проблемы:** Исправлено: горячая клавиша и пункты меню используют один toggle вокруг выделения.
+**Ctrl+0 — remove heading versus reset zoom.** The local
+`headingCommand(0)` handler consumes the event only when the current line is a
+heading and a marker was removed. Otherwise it returns false, allowing the
+next handler, `handlers.resetZoom`, to run. This follows the specification:
+heading removal has priority and zoom reset is the fallback. Both menu entries
+are necessarily labelled `Ctrl+0`.
 
----
+**Tab / Shift+Tab — table cell versus list indentation.** The table keymap is
+registered before the main keymap. `moveToCell` returns false outside a table,
+so the normal list command then runs. This resolves the conflict reliably and
+should be documented in the specification.
 
-### 9. Низкая: Различие `Ctrl+B`, `Ctrl+I`, `Ctrl+E` в меню и по клавише (unwrap toggle)
-- **Статус:** ✅ Исправлено 2026-09-16: меню вызывает actions, использующие общий `toggleWrapper`, и повторное применение снимает маркеры.
-- **Вероятность столкновения:** Низкая.
-- **Файлы и строки:**
-  - `src/editor/keymap.ts:274-291, 452-454` — `toggleWrapper`: повторное нажатие хоткея на слове или выделении с маркерами снимает жирный/курсив/код (unwrap).
-  - `src/App.svelte:495-499, 551-559` — пункты форматирования вызывают `actions.run`, который использует общий `toggleWrapper`.
-- **Суть проблемы:** Исправлено: меню и keymap используют одну реализацию toggle/unwrap.
+### 3.2 Runtime conflicts
 
----
-
-### 10. Информационное: Приоритет `Tab` / `Shift-Tab` в таблицах скрыт от Section 8
-- **Вероятность столкновения:** Постоянно при редактировании таблиц.
-- **Файлы и строки:**
-  - `docs/SPEC.md:471` — заявлено только: `Tab / Shift+Tab` — «Уровень вложенности списка».
-  - `src/editor/livePreview/tables.ts:135-138` — `tableKeymap` перехватывает `Tab` и `Shift-Tab` для перемещения между ячейками (`moveToCell`).
-  - `src/editor/createEditor.ts:328-329` — `keymap.of(tableKeymap)` смонтирован **перед** общим keymap.
-- **Суть проблемы:** Поведение правильное и удобное, но раздел 8 спецификации утверждает, что `Tab` управляет исключительно списками.
-
----
-
-## 3. Анализ конфликтов обработчиков и платформенных перехватов
-
-### 3.1. Внутренние конфликты сочетаний
-
-1. **`Ctrl+0`: «Убрать заголовок» vs «Сброс масштаба»**
-   - **Конфликт:** На одно сочетание претендуют две разные функции (`format.clearHeading` и `view.resetZoom`).
-   - **Разрешение в коде:** В `src/editor/keymap.ts:313-327, 463-466` локальный обработчик `headingCommand(0)` проверяет, была ли строка заголовком (`#`). Если заголовок был удалён, команда возвращает `true` (событие поглощено). Если строка не была заголовком, команда возвращает `false`, и CodeMirror передаёт `Mod-0` следующему обработчику — `handlers.resetZoom` (`keymap.ts:388`).
-   - **Оценка:** Реализация точно следует требованию `docs/SPEC.md:481` («Сброс масштаба — конфликт с „убрать заголовок“, масштаб уступает»). Однако в `menuModel.ts` оба пункта (`menuModel.ts:136` и `menuModel.ts:175`) подписаны как `Ctrl+0`.
-
-2. **`Tab` / `Shift-Tab`: «Ячейка таблицы» vs «Отступ списка»**
-   - **Конфликт:** Внутри таблицы нажатие Tab должно переходить к следующей ячейке, а не сдвигать строку вправо как список.
-   - **Разрешение в коде:** В `src/editor/createEditor.ts:328-329` массив `keymap.of(tableKeymap)` зарегистрирован перед основным keymap. Функция `moveToCell` возвращает `false`, если курсор не находится в таблице (`tables.ts:115`), передавая обработку в `indent` (`keymap.ts:124`), который дополнительно проверяет `isInTable`.
-   - **Оценка:** Конфликт разрешён надёжно и без багов, требуется лишь отразить это поведение в спецификации.
-
----
-
-### 3.2. Конфликты со средой исполнения (Windows и WebView2)
-
-1. **`Ctrl+P` (Печать Chromium)**:
-   - WebView2 по умолчанию перехватывает `Ctrl+P` как системный акселератор браузера.
-   - В MarkNote нет обработчика печати. Нажатие `Ctrl+P` в открытом окне приводит к неконтролируемому вызову системного окна предварительного просмотра печати Edge/Chromium.
-   - Решение для будущего исправления: блокировать в `ICoreWebView2Controller::put_IsAcceleratorKeyEnabled` или через `event.preventDefault()` на уровне окна.
-
-2. **`Ctrl+Shift+N` (InPrivate / Новое окно)**:
-   - В стандартном Chromium это хоткей открытия окна в режиме Инкогнито. В некоторых сборках WebView2 он может перехватываться до того, как событие дойдёт до DOM-дерева, если акселераторы веб-вью не подавлены на стороне хоста.
-
-3. **`Ctrl+Plus`, `Ctrl+Minus`, `Ctrl+0`, `Ctrl+Колёсико мыши` (Масштаб страницы WebView2)**:
-   - В MarkNote масштабирование реализовано через размер шрифта в CodeMirror (`src/editor/zoom.ts:46-53`).
-   - Однако WebView2 по умолчанию масштабирует весь viewport (включая шапку `TitleBar`, меню и статус-бар), если сочетания зума нажимаются вне фокуса редактора или если пользователь крутит колёсико мыши с зажатым `Ctrl`. `Ctrl+MouseWheel` в приложении сейчас не перехвачен.
-
-4. **Системные клавиши отладки и обновления (`F5`, `Ctrl+R`, `F12`)**:
-   - `F5` и `Ctrl+R` в незащищённом WebView2 вызывают перезагрузку страницы, что приведёт к мгновенной потере несохранённого документа в памяти.
-   - `F12` / `Ctrl+Shift+I` открывают DevTools (если включены в сборке).
-
-5. **Физические коды клавиш на нелатинских раскладках**:
-   - В `src/editor/keymap.ts:393-431` реализован механизм `physicalShortcutName`, преобразующий `event.code` (`KeyB`, `KeyZ` и т.д.) в `Mod-b`, `Mod-z`. Это гарантирует работу хоткеев в редакторе на русской раскладке.
-   - Однако глобальный обработчик `handleWindowKeydown` в `src/App.svelte:583` проверяет `event.key === ","`. На русской раскладке `event.key` равен `"б"` или `"?"`, из-за чего открытие настроек по `Ctrl+,` с клавиатуры не работает.
+1. **Ctrl+P (Chromium print):** WebView2 can intercept this unhandled
+   accelerator and open its print preview.
+2. **Ctrl+Shift+N (InPrivate):** Chromium may reserve this shortcut before the
+   DOM receives it when host accelerators are not suppressed.
+3. **Ctrl+plus, Ctrl-minus, Ctrl+0, and Ctrl+mouse-wheel:** MarkNote changes
+   the CodeMirror font size, but WebView2 can zoom the entire viewport when
+   focus is outside the editor or Ctrl+mouse-wheel is used.
+4. **F5, Ctrl+R, and F12:** an unprotected WebView2 may reload the page or open
+   developer tools; a reload can discard an unsaved in-memory document.
+5. **Non-Latin keyboard layouts:** editor shortcuts use physical key codes
+   such as `KeyB` and `KeyZ`, which keeps them working on non-Latin layouts.
+   Global handlers must likewise use physical codes when the shortcut is
+   layout-independent.

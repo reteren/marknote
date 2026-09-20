@@ -63,12 +63,15 @@ describe("translation fallback and formatting", () => {
   });
 
   it("uses the Russian one, few, and many plural forms", () => {
+    // The forms are named after their plural category, the way the Arabic case
+    // below does it: what is checked here is which category Russian picks for a
+    // number, not the wording of the translation.
     const russian: Dictionary = {
-      files: { one: "{count} файл", few: "{count} файла", many: "{count} файлов", other: "{count} файла" },
+      files: { one: "{count} one", few: "{count} few", many: "{count} many", other: "{count} other" },
     };
-    expect(translateWith("ru", russian, "files", { count: 1 })).toBe("1 файл");
-    expect(translateWith("ru", russian, "files", { count: 2 })).toBe("2 файла");
-    expect(translateWith("ru", russian, "files", { count: 5 })).toBe("5 файлов");
+    expect(translateWith("ru", russian, "files", { count: 1 })).toBe("1 one");
+    expect(translateWith("ru", russian, "files", { count: 2 })).toBe("2 few");
+    expect(translateWith("ru", russian, "files", { count: 5 })).toBe("5 many");
   });
 
   it("uses Arabic plural categories and Chinese's single other form", () => {

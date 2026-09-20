@@ -1,15 +1,15 @@
-// Общее для плагина предпросмотра и поля состояния: где у блока `$$` формула и
-// занимает ли он несколько строк. Оба места должны решать это одинаково,
-// иначе блок либо нарисуется дважды, либо не нарисуется вовсе.
+// Shared by the preview plugin and state field: where a `$$` block's formula is
+// and whether it spans multiple lines. Both locations must decide identically,
+// or the block is either rendered twice or not at all.
 
 import type { EditorState } from "@codemirror/state";
 import type { SyntaxNode } from "@lezer/common";
 
 export function spansSeveralLines(state: EditorState, node: SyntaxNode): boolean {
-  // Ровно тот признак, по которому CodeMirror запрещает замену из плагина:
-  // диапазон перекрывает перевод строки. Считать по `node.to - 1` нельзя —
-  // блок `$$\n` тогда выглядит однострочным, а замена всё равно съедает
-  // перевод строки, и редактор падает с RangeError.
+  // This is exactly the condition that makes CodeMirror forbid a plugin
+  // replacement: the range covers a line break. Do not calculate it from
+  // `node.to - 1`: `$$\n` would then look single-line even though the replacement
+  // still consumes the line break, causing a RangeError in the editor.
   const first = state.doc.lineAt(Math.min(node.from, state.doc.length)).number;
   const last = state.doc.lineAt(Math.min(node.to, state.doc.length)).number;
   return last > first;

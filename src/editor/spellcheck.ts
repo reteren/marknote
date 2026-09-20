@@ -1,10 +1,10 @@
-// Поддержка проверки орфографии и исключения разметки кода/формул/ссылок.
+// Support for spellchecking and excluding code/formula/link markup.
 //
-// Проверка орфографии выполняется браузерным движком (WebView2 / Chromium)
-// по атрибуту spellcheck на contentDOM редактора. Язык словаря выбирает
-// WebView2 из языка интерфейса Windows; страница не может его переопределить.
-// Разметка (код, формулы, ссылки) помечается spellcheck="false", чтобы
-// словари не подчёркивали синтаксис и идентификаторы.
+// Spellchecking is performed by the browser engine (WebView2 / Chromium)
+// from the spellcheck attribute on the editor contentDOM. WebView2 chooses
+// the dictionary language from the Windows UI language; the page cannot override it.
+// Markup (code, formulas, links) is marked spellcheck="false" so dictionaries
+// do not underline syntax and identifiers.
 
 import { syntaxTree } from "@codemirror/language";
 import type { EditorState, Extension, Range } from "@codemirror/state";
@@ -44,8 +44,8 @@ const TOP_LEVEL_SKIP_NODES = new Set([
 ]);
 
 /**
- * Проверяет, находится ли позиция pos внутри блока кода, инлайн-кода, формулы или ссылки.
- * Используется автозаменой, чтобы не менять кавычки, тире и многоточия в разметке.
+ * Checks whether position pos is inside a code block, inline code, formula, or link.
+ * Autocorrection uses this to avoid changing quotes, dashes, and ellipses in markup.
  */
 export function isInsideCodeFormulaOrLink(state: EditorState, pos: number): boolean {
   const tree = syntaxTree(state);

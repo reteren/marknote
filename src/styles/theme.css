@@ -1,54 +1,55 @@
 /*
- * MarkNote — тёмная тема.
- * Значения сняты «на глаз» с темы Obsidian по умолчанию. Перед релизом стоит
- * сверить пипеткой со скриншотом Obsidian: в M2 расхождение будет заметно.
- * Единственная тема в программе, светлой не предусмотрено.
+ * MarkNote — the dark theme.
+ * The values were taken by eye from the default Obsidian theme. Before a
+ * release they are worth checking against an Obsidian screenshot with a colour
+ * picker: the difference shows in M2. This is the only theme in the program;
+ * there is no light one.
  */
 
 :root {
   color-scheme: dark;
 
-  /* Поверхности */
-  --bg-primary: #1e1e1e;          /* область текста */
-  --bg-primary-alt: #262626;      /* подсветка активной строки: светлее фона, иначе читается как провал */
-  --bg-secondary: #161616;        /* меню, строка состояния */
-  --bg-secondary-alt: #0f0f0f;    /* вложенные панели */
+  /* Surfaces */
+  --bg-primary: #1e1e1e;          /* the text area */
+  --bg-primary-alt: #262626;      /* the active line: lighter than the background, or it reads as a dent */
+  --bg-secondary: #161616;        /* the menu and the status bar */
+  --bg-secondary-alt: #0f0f0f;    /* nested panels */
   --bg-modifier-border: #2f2f2f;
   --bg-modifier-border-hover: #3d3d3d;
   --bg-modifier-hover: rgba(255, 255, 255, 0.055);
   --bg-modifier-active: rgba(255, 255, 255, 0.09);
 
-  /* Текст */
+  /* Text */
   --text-normal: #dadada;
   --text-muted: #999999;
   --text-faint: #666666;
   --text-on-accent: #1e1e1e;
-  /* Текст на красной заливке — своё значение, а не текст на акценте:
-     акцент стал светлым и требует тёмной подписи, красный по-прежнему
-     требует белой. Один общий токен на две заливки давал тёмный крестик
-     на красной кнопке закрытия. */
+  /* Text on a red fill has a value of its own rather than reusing the text on
+     the accent: the accent became light and needs a dark label, while red still
+     needs a white one. One shared token for both fills gave a dark cross on the
+     red close button. */
   --text-on-danger: #ffffff;
   --text-error: #e35d5d;
   --text-success: #6bb96b;
 
-  /* Акцент */
+  /* Accent */
   --accent: #5EACC7;
   --accent-hover: #6CB3CC;
   --text-accent: #7EB8CC;
 
-  /* Выделение и курсор */
+  /* Selection and caret */
   --text-selection: rgba(80, 100, 155, 0.38);
-  --text-highlight-bg: rgba(255, 208, 0, 0.34);   /* ==подсветка== */
+  --text-highlight-bg: rgba(255, 208, 0, 0.34);   /* ==highlight== */
   --search-match-bg: rgba(255, 177, 80, 0.28);
   --search-match-current-bg: rgba(255, 177, 80, 0.55);
   --caret-color: #dadada;
 
-  /* Код */
+  /* Code */
   --code-bg: #2a2a2a;
   --code-text: #d98e7f;
   --code-block-bg: #161616;
 
-  /* Типографика */
+  /* Typography */
   --font-ui: "Inter", "Segoe UI Variable", "Segoe UI", sans-serif;
   --font-text: "Inter", "Segoe UI Variable", "Segoe UI", sans-serif;
   --font-mono: "JetBrains Mono", "Cascadia Code", Consolas, monospace;
@@ -59,7 +60,7 @@
   --line-height-text: 1.6;
   --line-height-ui: 1.4;
 
-  /* Заголовки: масштаб Obsidian по умолчанию */
+  /* Headings: the default Obsidian scale */
   --h1-size: 1.802em;
   --h2-size: 1.602em;
   --h3-size: 1.424em;
@@ -79,15 +80,15 @@
   --h5-color: var(--text-normal);
   --h6-color: var(--text-muted);
 
-  /* Раскладка */
-  --line-width: 81ch;        /* ширина колонки текста, см. SPEC 4.2 */
+  /* Layout */
+  --line-width: 81ch;        /* width of the text column, see SPEC 4.2 */
   --editor-padding: 32px;
   --menubar-height: 30px;
   --statusbar-height: 24px;
   --radius-s: 4px;
   --radius-m: 6px;
 
-  /* Цвета callout-блоков */
+  /* Callout colours */
   --callout-note: 122, 162, 247;
   --callout-tip: 78, 201, 176;
   --callout-info: 122, 162, 247;
@@ -121,13 +122,14 @@ body {
   background: var(--bg-primary);
 }
 
-/* Выделение текста не должно ничего перекрашивать — только подложку */
+/* Selecting text must not recolour anything but the background behind it */
 ::selection {
   background: var(--text-selection);
 }
 
-/* Полосы прокрутки: виден только ползунок. Подложка своего цвета выглядела
-   тёмной лентой вдоль края документа и спорила с фоном редактора. */
+/* Scrollbars: only the thumb is visible. A track with a colour of its own read
+   as a dark ribbon along the edge of the document and argued with the editor
+   background. */
 * {
   scrollbar-color: var(--bg-modifier-border) transparent;
 }
@@ -158,7 +160,7 @@ body {
   background: transparent;
 }
 
-/* Чекбоксы в стиле тёмной темы */
+/* Checkboxes in the style of the dark theme */
 input[type="checkbox"] {
   appearance: none;
   -webkit-appearance: none;
@@ -232,15 +234,15 @@ input[type="number"]::-webkit-outer-spin-button {
   filter: brightness(0.5);
 }
 
-/* Клавиатурный фокус виден всегда: в программе без настроек это единственный
-   способ понять, где ты находишься */
+/* Keyboard focus is always visible: in a program without settings it is the
+   only way to tell where you are */
 :focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
 }
 
-/* Область редактора показывает фокус собственным кареткой/курсором;
-   обводка контейнера поверх текста выглядит как рамка-артефакт при кликах */
+/* The editor area shows focus through its own caret; an outline around the
+   container on top of the text looks like a stray frame when you click */
 .editor-stage:focus,
 .editor-stage:focus-visible,
 .editor-host:focus,

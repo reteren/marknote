@@ -1,11 +1,11 @@
-// Необязательные замеры участков редактора для проверок из qa/.
+// Optional timings for editor sections used by qa/ checks.
 //
-// Пока никто не поставил приёмник в globalThis.__marknoteProfile__, обёртка
-// просто вызывает переданную работу: в обычной работе редактора она ничего не
-// считает и ничего не выделяет. Приёмник ставит скрипт замера через CDP, и
-// тогда в него попадает длительность каждого участка. Держим это в коде
-// нарочно: иначе каждый следующий замер начинается с правки исходников, а
-// правка исходников ради замера — это уже другой предмет измерения.
+// Until a sink is installed in globalThis.__marknoteProfile__, the wrapper only
+// calls the supplied operation: normal editor work performs no timing and no
+// allocations. A CDP benchmark installs the sink and receives each section's
+// duration. This intentionally stays in the code; otherwise every new benchmark
+// would begin by changing the source, and source changes made for measurement
+// would become a different thing being measured.
 
 type ProfileEntry = { name: string; duration: number };
 

@@ -4,7 +4,7 @@ import type { SyntaxNode } from "@lezer/common";
 import { syntaxTree } from "@codemirror/language";
 import type { BlockBuilder, BuilderContext } from "./types";
 
-/** Извлекает все определения сносок из документа в виде Map: метка -> текст определения. */
+/** Extracts all footnote definitions from the document as a Map: label -> definition text. */
 export function getFootnoteDefinitions(state: EditorState): Map<string, string> {
   const definitions = new Map<string, string>();
   const docText = state.doc.toString();
@@ -23,7 +23,7 @@ export function getFootnoteDefinitions(state: EditorState): Map<string, string> 
     } else if (currentLabel && /^(?: {4}|\t)(.*)$/.test(line)) {
       currentText.push(line.trim());
     } else if (currentLabel && line.trim() === "") {
-      // Пустая строка может предшествовать продолжению или завершать определение
+      // A blank line may precede a continuation or terminate a definition.
     } else {
       if (currentLabel) {
         definitions.set(currentLabel, currentText.join(" ").trim());
@@ -40,7 +40,7 @@ export function getFootnoteDefinitions(state: EditorState): Map<string, string> 
   return definitions;
 }
 
-/** Виджет надстрочной сноски в тексте. */
+/** Superscript footnote widget in the text. */
 export class FootnoteRefWidget extends WidgetType {
   constructor(readonly label: string) {
     super();
@@ -60,25 +60,25 @@ export class FootnoteRefWidget extends WidgetType {
   }
 }
 
-/** Построитель декораций для сносок и их определений (W6). */
+/** Decoration builder for footnotes and their definitions (W6). */
 export const footnoteBuilder: BlockBuilder = (ctx: BuilderContext): boolean => {
-  // 1. Определение сноски: [^1]: текст
+  // 1. Footnote definition: [^1]: text.
   if (ctx.node.name === "FootnoteDefinition") {
-    // Курсор внутри определения — показываем исходный текст
+    // Cursor inside the definition: show the original text.
     if (ctx.active) return true;
 
     const source = ctx.view.state.doc.sliceString(ctx.node.from, ctx.node.to);
     const colonIdx = source.indexOf(":") + 1;
     const labelEnd = ctx.node.from + (colonIdx > 0 ? colonIdx : 0);
 
-    // Весь текст определения — приглушённый стиль
+    // Entire definition text: muted style.
     ctx.add({
       from: ctx.node.from,
       to: ctx.node.to,
       value: Decoration.mark({ class: "cm-marknote-footnote-definition" }),
     });
 
-    // Метка выделена акцентом
+    // Emphasize the label.
     if (labelEnd > ctx.node.from) {
       ctx.add({
         from: ctx.node.from,
@@ -90,7 +90,7 @@ export const footnoteBuilder: BlockBuilder = (ctx: BuilderContext): boolean => {
     return true;
   }
 
-  // 2. Ссылка на сноску в тексте: [^1]
+  // 2. Footnote reference in text: [^1].
   if (ctx.node.name === "FootnoteReference") {
     const text = ctx.view.state.doc.sliceString(ctx.node.from, ctx.node.to);
     const match = /^\[\^([^\]\s]+)\]$/.exec(text);
@@ -99,17 +99,17 @@ export const footnoteBuilder: BlockBuilder = (ctx: BuilderContext): boolean => {
     const label = match[1];
     const defs = getFootnoteDefinitions(ctx.view.state);
 
-    // Ссылка без определения не должна ломать отображение: остаётся обычным текстом
+    // A reference without a definition must not break rendering: leave it as ordinary text.
     if (!defs.has(label)) {
       return true;
     }
 
-    // При курсоре внутри виден исходный текст
+    // Show the original text when the cursor is inside.
     if (ctx.active) {
       return true;
     }
 
-    // Отображается как надстрочный номер или метка
+    // Display it as a superscript number or label.
     const widget = Decoration.replace({
       widget: new FootnoteRefWidget(label),
     });
@@ -118,8 +118,8 @@ export const footnoteBuilder: BlockBuilder = (ctx: BuilderContext): boolean => {
     return true;
   }
 
-  // 3. Fallback: если дерево не содержит специфических узлов сносок (W4 ещё не подключил их),
-  // распознаём конструкцию по тексту абзаца/блока
+  // 3. Fallback: if the tree has no footnote-specific nodes (W4 has not wired
+  // them in yet), recognize the construct from paragraph/block text.
   if (ctx.node.name === "Paragraph") {
     if (ctx.node.getChild("FootnoteReference") || ctx.node.getChild("FootnoteDefinition")) {
       return false;
@@ -127,7 +127,7 @@ export const footnoteBuilder: BlockBuilder = (ctx: BuilderContext): boolean => {
 
     const text = ctx.view.state.doc.sliceString(ctx.node.from, ctx.node.to);
 
-    // Проверяем, не является ли весь абзац определением сноски: [^1]: текст
+    // Check whether the whole paragraph is a footnote definition: [^1]: text.
     const defMatch = /^\[\^([^\]\s]+)\]:[ \t]*(.*)$/.exec(text);
     if (defMatch) {
       if (ctx.active) return true;
@@ -146,7 +146,7 @@ export const footnoteBuilder: BlockBuilder = (ctx: BuilderContext): boolean => {
       return true;
     }
 
-    // Проверяем ссылки на сноски внутри абзаца: [^1]
+    // Check for footnote references inside the paragraph: [^1].
     const refRE = /\[\^([^\]\s]+)\]/g;
     let m: RegExpExecArray | null;
     let handled = false;
@@ -154,7 +154,7 @@ export const footnoteBuilder: BlockBuilder = (ctx: BuilderContext): boolean => {
 
     while ((m = refRE.exec(text)) !== null) {
       const label = m[1];
-      // Ссылка без определения остаётся обычным текстом
+      // A reference without a definition remains ordinary text.
       if (!defs.has(label)) continue;
 
       const from = ctx.node.from + m.index;
@@ -178,14 +178,14 @@ export const footnoteBuilder: BlockBuilder = (ctx: BuilderContext): boolean => {
 };
 
 /**
- * Всплывающая подсказка с текстом определения при наведении курсора мыши на сноску.
+ * Tooltip showing definition text when the pointer hovers over a footnote.
  */
 export const footnoteTooltip: Extension = hoverTooltip((view: EditorView, pos: number): Tooltip | null => {
   let label: string | null = null;
   let refFrom = 0;
   let refTo = 0;
 
-  // 1. Поиск узла FootnoteReference в синтаксическом дереве
+  // 1. Find the FootnoteReference node in the syntax tree.
   let node: SyntaxNode | null = syntaxTree(view.state).resolve(pos, 1);
   while (node && node.name !== "FootnoteReference" && node.name !== "Paragraph" && node.name !== "Document") {
     node = node.parent;
@@ -198,7 +198,7 @@ export const footnoteTooltip: Extension = hoverTooltip((view: EditorView, pos: n
     const m = /^\[\^([^\]\s]+)\]$/.exec(text);
     if (m) label = m[1];
   } else {
-    // 2. Fallback: поиск конструкции по строке вокруг позиции курсора
+    // 2. Fallback: find the construct in the text around the cursor position.
     const line = view.state.doc.lineAt(pos);
     const lineText = line.text;
     const refRE = /\[\^([^\]\s]+)\]/g;
@@ -234,7 +234,7 @@ export const footnoteTooltip: Extension = hoverTooltip((view: EditorView, pos: n
   };
 });
 
-/** CSS-тема оформления сносок и тултипа. Токены строго из theme.css. */
+/** CSS theme for footnotes and the tooltip. Tokens must come from theme.css. */
 export const footnoteTheme = EditorView.baseTheme({
   ".cm-marknote-footnote-ref": {
     color: "var(--text-accent)",

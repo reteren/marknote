@@ -63,7 +63,7 @@ fn replace_existing(temp_path: &Path, target_path: &Path) -> io::Result<()> {
             .chain(std::iter::once(0))
             .collect::<Vec<_>>();
 
-        // Заменяем цель через Win32 MoveFileExW, не удаляя её заранее.
+        // Replace the target through Win32 MoveFileExW without deleting it first.
         use windows_sys::Win32::Foundation::GetLastError;
         use windows_sys::Win32::Storage::FileSystem::{MoveFileExW, MOVEFILE_REPLACE_EXISTING};
 

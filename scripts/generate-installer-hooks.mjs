@@ -55,10 +55,10 @@ lines.push(
   "!macro NSIS_HOOK_POSTUNINSTALL",
   `  DeleteRegValue HKCU "Software\\RegisteredApplications" "${quote(productName)}"`,
   `  DeleteRegKey HKCU "${capabilityPath}"`,
-    // Корень вендора удаляем ТОЛЬКО если он опустел. Там же Tauri держит свою
-  // запись о месте установки: при обновлении она нужна, чтобы найти прошлую
-  // установку. Безусловное удаление снесло бы её заодно — чистота в реестре
-  // не стоит сломанного обновления. /ifempty убирает наш след, чужой не трогает.
+    // Remove the vendor root ONLY when it is empty. Tauri keeps its installation
+  // record there too; updates need it to find the previous installation.
+  // Unconditionally removing it would break updates for the sake of a clean
+  // registry. /ifempty removes our marker without touching anything else.
   `  DeleteRegKey /ifempty HKCU "Software\\${productName}"`,
   `  DeleteRegKey HKCU "${appPath}"`,
   "  !insertmacro UPDATEFILEASSOC",

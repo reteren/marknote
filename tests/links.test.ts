@@ -29,7 +29,7 @@ describe("safe link targets", () => {
     "java\tscript:alert(1)",
     "java\nscript:alert(1)",
     "%6A%61%76%61%73%63%72%69%70%74:alert(1)",
-    "јavascript:alert(1)",
+    "ĵavascript:alert(1)",
     "ｊavascript:alert(1)",
     " \u0000javascript:alert(1)",
   ])("rejects a URL-parser bypass %s", (raw) => {

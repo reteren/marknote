@@ -298,10 +298,10 @@ describe("application actions", () => {
   it("has an action for every menu and context-menu command identifier", () => {
     const actions = makeActions();
     const menuItems = allItems(createMenuModel([editableFormat, plainFormat]).flatMap((section) => section.items));
-    // Строки-подписи (kind: "label") командами не являются: по ним не щёлкают
-    // и клавиатура их пропускает. Такая сейчас одна — текущий масштаб над
-    // пунктами меню View. Проверка по-прежнему требует действие для каждой
-    // настоящей команды, иначе она перестала бы что-либо ловить.
+    // Label rows (kind: "label") are not commands: they are not clickable and
+    // the keyboard skips them. There is currently one — the current zoom above
+    // the View menu items. The check still requires an action for every real
+    // command, otherwise it would stop catching anything.
     for (const item of menuItems.filter((item) => item.kind === "item")) {
       expect(actions.hasAction(item.id), item.id).toBe(true);
     }

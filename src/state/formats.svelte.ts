@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 
-/** Возможности формата, которые приходят из Rust в camelCase. */
+/** Format capabilities received from Rust in camelCase. */
 export type FormatCapabilities = {
   id: string;
   label: string;
@@ -62,7 +62,7 @@ export type FormatsState = {
   error: string | null;
 };
 
-/** Единое состояние списка типов для стартового экрана и меню. */
+/** Shared state for the format-type list used by the start screen and menu. */
 export const formatsState = $state<FormatsState>({
   items: fallbackFormats,
   loading: false,
@@ -78,7 +78,8 @@ export async function loadCreatableFormats(): Promise<FormatCapabilities[]> {
     formatsState.items = formats.length > 0 ? formats : fallbackFormats;
     return formatsState.items;
   } catch (error) {
-    // До запуска Tauri (и при разработке каркаса раньше W1) интерфейс остаётся рабочим.
+    // Before Tauri starts (and while developing the shell before W1), the UI
+    // remains usable.
     formatsState.items = fallbackFormats;
     formatsState.error = error instanceof Error ? error.message : String(error);
     return formatsState.items;

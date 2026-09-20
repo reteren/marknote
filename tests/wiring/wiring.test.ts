@@ -59,9 +59,9 @@ describe("wiring contracts", () => {
     expect(
       missing,
       failureMessage(
-        "Незарегистрированные построители live preview:",
+        "Unregistered live-preview builders:",
         missing.map(({ path, name }) =>
-          `${projectPath(path)} экспортирует ${name}; добавьте ${name} в livePreviewBlockBuilders в src/editor/livePreview/plugin.ts`,
+          `${projectPath(path)} exports ${name}; add ${name} to livePreviewBlockBuilders in src/editor/livePreview/plugin.ts`,
         ),
       ),
     ).toEqual([]);
@@ -82,9 +82,9 @@ describe("wiring contracts", () => {
     expect(
       missing,
       failureMessage(
-        "Не подключённые расширения live preview:",
+        "Unregistered live-preview extensions:",
         missing.map(({ path, name }) =>
-          `${projectPath(path)} экспортирует ${name}; импортируйте его и добавьте в return-массив livePreview() в src/editor/livePreview/index.ts`,
+          `${projectPath(path)} exports ${name}; import it and add it to the livePreview() return array in src/editor/livePreview/index.ts`,
         ),
       ),
     ).toEqual([]);
@@ -115,10 +115,10 @@ describe("wiring contracts", () => {
 
     const failures = [
       ...missingRootModules.map((path) =>
-        `${projectPath(path)} не объявлен в src-tauri/src/lib.rs; добавьте mod ${basename(path, ".rs")};`,
+        `${projectPath(path)} is not declared in src-tauri/src/lib.rs; add mod ${basename(path, ".rs")};`,
       ),
       ...missingFormatModules.map((path) =>
-        `${projectPath(path)} не объявлен в src-tauri/src/formats/mod.rs; добавьте pub mod ${basename(path, ".rs")};`,
+        `${projectPath(path)} is not declared in src-tauri/src/formats/mod.rs; add pub mod ${basename(path, ".rs")};`,
       ),
     ];
 
@@ -141,11 +141,11 @@ describe("wiring contracts", () => {
         new RegExp(`\\bbinary::${detector}\\s*\\(`).test(openFileBody)
       )) {
         failures.push(
-          `src-tauri/src/binary.rs экспортирует ${detectors.join(", ")}, но open_file не вызывает детектор; добавьте binary::is_binary*(...) в src-tauri/src/commands.rs`,
+          `src-tauri/src/binary.rs exports ${detectors.join(", ")}, but open_file does not call a detector; add binary::is_binary*(...) in src-tauri/src/commands.rs`,
         );
       }
     }
-    expect(failures, failureMessage("Не подключённые Rust-модули:", failures)).toEqual([]);
+    expect(failures, failureMessage("Unregistered Rust modules:", failures)).toEqual([]);
   });
 
   it("keeps Rust commands, invoke_handler, and CONTRACTS.md section 5 in sync", () => {
@@ -174,20 +174,20 @@ describe("wiring contracts", () => {
       ...commandDeclarations
         .filter(({ name }) => !registeredSet.has(name))
         .map(({ name, path }) =>
-          `${projectPath(path)} объявляет #[tauri::command] ${name}, но он не зарегистрирован: добавьте commands::${name} в invoke_handler в src-tauri/src/lib.rs`,
+          `${projectPath(path)} declares #[tauri::command] ${name}, but it is not registered; add commands::${name} to invoke_handler in src-tauri/src/lib.rs`,
         ),
       ...registered
         .filter((name) => !declared.has(name))
         .map((name) =>
-          `src-tauri/src/lib.rs регистрирует commands::${name}, но такой #[tauri::command] не найден; удалите запись или добавьте команду в src-tauri/src/`,
+          `src-tauri/src/lib.rs registers commands::${name}, but no such #[tauri::command] was found; remove the entry or add the command in src-tauri/src/`,
         ),
       ...documented
         .filter((name) => !declared.has(name))
         .map((name) =>
-          `docs/CONTRACTS.md §5 требует IPC-команду ${name}, но её нет среди #[tauri::command]; владелец IPC W1 должен добавить реализацию в src-tauri/src/ и регистрацию в lib.rs`,
+          `docs/CONTRACTS.md §5 requires IPC command ${name}, but it is not among #[tauri::command]; IPC owner W1 must implement it in src-tauri/src/ and register it in lib.rs`,
         ),
     ];
-    expect(failures, failureMessage("Расхождения IPC-команд:", failures)).toEqual([]);
+    expect(failures, failureMessage("IPC command mismatches:", failures)).toEqual([]);
   });
 
   it("mounts every src/ui component from App.svelte or a mounted component", () => {
@@ -238,16 +238,16 @@ describe("wiring contracts", () => {
           .filter((edge) => edge.child === component)
           .map((edge) =>
             edge.used
-              ? `${projectPath(importer)} импортирует компонент, но он недостижим от App.svelte`
-              : `${projectPath(importer)} импортирует его как ${edge.localName}, но не монтирует тег <${edge.localName}>`,
+              ? `${projectPath(importer)} imports the component, but it is unreachable from App.svelte`
+              : `${projectPath(importer)} imports it as ${edge.localName}, but does not mount the <${edge.localName}> tag`,
           ),
       );
       failures.push(
-        `${projectPath(component)} не смонтирован: импортируйте его и используйте как <${basename(component, ".svelte")}> в App.svelte или в уже смонтированном компоненте${importers.length ? ` (${importers.join("; ")})` : ""}`,
+        `${projectPath(component)} is not mounted: import it and use it as <${basename(component, ".svelte")}> in App.svelte or an already mounted component${importers.length ? ` (${importers.join("; ")})` : ""}`,
       );
     }
 
-    expect(failures, failureMessage("Несмонтированные UI-компоненты:", failures)).toEqual([]);
+    expect(failures, failureMessage("Unmounted UI components:", failures)).toEqual([]);
   });
 
   it("routes every external opener through safeLinkHref", () => {
@@ -274,7 +274,7 @@ describe("wiring contracts", () => {
         const guarded = Boolean(normalizedVariable || inlineNormalized);
         if (!guarded) {
           failures.push(
-            `${projectPath(path)}:${line} вызывает window.open без safeLinkHref; импортируйте helper из src/editor/livePreview/inline.ts и открывайте только его результат`,
+            `${projectPath(path)}:${line} calls window.open without safeLinkHref; import the helper from src/editor/livePreview/inline.ts and open only its result`,
           );
         }
       }
@@ -290,12 +290,12 @@ describe("wiring contracts", () => {
         const guarded = Boolean(normalizedVariable || inlineNormalized);
         if (!guarded) {
           failures.push(
-            `${projectPath(path)}:${line} вызывает внешний openLink без safeLinkHref; проверьте URL перед передачей adapter/dialogs.openLink`,
+            `${projectPath(path)}:${line} calls external openLink without safeLinkHref; validate the URL before passing it to adapter/dialogs.openLink`,
           );
         }
       }
     }
 
-    expect(failures, failureMessage("Обход проверки безопасных ссылок:", failures)).toEqual([]);
+    expect(failures, failureMessage("Safe-link check bypass:", failures)).toEqual([]);
   });
 });

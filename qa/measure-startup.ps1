@@ -1,12 +1,12 @@
 <#
 .SYNOPSIS
-  Измеряет запуск MarkNote до настоящего редактируемого CodeMirror-редактора.
+  Times MarkNote startup up to a genuinely editable CodeMirror editor.
 .DESCRIPTION
-  Каждый запуск получает отдельную MARKNOTE_CONFIG_DIR, порт CDP и лог Rust.
-  По умолчанию создаются текстовые файлы размером 10 KiB, 1 MiB и 10 MiB;
-  на каждый файл выполняется холодный (первый) и тёплые (последующие) запуски.
-  Для Rust-этапов задаётся MARKNOTE_STARTUP_TRACE=1. В отчёт попадает полный
-  stderr trace, поэтому результаты можно проверить без догадок.
+  Every run gets its own MARKNOTE_CONFIG_DIR, CDP port and Rust log.
+  By default it creates text files of 10 KiB, 1 MiB and 10 MiB and performs
+  one cold (first) and several warm (subsequent) runs on each of them.
+  MARKNOTE_STARTUP_TRACE=1 is set for the Rust stages. The report carries the
+  full stderr trace, so the numbers can be checked instead of guessed at.
 #>
 [CmdletBinding()]
 param(

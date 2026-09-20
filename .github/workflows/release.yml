@@ -41,16 +41,16 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
-      # Тег и версия в манифесте задаются вручную и в разных файлах, поэтому
-      # разъехаться они могут молча. Проверяем до сборки: иначе получасовая
-      # сборка закончится установщиком не с той версией на вкладке релиза.
+      # The tag and manifest version are set manually in different files, so they
+      # can silently diverge. Check before building; otherwise a half-hour build
+      # can finish with an installer carrying the wrong version on the release tab.
       - name: Check tag matches manifest version
         shell: pwsh
         run: |
           $tag = "${{ github.ref_name }}" -replace '^v', ''
           $manifest = (Get-Content src-tauri/tauri.conf.json -Raw | ConvertFrom-Json).version
           if ($tag -ne $manifest) {
-            throw "Тег v$tag не совпадает с версией $manifest в tauri.conf.json"
+            throw "Tag v$tag does not match version $manifest in tauri.conf.json"
           }
           "VERSION=$manifest" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
@@ -60,8 +60,8 @@ jobs:
       - name: Upload installer to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          # Имя собирается из версии, а не из маски: каталог bundle переживает
-          # сборки (он лежит в кэше Cargo), и маска подхватила бы заодно
-          # установщики прошлых версий.
+          # Build the name from the version rather than a wildcard: the bundle
+          # directory survives builds (it is in Cargo's cache), and a wildcard
+          # would also pick up installers from previous versions.
           files: src-tauri/target/release/bundle/nsis/MarkNote_${{ env.VERSION }}_x64-setup.exe
           body_path: scripts/RELEASE_NOTES.md

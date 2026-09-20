@@ -1,9 +1,9 @@
-// Многострочный блок `$$ … $$` рисуется одним виджетом, а такая замена
-// перекрывает перевод строки. CodeMirror запрещает отдавать подобные замены из
-// плагина вида: он бросает «Decorations that replace line breaks may not be
-// specified via plugins», после чего перестаёт обновляться — редактор застывает
-// и на экране остаётся сырой текст. Поэтому блок формулы живёт в поле
-// состояния, а плагин предпросмотра его не трогает (см. blocks.ts, MathBlock).
+// A multiline `$$ … $$` block is rendered by one widget, and such a replacement
+// covers a line break. CodeMirror forbids returning these replacements from view
+// plugins: it throws “Decorations that replace line breaks may not be specified
+// via plugins”, then stops updating — the editor freezes and raw text remains on
+// screen. Therefore the formula block lives in a state field, and the preview
+// plugin leaves it alone (see blocks.ts, MathBlock).
 
 import { StateField, type EditorState, type Extension, type Range } from "@codemirror/state";
 import { syntaxTree } from "@codemirror/language";
@@ -49,8 +49,8 @@ export const blockMathField = StateField.define<DecorationSet>({
     if (!transaction.docChanged && !transaction.selection && !configChanged) return value;
     return blockMathDecorations(transaction.state);
   },
-  // Блок намеренно НЕ объявлен неделимым: иначе курсор не попадает внутрь ни
-  // щелчком, ни стрелками, и набранную формулу можно только удалить целиком.
-  // Курсор внутри делает блок активным, и на его месте показывается разметка.
+  // The block is intentionally NOT marked atomic: otherwise the cursor cannot
+  // enter it by click or arrow keys, and a typed formula can only be deleted in
+  // its entirety. A cursor inside activates the block and shows markup in place.
   provide: (field): Extension => EditorView.decorations.from(field),
 });

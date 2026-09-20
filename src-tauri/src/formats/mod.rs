@@ -38,9 +38,9 @@ fn adapters() -> &'static [Box<dyn FormatAdapter>] {
     static ADAPTERS: OnceLock<Vec<Box<dyn FormatAdapter>>> = OnceLock::new();
     ADAPTERS
         .get_or_init(|| {
-            // Порядок важен: он же определяет порядок плиток на стартовом экране
-            // и пунктов в меню File / New. Родной формат первым, простой текст
-            // вторым, остальные — из реестра вехи M6.
+            // Order matters: it also determines start-screen tiles and File / New
+            // menu items. The native format comes first, plain text second, and
+            // the rest come from the milestone M6 registry.
             let mut list: Vec<Box<dyn FormatAdapter>> = vec![
                 Box::new(markdown::MarkdownAdapter),
                 Box::new(plain::PlainAdapter),
@@ -51,7 +51,7 @@ fn adapters() -> &'static [Box<dyn FormatAdapter>] {
         .as_slice()
 }
 
-/// Возвращает адаптер по идентификатору формата.
+/// Returns an adapter by format identifier.
 pub fn adapter_by_id(id: &str) -> Option<&'static dyn FormatAdapter> {
     adapters()
         .iter()
@@ -59,7 +59,7 @@ pub fn adapter_by_id(id: &str) -> Option<&'static dyn FormatAdapter> {
         .map(|adapter| adapter.as_ref())
 }
 
-/// Возвращает адаптер по расширению; неизвестное расширение считается plain.
+/// Returns an adapter by extension; an unknown extension is treated as plain.
 pub fn adapter_for_extension(ext: &str) -> &'static dyn FormatAdapter {
     let normalized = ext.trim().trim_start_matches('.').to_ascii_lowercase();
     adapters()
@@ -81,7 +81,7 @@ pub fn adapter_for_extension(ext: &str) -> &'static dyn FormatAdapter {
         })
 }
 
-/// Возвращает адаптер по пути; отсутствие расширения также означает plain.
+/// Returns an adapter by path; a missing extension also means plain.
 pub fn adapter_for_path(path: &Path) -> &'static dyn FormatAdapter {
     path.extension()
         .and_then(|extension| extension.to_str())

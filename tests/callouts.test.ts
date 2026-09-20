@@ -51,25 +51,25 @@ function buildCallout(state: EditorState, active = false, index = 0) {
 }
 
 describe("calloutBuilder", () => {
-  it("callout без своего заголовка: скрывает маркеры, подставляет имя типа и показывает исходный текст под курсором", () => {
-    const doc = "> [!NOTE]\n> Текст заметки Obsidian.";
+  it("callout without a custom heading hides markers, inserts the type name, and shows source under the cursor", () => {
+    const doc = "> [!NOTE]\n> Text from the Obsidian note.";
     const state = createCalloutState(doc);
 
-    // 1. Курсор снаружи — маркеры скрыты, имя типа подставлено в виджет заголовка
+    // 1. Cursor outside: markers are hidden and the type name is inserted in the heading widget.
     const outside = buildCallout(state, false);
     expect(outside.handled).toBe(true);
 
-    // Оформление блока callout
+    // Callout block styling.
     const blockMarks = outside.decorations.filter((d) =>
       d.value.spec.class?.includes("cm-marknote-callout-note"),
     );
     expect(blockMarks.length).toBeGreaterThan(0);
 
-    // Скрыт маркер `>` первой строки (0..1)
+    // The first-line `>` marker is hidden (0..1).
     const hiddenQuote = outside.decorations.filter((d) => d.from === 0 && d.to === 1);
     expect(hiddenQuote.length).toBeGreaterThan(0);
 
-    // Заменён маркер [!NOTE] виджетом заголовка с именем типа
+    // The [!NOTE] marker is replaced by a heading widget with the type name.
     const headerWidgetDecos = outside.decorations.filter(
       (d) => d.value.spec.widget instanceof CalloutHeaderWidget,
     );
@@ -78,122 +78,122 @@ describe("calloutBuilder", () => {
     expect(widget.type).toBe("note");
     expect(widget.title).toBe("Note");
 
-    // Скрыт маркер `>` второй строки (10..11)
+    // The second-line `>` marker is hidden (10..11).
     const secondLineQuote = outside.decorations.filter((d) => d.from === 10 && d.to === 11);
     expect(secondLineQuote.length).toBeGreaterThan(0);
 
-    // 2. Курсор внутри — исходный текст, декорации скрытия отсутствуют
+    // 2. Cursor inside: source text, with no hiding decorations.
     const inside = buildCallout(state, true);
     expect(inside.handled).toBe(true);
     expect(inside.decorations).toHaveLength(0);
     expect(inside.atomic).toHaveLength(0);
   });
 
-  it("callout со своим заголовком: скрывает [!TYPE], оставляет свой заголовок и показывает исходный текст под курсором", () => {
-    const doc = "> [!TIP] Свой заголовок\n> Текст подсказки.";
+  it("callout with a custom heading hides [!TYPE], keeps the heading, and shows source under the cursor", () => {
+    const doc = "> [!TIP] Custom heading\n> Hint text.";
     const state = createCalloutState(doc);
 
-    // 1. Курсор снаружи
+    // 1. Cursor outside.
     const outside = buildCallout(state, false);
     expect(outside.handled).toBe(true);
 
-    // Класс нужного типа tip
+    // Class for the tip type.
     const tipMarks = outside.decorations.filter((d) =>
       d.value.spec.class?.includes("cm-marknote-callout-tip"),
     );
     expect(tipMarks.length).toBeGreaterThan(0);
 
-    // Виджет иконки для tip
+    // Icon widget for tip.
     const iconWidgets = outside.decorations.filter(
       (d) => d.value.spec.widget instanceof CalloutIconWidget,
     );
     expect(iconWidgets.length).toBe(1);
     expect((iconWidgets[0].value.spec.widget as CalloutIconWidget).type).toBe("tip");
 
-    // Свой заголовок помечен стилем callout-title
+    // Custom heading has the callout-title style.
     const titleMarks = outside.decorations.filter((d) =>
       d.value.spec.class?.includes("cm-marknote-callout-title"),
     );
     expect(titleMarks.length).toBeGreaterThan(0);
 
-    // 2. Курсор внутри
+    // 2. Cursor inside.
     const inside = buildCallout(state, true);
     expect(inside.handled).toBe(true);
     expect(inside.decorations).toHaveLength(0);
     expect(inside.atomic).toHaveLength(0);
   });
 
-  it("неизвестный тип [!ЧТОТО]: отображается как note", () => {
-    const doc = "> [!ЧТОТО]\n> Тело неизвестного блока.";
+  it("unknown type [!UNKNOWN] is displayed as note", () => {
+    const doc = "> [!WHATEVER]\n> Unknown callout body.";
     const state = createCalloutState(doc);
 
-    expect(normalizeCalloutType("ЧТОТО")).toBe("note");
+    expect(normalizeCalloutType("WHATEVER")).toBe("note");
 
     const outside = buildCallout(state, false);
     expect(outside.handled).toBe(true);
 
-    // Неизвестный тип получил оформление note
+    // The unknown type receives note styling.
     const noteMarks = outside.decorations.filter((d) =>
       d.value.spec.class?.includes("cm-marknote-callout-note"),
     );
     expect(noteMarks.length).toBeGreaterThan(0);
 
-    // Курсор внутри неизвестного callout
+    // Cursor inside the unknown callout.
     const inside = buildCallout(state, true);
     expect(inside.handled).toBe(true);
     expect(inside.decorations).toHaveLength(0);
   });
 
-  it("обычная цитата: вертикальная линия слева, скрытие маркеров и показ исходного текста под курсором", () => {
-    const doc = "> Обычная цитата без типа\n> Вторая строка цитаты.";
+  it("ordinary quote has a left rule, hidden markers, and source text under the cursor", () => {
+    const doc = "> Ordinary quote without a type\n> Second quote line.";
     const state = createCalloutState(doc);
 
-    // 1. Курсор снаружи
+    // 1. Cursor outside.
     const outside = buildCallout(state, false);
     expect(outside.handled).toBe(true);
 
-    // Маркирована как blockquote
+    // Marked as blockquote.
     const quoteMarks = outside.decorations.filter((d) =>
       d.value.spec.class?.includes("cm-marknote-blockquote"),
     );
     expect(quoteMarks.length).toBeGreaterThan(0);
 
-    // Маркеры `>` на обеих строках скрыты
+    // `>` markers on both lines are hidden.
     const hiddenMarkers = outside.decorations.filter((d) => d.to === d.from + 1);
     expect(hiddenMarkers.length).toBeGreaterThanOrEqual(2);
 
-    // 2. Курсор внутри
+    // 2. Cursor inside.
     const inside = buildCallout(state, true);
     expect(inside.handled).toBe(true);
     expect(inside.decorations).toHaveLength(0);
     expect(inside.atomic).toHaveLength(0);
   });
 
-  it("вложенная цитата: поддерживает вложенные уровни и изолированное раскрытие", () => {
-    const doc = "> Цитата первого уровня\n> > Вложенная цитата\n> Продолжение первого уровня";
+  it("nested quote supports nested levels and isolated revealing", () => {
+    const doc = "> First-level quote\n> > Nested quote\n> Continued first level";
     const state = createCalloutState(doc);
 
-    // Внешняя цитата
+    // Outer quote.
     const outer = buildCallout(state, false, 0);
     expect(outer.handled).toBe(true);
     expect(
       outer.decorations.some((d) => d.value.spec.class?.includes("cm-marknote-blockquote")),
     ).toBe(true);
 
-    // Внутренняя цитата (второй узел Blockquote в дереве)
+    // Inner quote (the second Blockquote node in the tree).
     const inner = buildCallout(state, false, 1);
     expect(inner.handled).toBe(true);
     expect(
       inner.decorations.some((d) => d.value.spec.class?.includes("cm-marknote-blockquote")),
     ).toBe(true);
 
-    // Курсор внутри вложенной цитаты: вложенный узел раскрыт
+    // Cursor inside the nested quote: the nested node is revealed.
     const innerActive = buildCallout(state, true, 1);
     expect(innerActive.handled).toBe(true);
     expect(innerActive.decorations).toHaveLength(0);
   });
 
-  it("виджеты callout корректно реализуют метод eq()", () => {
+  it("callout widgets implement eq() correctly", () => {
     const icon1 = new CalloutIconWidget("tip");
     const icon2 = new CalloutIconWidget("tip");
     const iconDiff = new CalloutIconWidget("note");

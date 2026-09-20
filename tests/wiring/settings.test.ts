@@ -1,12 +1,11 @@
-// Мета-тест на фронтенде: проверка того, что настройки из defaultSettings
-// не остаются «витриной», а действительно читаются и применяются в приложении
-// за пределами окна настроек и модуля состояния.
+// Frontend meta-test: verify that defaultSettings values are not a facade but
+// are actually read and applied by the app outside the settings window and
+// state module.
 //
-// Окно настроек долго сохраняло значения в settings.json, которые никем
-// в приложении не читались. Этот тест гарантирует, что каждая настройка либо
-// имеет потребителя в src/ (эффекты, расширения CodeMirror, вспомогательные модули),
-// либо зафиксирована в списке именованных исключений с указанием причины
-// (обработка на стороне Rust или параллельный перенос в задачах W85/W86/W87).
+// The settings window used to save values to settings.json that nothing in the
+// app read. This test guarantees that every setting either has a consumer in
+// src/ (effects, CodeMirror extensions, helper modules) or appears in a named
+// exception list with a reason (Rust-side handling or a parallel W85/W86/W87 migration).
 
 import { readFileSync, readdirSync } from "node:fs";
 import { extname, join, relative, resolve } from "node:path";
@@ -22,33 +21,33 @@ export type SettingException = {
 };
 
 /**
- * Явный реестр исключений для настроек, которые не читаются напрямую
- * в обычном коде фронтенда за пределами окна настроек.
+ * Explicit registry of settings that are not read directly by ordinary
+ * frontend code outside the settings window.
  *
- * Каждая запись обязана содержать внятное техническое обоснование.
+ * Every entry must contain a clear technical justification.
  */
 export const SETTINGS_EXCEPTIONS: readonly SettingException[] = [
-  // --- Настройки, применяемые на бэкенде в Rust (windows.*) ---
+  // --- Settings applied by the Rust backend (windows.*) ---
   {
     path: "windows.rememberSizeAndPosition",
     reason:
-      "Обрабатывается в Rust: src-tauri/src/lib.rs (window_state_flags настраивает tauri_plugin_window_state)",
+      "Handled in Rust: src-tauri/src/lib.rs (window_state_flags configures tauri_plugin_window_state)",
   },
   {
     path: "windows.raiseExistingWindow",
     reason:
-      "Обрабатывается в Rust: src-tauri/src/windows.rs (existing_window_label поднимает уже открытое окно вместо создания дубликата)",
+      "Handled in Rust: src-tauri/src/windows.rs (existing_window_label raises an existing window instead of creating a duplicate)",
   },
 
-  // --- Язык интерфейса ---
+  // --- Interface language ---
   {
     path: "language",
     reason:
-      "Применяется реактивно внутри src/state/settings.svelte.ts (applyLanguagePreference вызывает setInterfaceLanguage при загрузке и изменении)",
+      "Applied reactively in src/state/settings.svelte.ts (applyLanguagePreference calls setInterfaceLanguage on load and change)",
   },
 ];
 
-/** Рекурсивно собирает все конечные (листовые) пути свойств объекта настроек. */
+/** Recursively collects all leaf property paths from a settings object. */
 export function extractLeafPaths(obj: Record<string, unknown>, prefix = ""): string[] {
   const paths: string[] = [];
   for (const [key, value] of Object.entries(obj)) {
@@ -76,7 +75,7 @@ function collectSourceFiles(dir: string): Array<{ path: string; content: string 
         visit(fullPath);
       } else if (extname(entry.name) === ".ts" || extname(entry.name) === ".svelte") {
         const rel = relative(ROOT, fullPath).replaceAll("\\", "/");
-        // Исключаем модуль состояния настроек, окно настроек с подкаталогом и словари локалей
+        // Exclude the settings state module, settings window and subdirectory, and locale dictionaries.
         if (
           rel === "src/state/settings.svelte.ts" ||
           rel === "src/ui/SettingsWindow.svelte" ||
@@ -98,14 +97,14 @@ function collectSourceFiles(dir: string): Array<{ path: string; content: string 
 }
 
 /**
- * Проверяет, читается ли данная настройка в переданном файле.
+ * Checks whether the given setting is read in the supplied file.
  *
- * Распознаёт:
- * 1. Прямой доступ: settings.editor.fontSize, settings?.editor?.fontSize, editor?.fontSize
- * 2. Доступ через settingsState: settingsState.settings.editor.fontSize
- * 3. Доступ через скобки: editor["fontSize"], settings["editor"]["fontSize"]
- * 4. Деструктуризацию: const { fontSize } = editor; const { fontSize } = settings.editor
- * 5. Контекстный доступ к фасетам/конфигурациям разделов (например, val.renderFormulas, config.revealMarkup)
+ * Recognizes:
+ * 1. Direct access: settings.editor.fontSize, settings?.editor?.fontSize, editor?.fontSize
+ * 2. Access through settingsState: settingsState.settings.editor.fontSize
+ * 3. Bracket access: editor["fontSize"], settings["editor"]["fontSize"]
+ * 4. Destructuring: const { fontSize } = editor; const { fontSize } = settings.editor
+ * 5. Contextual access to section facets/configs (for example, val.renderFormulas, config.revealMarkup)
  */
 export function isSettingReadInContent(path: string, content: string, filePath = ""): boolean {
   if (path.includes(".")) {
@@ -113,32 +112,32 @@ export function isSettingReadInContent(path: string, content: string, filePath =
     const escapedSection = escapeRegex(section);
     const escapedProp = escapeRegex(prop);
 
-    // Доступ вида settings.section.prop, settings?.section?.prop, section.prop, section?.prop
+    // Access such as settings.section.prop, settings?.section?.prop, section.prop, section?.prop.
     const dotAccess = new RegExp(
       `(?:\\bsettingsState\\??\\.settings\\??\\.|\\bsettings\\??\\.)?${escapedSection}\\??\\.${escapedProp}\\b`,
     );
     if (dotAccess.test(content)) return true;
 
-    // Доступ через квадратные скобки: section["prop"]
+    // Bracket access: section["prop"].
     const bracketAccess = new RegExp(
       `\\b${escapedSection}\\s*\\[\\s*["']${escapedProp}["']\\s*\\]`,
     );
     if (bracketAccess.test(content)) return true;
 
-    // Деструктуризация: { prop } = ...section
+    // Destructuring: { prop } = ...section.
     const destructuring = new RegExp(
       `\\{[^}]*\\b${escapedProp}\\b[^}]*\\}\\s*=\\s*(?:[A-Za-z0-9_$]+\\??\\.)*${escapedSection}\\b`,
     );
     if (destructuring.test(content)) return true;
 
-    // Раздел, переданный целиком, разбирается в модуле, названном по этому
-    // разделу: settings.spellcheck уходит в src/editor/spellcheck.ts, и там
-    // поле читается уже как options.enabled или config.enabled.
+    // A whole section is handled in the module named after that section:
+    // settings.spellcheck goes to src/editor/spellcheck.ts, where the field is
+    // read as options.enabled or config.enabled.
     //
-    // Правило намеренно узкое: свободное чтение вида options.enabled
-    // засчитывается только в файле, чей путь назван именем раздела. Иначе
-    // любое поле enabled в любом модуле закрывало бы любую настройку, и
-    // проверка перестала бы что-либо ловить.
+    // This rule is intentionally narrow: a free read such as options.enabled
+    // counts only in a file whose path is named after the section. Otherwise
+    // any enabled field in any module would satisfy any setting and the check
+    // would stop catching anything.
     if (filePath.toLowerCase().includes(section.toLowerCase())) {
       const sectionConfigAccess = new RegExp(
         `\\b(?:${escapedSection}|config|options|opts|val|preview|previewConfig)\\??\\.${escapedProp}\\b`,
@@ -146,7 +145,7 @@ export function isSettingReadInContent(path: string, content: string, filePath =
       if (sectionConfigAccess.test(content)) return true;
     }
   } else {
-    // Верхнеуровневое свойство (например, language)
+    // Top-level property (for example, language).
     const escapedProp = escapeRegex(path);
     const directAccess = new RegExp(
       `(?:\\bsettingsState\\??\\.)?\\bsettings\\??\\.${escapedProp}\\b`,
@@ -176,12 +175,12 @@ export function findReadersForSetting(
     .map(({ path }) => path);
 }
 
-describe("настройки не остаются витриной (settings wiring)", () => {
+describe("settings are not a facade (settings wiring)", () => {
   const leafPaths = extractLeafPaths(defaultSettings as unknown as Record<string, unknown>);
   const sourceFiles = collectSourceFiles(SRC_ROOT);
   const exceptionMap = new Map(SETTINGS_EXCEPTIONS.map((item) => [item.path, item.reason]));
 
-  it("находит все листовые поля defaultSettings (33 поля)", () => {
+  it("finds all defaultSettings leaf fields (33 fields)", () => {
     expect(leafPaths.length).toBeGreaterThanOrEqual(33);
     expect(leafPaths).toContain("language");
     expect(leafPaths).toContain("editor.fontSize");
@@ -190,32 +189,32 @@ describe("настройки не остаются витриной (settings wi
     expect(leafPaths).toContain("windows.startupAction");
   });
 
-  it("все исключения в SETTINGS_EXCEPTIONS валидны, уникальны и имеют описание причины", () => {
+  it("all SETTINGS_EXCEPTIONS entries are valid, unique, and justified", () => {
     const leafSet = new Set(leafPaths);
     const seen = new Set<string>();
     const failures: string[] = [];
 
     for (const exception of SETTINGS_EXCEPTIONS) {
       if (seen.has(exception.path)) {
-        failures.push(`Дубликат исключения: '${exception.path}'`);
+        failures.push(`Duplicate exception: '${exception.path}'`);
       }
       seen.add(exception.path);
 
       if (!leafSet.has(exception.path)) {
         failures.push(
-          `Устаревшее исключение: '${exception.path}' не существует в defaultSettings`,
+          `Stale exception: '${exception.path}' does not exist in defaultSettings`,
         );
       }
 
       if (!exception.reason || exception.reason.trim().length === 0) {
-        failures.push(`У исключения '${exception.path}' отсутствует описание причины`);
+        failures.push(`Exception '${exception.path}' has no reason`);
       }
     }
 
     expect(failures, failures.join("\n")).toEqual([]);
   });
 
-  it("каждая настройка из defaultSettings читается в src/ либо имеет зарегистрированное исключение", () => {
+  it("each defaultSettings value is read in src/ or has a registered exception", () => {
     const missing: Array<{ path: string; hint: string }> = [];
 
     for (const path of leafPaths) {
@@ -227,7 +226,7 @@ describe("настройки не остаются витриной (settings wi
       if (readers.length === 0) {
         missing.push({
           path,
-          hint: `Настройка '${path}' не читается нигде в src/ (за пределами окна настроек и модуля состояния). Добавьте её реальное использование в коде приложения или зарегистрируйте обоснованное исключение в SETTINGS_EXCEPTIONS.`,
+          hint: `Setting '${path}' is not read anywhere in src/ (outside the settings window and state module). Add real use in app code or register a justified exception in SETTINGS_EXCEPTIONS.`,
         });
       }
     }
@@ -236,13 +235,13 @@ describe("настройки не остаются витриной (settings wi
     expect(
       missing,
       [
-        "Настройки, остающиеся витриной (не применяются и не имеют обоснованного исключения):",
+        "Settings that remain a facade (not applied and without a justified exception):",
         ...failureLines,
       ].join("\n"),
     ).toEqual([]);
   });
 
-  it("проверяет чувствительность: неприменённая фиктивная настройка без исключения гарантированно падает", () => {
+  it("checks sensitivity: an unused fake setting without an exception reliably fails", () => {
     const fakeUnwiredSetting = "spellcheck.unwiredTestProbe";
     const readers = findReadersForSetting(fakeUnwiredSetting, sourceFiles);
     expect(readers).toEqual([]);

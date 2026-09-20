@@ -253,15 +253,15 @@ describe("ContextMenu user interactions", () => {
     await fireEvent.mouseEnter(insertTrigger);
     await fireEvent.click(Array.from(document.querySelectorAll<HTMLButtonElement>(`[role="menu"][aria-label="${t("contextMenu.insert")}"] button`))
       .find((button) => button.textContent?.includes(t("format.table")))!);
-    // Пустая строка после таблицы: иначе набранный под ней текст стал бы её строкой.
+    // Blank line after the table: otherwise text typed below it would become its row.
     expect(documentState.text).toBe("|  |  |\n| --- | --- |\n|  |  |\n\n");
   });
 
-  it("возвращает фокус через редактор, а не сырым focus() по элементу", async () => {
-    // Сырой focus() на contenteditable ставит курсор в начало документа, и
-    // CodeMirror принимает это за новое выделение: жирный или заголовок из
-    // меню оставляли курсор на первой строке. Через EditorView.focus()
-    // редактор восстанавливает то выделение, которое поставила команда.
+  it("restores focus through the editor rather than raw focus() on the element", async () => {
+    // Raw focus() on contenteditable places the cursor at the start of the
+    // document, and CodeMirror treats it as a new selection: bold or heading
+    // commands from the menu left the cursor on the first line. EditorView.focus()
+    // restores the selection made by the command.
     const editor = document.createElement("div");
     editor.className = "cm-editor";
     const content = document.createElement("div");
@@ -287,8 +287,8 @@ describe("ContextMenu user interactions", () => {
     editor.remove();
   });
 
-  it("приложение передаёт меню возврат фокуса через редактор", () => {
-    // Без этого свойства меню снова начнёт звать focus() по элементу.
+  it("the app gives the menu an editor-based focus-restoration callback", () => {
+    // Without this property, the menu would call focus() on the element again.
     const source = readFileSync(resolve(process.cwd(), "src/App.svelte"), "utf8");
     const usage = source.slice(source.indexOf("<ContextMenu"));
     expect(usage.slice(0, usage.indexOf("/>"))).toContain("onFocusEditor={() => editorView?.focus()}");
@@ -332,7 +332,8 @@ describe("ContextMenu user interactions", () => {
       .find((button) => button.textContent?.includes(t("format.horizontalRule")))!);
     await settle();
 
-    // Линия в начале документа: ни пустой строки перед ней, ни лишней после.
+    // Line at the start of the document: neither a preceding nor an extra
+    // following blank line.
     expect(documentState.text).toBe("---\nSome preceding paragraph");
     const hrElement = document.querySelector<HTMLElement>(".cm-marknote-hr");
     expect(hrElement).not.toBeNull();

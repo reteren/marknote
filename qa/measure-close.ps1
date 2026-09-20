@@ -14,7 +14,10 @@ param(
     [ValidateRange(1, 20)]
     [int]$Runs = 3,
     [string]$BinaryPath = "",
-    [string]$FixturePath = ""
+    [string]$FixturePath = "",
+    # Accessible name of the "discard changes" button. The interface is
+    # translated, so a non-English UI needs its own label passed here.
+    [string[]]$DiscardLabel = @("Discard")
 )
 
 Set-StrictMode -Version Latest
@@ -69,7 +72,7 @@ function Find-Button([IntPtr]$Handle) {
     $all = $root.FindAll(
         [System.Windows.Automation.TreeScope]::Descendants,
         [System.Windows.Automation.Condition]::TrueCondition)
-    $names = @("Discard", "Не сохранять", "Не сохранять изменения", "Отбросить")
+    $names = $DiscardLabel
     return @($all | Where-Object {
         try {
             $current = $_.Current

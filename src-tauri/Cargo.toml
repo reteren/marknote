@@ -12,9 +12,9 @@ name = "marknote_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [features]
-# Без этой feature релизная сборка берёт фронтенд с dev-сервера, а не из
-# встроенного dist: собранный exe показывает «localhost refused to connect».
-# tauri build подставляет её сам, но cargo build --release — нет.
+# Without this feature, a release build takes the frontend from the dev server
+# instead of the embedded dist: the built exe shows “localhost refused to connect”.
+# `tauri build` supplies it automatically, but `cargo build --release` does not.
 custom-protocol = ["tauri/custom-protocol"]
 
 [build-dependencies]
@@ -39,7 +39,7 @@ chardetng = "0.1"
 anyhow = "1"
 thiserror = "2"
 
-# Веха M6 — просмотр форматов, которые нельзя редактировать без потери структуры.
+# Milestone M6 — viewing formats that cannot be edited without losing structure.
 pdf-extract = "0.12.0"
 docx-rs = "0.4.22"
 quick-xml = { version = "0.41.0", features = ["encoding"] }

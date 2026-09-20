@@ -341,9 +341,9 @@ describe("MarkNote editor keymap", () => {
     const keyBindings = keymapPlugin.value as KeyBinding[];
     expect(keyBindings.some((item) => item.key === "Mod-Enter")).toBe(false);
   });
-  it("печатает знаки = как набраны и оборачивает ими только выделение", () => {
-    // Раньше каждое нажатие «=» вставляло сразу «====»: знак равенства было
-    // физически не набрать.
+  it("prints = signs as typed and wraps only the selection", () => {
+    // Previously each “=” press inserted “====” at once, making it impossible
+    // to type an equals sign literally.
     const extensions = createMarknoteKeymap() as any[];
     const inputHandler = extensions[2].value as (
       view: EditorView,
@@ -357,25 +357,25 @@ describe("MarkNote editor keymap", () => {
     const first = makeView("a", 1);
     expect(inputHandler(first as EditorView, 1, 1, "=", noop)).toBe(false);
 
-    // Второе «=» тоже печатается как есть: «==» — это два знака, а не четыре
-    // с курсором посередине.
+    // The second “=” is also printed as is: “==” means two signs, not four with
+    // the cursor in the middle.
     const second = makeView("a=", 2);
     expect(inputHandler(second as EditorView, 2, 2, "=", noop)).toBe(false);
 
-    // И третье: рядом с уже набранной парой ничего не проглатывается.
+    // Third, nothing next to an already typed pair is swallowed.
     const third = makeView("a==", 3);
     expect(inputHandler(third as EditorView, 3, 3, "=", noop)).toBe(false);
 
     const tilde = makeView("a~", 2);
     expect(inputHandler(tilde as EditorView, 2, 2, "~", noop)).toBe(false);
 
-    // С выделением «=» по-прежнему оборачивает текст в ==…==.
+    // With a selection, it still wraps text in ==…==.
     const wrapped = makeView("word", 0, 4);
     expect(inputHandler(wrapped as EditorView, 0, 4, "=", noop)).toBe(true);
     expect(wrapped.state.doc.toString()).toBe("==word==");
   });
 
-  it("ставит курсор за решётками заголовка, в том числе на пустой строке", () => {
+  it("places the cursor after heading hashes, including on an empty line", () => {
     const empty = makeView("", 0);
     expect(run("Mod-2", empty)).toBe(true);
     expect(empty.state.doc.toString()).toBe("## ");

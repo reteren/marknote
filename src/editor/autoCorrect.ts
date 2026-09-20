@@ -1,14 +1,14 @@
-// Поддержка автозамены при наборе текста (settings.autoCorrect).
+// Support for autocorrection while typing (settings.autoCorrect).
 //
-// Включает четыре правила:
-// - smartQuotes: замена прямых кавычек "" и '' на парные «типографские»
-// - doubleHyphenToEmDash: замена двух дефисов -- на длинное тире —
-// - capitalizeAfterPeriod: заглавная буква после точки с пробелом
-// - threeDotsToEllipsis: замена трёх точек ... на знак многоточия …
+// It enables four rules:
+// - smartQuotes: replace straight "" and '' quotes with paired “typographic” quotes
+// - doubleHyphenToEmDash: replace two hyphens -- with an em dash —
+// - capitalizeAfterPeriod: capitalize the letter after a period and whitespace
+// - threeDotsToEllipsis: replace three dots ... with an ellipsis …
 //
-// Каждое правило срабатывает при наборе и отменяется одним нажатием Ctrl+Z
-// (восстанавливая исходно набранные символы).
-// Внутри блоков кода, инлайн-кода, формул и ссылок автозамена отключена.
+// Each rule runs while typing and is undone with one Ctrl+Z press
+// (restoring the originally typed characters).
+// Autocorrection is disabled inside code blocks, inline code, formulas, and links.
 
 import type { Extension } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
@@ -33,13 +33,13 @@ export function autoCorrectExtension(options: AutoCorrectOptions): Extension[] {
 
   return [
     EditorView.inputHandler.of((view, from, to, text) => {
-      // Автозамена работает только для одиночных вводимых символов
+      // Autocorrection only handles single-character insertions.
       if (text.length !== 1) return false;
 
-      // Внутри блоков кода, инлайн-кода, формул и ссылок замена не выполняется
+      // Do not replace text inside code blocks, inline code, formulas, or links.
       if (isInsideCodeFormulaOrLink(view.state, from)) return false;
 
-      // 1. Двойной дефис в длинное тире (-- -> —)
+      // 1. Double hyphen to em dash (-- -> —)
       if (options.doubleHyphenToEmDash && text === "-" && from === to && from > 0) {
         if (view.state.sliceDoc(from - 1, from) === "-") {
           view.dispatch({ changes: { from, to, insert: text }, userEvent: "input.type" });
@@ -48,7 +48,7 @@ export function autoCorrectExtension(options: AutoCorrectOptions): Extension[] {
         }
       }
 
-      // 2. Три точки в многоточие (... -> …)
+      // 2. Three dots to ellipsis (... -> …)
       if (options.threeDotsToEllipsis && text === "." && from === to && from >= 2) {
         if (view.state.sliceDoc(from - 2, from) === "..") {
           view.dispatch({ changes: { from, to, insert: text }, userEvent: "input.type" });
@@ -57,7 +57,7 @@ export function autoCorrectExtension(options: AutoCorrectOptions): Extension[] {
         }
       }
 
-      // 3. Заглавная буква после точки с пробелом (. + пробелы + строчная -> заглавная)
+      // 3. Capitalize after a period and whitespace (. + whitespace + lowercase -> uppercase)
       if (options.capitalizeAfterPeriod && /^\p{Ll}$/u.test(text)) {
         const before = view.state.sliceDoc(Math.max(0, from - 20), from);
         if (/(?:^|[^\.\p{N}])\.\s+$/u.test(before)) {
@@ -68,7 +68,7 @@ export function autoCorrectExtension(options: AutoCorrectOptions): Extension[] {
         }
       }
 
-      // 4. Типографские кавычки (smart quotes: " -> “/” и ' -> ‘/’)
+      // 4. Typographic quotes (smart quotes: " -> “/” and ' -> ‘/’)
       if (options.smartQuotes && (text === '"' || text === "'")) {
         const prevChar = from > 0 ? view.state.sliceDoc(from - 1, from) : "";
         const isOpening = from === 0 || /\s/u.test(prevChar) || /[(\[{<«"'—–-]/.test(prevChar);

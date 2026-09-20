@@ -17,7 +17,7 @@
     {
       "Pid": 39772,
       "Name": "msedgewebview2.exe",
-      "Role": "основной",
+      "Role": "main",
       "Mb": 125.3,
       "CommandLine": "\"C:\\WebView2Runtime\\149.0.4022.98\\msedgewebview2.exe\" --embedded-browser-webview=1 --webview-exe-name=marknote.exe --webview-exe-version=1.0.17 --user-data-dir=\"C:\\Users\\reteren\\AppData\\Local\\dev.marknote.app\\EBWebView\" --noerrdialogs --embedded-browser-webview-dpi-awareness=2 --autoplay-policy=no-user-gesture-required --disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --lang=ru-RU --mojo-named-platform-channel-pipe=40548.42840.297416900948131335 /pfhostedapp:2017d522a774382594858f492b9e1add59a8b77f"
     },

@@ -1,7 +1,7 @@
 import { defineConfig } from "vite";
 import { svelte } from "@sveltejs/vite-plugin-svelte";
 
-/** WebView2 поддерживает woff2, поэтому не выпускаем дублирующие ttf/woff. */
+/** WebView2 supports woff2, so do not emit duplicate ttf/woff files. */
 function katexWoff2Only() {
   return {
     name: "marknote-katex-woff2-only",
@@ -21,7 +21,7 @@ function katexWoff2Only() {
   };
 }
 
-// Порт фиксирован: он же прописан как devUrl в tauri.conf.json.
+// The port is fixed because it is also the devUrl in tauri.conf.json.
 export default defineConfig({
   plugins: [katexWoff2Only(), svelte()],
   clearScreen: false,
@@ -29,19 +29,19 @@ export default defineConfig({
     port: 1420,
     strictPort: true,
     watch: {
-      // src-tauri пересобирает cargo, Vite за ним следить не должен
+      // src-tauri rebuilds Cargo; Vite must not watch it.
       ignored: ["**/src-tauri/**"],
     },
   },
   build: {
-    target: "chrome105", // WebView2 на поддерживаемых Windows 10
+    target: "chrome105", // WebView2 on supported Windows 10 versions
     minify: "esbuild",
     sourcemap: false,
     rollupOptions: {
       output: {
         manualChunks(id) {
           const moduleId = id.replaceAll("\\", "/");
-          // KaTeX нужен только редактору, в котором встретилась формула.
+          // KaTeX is needed only by an editor that contains a formula.
           if (moduleId.includes("/node_modules/katex/")) return "katex";
           return undefined;
         },

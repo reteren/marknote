@@ -1,532 +1,246 @@
-# Спецификация поведения
+# Behavior specification
 
-Единственный источник правды о том, что программа делает. Если код расходится
-со спецификацией — ошибка в одном из них, и сначала решается, в каком именно.
+This is the single source of truth for MarkNote behavior. If code and this
+specification differ, one of them is wrong and the team must decide which.
+The reference behavior is Obsidian with its default settings; where this
+specification is silent, follow Obsidian.
 
-Ориентир везде — Obsidian с настройками по умолчанию. Где спецификация молчит,
-правильный ответ: «как в Obsidian».
+## 1. Core principles
 
----
+One window is a workspace with one or more tabs, each containing a document.
+At startup the window shows one tab with the start screen or the supplied file.
+The plus button creates a tab with the start screen, and the tab bar is always
+visible. There are no vaults or sidebars.
 
-## 1. Основной принцип
+English is the default interface language. Supported languages and direction
+are described in SETTINGS.md. The documentation itself is in English. The
+theme is one dark Obsidian-style theme and has no switch. Settings exist, but
+they may not change the core principles: tabs inside a window, no plugins or
+vaults, and the single dark theme.
 
-Одно окно — рабочее пространство с одной или несколькими вкладками; каждая
-вкладка содержит отдельный документ. При запуске окно показывает одну вкладку
-со стартовым экраном или переданным файлом. Кнопка «+» создаёт вкладку со
-стартовым экраном; полоса вкладок видна всегда. Хранилищ и
-боковой панели нет.
+## 2. Launching and opening files
 
-Язык интерфейса по умолчанию английский. Доступные языки и направление интерфейса
-описаны в [SETTINGS.md](SETTINGS.md); документация проекта на русском.
+### 2.1 Double-click
 
-Тема — только тёмная, вариант Obsidian по умолчанию. Переключателя нет.
+The installer associates Markdown extensions with MarkNote. A double-click
+passes the file to MarkNote, which uses a free start window or creates a new
+window. There is always one process: the single-instance plugin forwards
+arguments to the running process. When raiseExistingWindow is enabled, an
+already open file raises and focuses its existing window; otherwise a new
+window is created.
 
-Поведение по умолчанию совпадает с настройками Obsidian, и большая часть его
-зашита намеренно. Окно настроек есть; его состав, значения и применяемые
-ограничения описаны в [SETTINGS.md](SETTINGS.md). Того, что составляет принцип
-программы — одна тёмная тема, вкладки внутри окна, отсутствие плагинов и
-хранилищ, — в настройках нет.
+### 2.2 Start screen
 
----
+Launching without a file shows a start screen. It can create every editable,
+creatable format. The first tiles are Markdown, Plain Text, JSON, YAML, TOML,
+CSV, and common code/data formats; More… reveals the rest. RTF is editable
+after opening but is not creatable. PDF, DOCX, and EPUB are read-only and are
+not offered as new files.
 
-## 2. Запуск и открытие файлов
+Selecting a tile closes the start screen and creates an empty document with
+the selected extension, such as Untitled.json — MarkNote. Typing before
+selecting a tile creates Markdown and dismisses the screen.
 
-### 2.1 Двойной клик по файлу
+### 2.3 Unsaved documents
 
-`.md` ассоциируется с MarkNote при установке. Двойной клик передаёт файл в
-MarkNote; маршрутизация использует свободное стартовое окно, если оно есть,
-иначе создаёт новое.
+An unsaved document has no disk path. Autosave is disabled, the menu shows
+Unsaved, and Save and Save as are available. Closing a non-empty unsaved
+document asks Save, Discard, or Cancel. A multi-dirty-tab close protocol must
+treat all dirty tabs before closing the window. The first save opens the system
+dialog with the selected format as its default.
 
-Процесс всегда один. Второй запуск перехватывается
-`tauri-plugin-single-instance`: аргументы передаются уже работающему процессу,
-и тот маршрутизирует файл в свободное стартовое или новое окно. Это быстрее и
-экономит память — WebView2 общий.
+### 2.4 Changing document type
 
-Если включена настройка поднятия уже открытого окна и файл уже открыт в каком-то
-окне, новое не создаётся: существующее окно поднимается и получает фокус. При
-выключенной настройке создаётся новое окно.
+The type in the status bar is clickable. Changing it keeps text, cursor, and
+undo history but changes preview, syntax highlighting, and saving policy. For
+an unsaved document it changes the proposed extension. For a saved document
+it is Save as with a new extension; the original is untouched. Read-only
+types do not appear in the picker.
 
-### 2.2 Запуск без файла — стартовый экран
+### 2.5 Drop and title
 
-Открывается пустое окно со стартовым экраном. Отсюда можно создать файл любого
-формата, который программа умеет создавать и редактировать, — не только
-Markdown.
+Dropping a file into an empty untouched window reuses it; otherwise a new
+window opens. Multiple files use one window each. Saved titles are
+name.ext — MarkNote. Unsaved titles are Untitled.ext — MarkNote; save state
+appears in the menu, not the native title.
 
-```
-┌──────────────────────────────────────────────┐
-│                                              │
-│                  MarkNote                    │
-│                                              │
-│   New file                                   │
-│   ┌──────────┬──────────┬──────────┐         │
-│   │ Markdown │  Text    │  JSON    │         │
-│   │   .md    │  .txt    │  .json   │         │
-│   ├──────────┼──────────┼──────────┤         │
-│   │  YAML    │  TOML    │   XML    │         │
-│   │  .yaml   │  .toml   │  .xml    │         │
-│   ├──────────┼──────────┼──────────┤         │
-│   │  HTML    │   CSS    │  More… ▾ │         │
-│   │  .html   │  .css    │          │         │
-│   └──────────┴──────────┴──────────┘         │
-│                                              │
-│   Open file…      or drop a file here        │
-│                                              │
-└──────────────────────────────────────────────┘
-```
+## 3. Saving
 
-Клик по плитке закрывает стартовый экран и открывает пустой документ
-выбранного типа. Заголовок окна — `Untitled.json — MarkNote`, то есть с
-расширением будущего файла.
+### 3.1 Autosave
 
-`More…` раскрывает остальные создаваемые типы из класса C (см.
-[FORMATS.md](FORMATS.md)): JavaScript, TypeScript, Python, Rust, Go, C, C++,
-Shell и JSONC. Расширения `.cfg`, `.conf`, `.csv`, `.tsv`, `.ini`, `.env`,
-`.log` и `.text` входят в тип Plain Text, а не в отдельные плитки.
+Autosave applies only to a document with a disk path and a lossless format
+(classes A, B, and C). It runs two seconds after the last keystroke, on window
+blur, while closing the active tab, and before reloading an external change.
+Closing a saved clean tab does not ask. A non-empty untitled document does ask.
 
-RTF редактируется после открытия, но новый RTF из стартового экрана не
-создаётся: адаптер помечен как `creatable: false`. Классы только для чтения —
-PDF, DOCX, EPUB — в списке отсутствуют. Создать PDF программа не может, и
-предлагать это нечестно.
+### 3.2 Save controls
 
-Стартовый экран не мешает: если начать печатать, не нажимая плитку, документ
-создаётся как Markdown, а экран исчезает. Markdown остаётся типом по умолчанию.
+Save and Save as live in the menu beside the state indicator. States are:
 
-### 2.3 Несохранённый документ
-
-Пока файл не записан на диск, он в состоянии `Untitled`:
-
-- **автосохранение не работает** — некуда сохранять;
-- в правой части строки меню горит пометка `Unsaved` и активны кнопки `Save` и
-  `Save as…`;
-- закрытие окна или вкладки с непустым несохранённым документом спрашивает:
-  `Save`, `Discard`, `Cancel`. Для окна с несколькими грязными вкладками сводный
-  протокол ещё дорабатывается (см. ограничения в разделе 9).
-
-Первое сохранение вызывает системный диалог. Тип файла в диалоге заранее выбран
-по тому, что было нажато на стартовом экране, но его можно поменять — тогда
-меняется и тип документа.
-
-### 2.4 Смена типа документа
-
-Тип показан в строке состояния слева и кликабелен. Клик открывает список
-доступных типов.
-
-При смене типа текст не трогается, меняются только возможности: включается или
-выключается живой предпросмотр, подставляется другая подсветка синтаксиса,
-пересчитывается политика сохранения.
-
-- У несохранённого документа смена типа просто меняет предполагаемое
-  расширение.
-- У сохранённого файла смена типа — это `Save as…` с новым расширением.
-  Исходный файл остаётся нетронутым, окно переключается на новый.
-- Переключение на тип из класса «только чтение» невозможно, такие типы в
-  списке не появляются.
-
-### 2.5 Перетаскивание
-
-Файл, брошенный в окно:
-
-- если окно пустое и нетронутое — файл открывается в нём же;
-- иначе — открывается новое окно.
-
-Несколько файлов сразу — по окну на каждый.
-
-### 2.6 Заголовок окна
-
-`имя_файла.md — MarkNote`. У сохранённого файла индикатора изменений нет: при
-автосохранении он не нужен.
-
-Несохранённый документ: `Untitled.json — MarkNote`. Состояние показано не в
-заголовке, а пометкой `Unsaved` в строке меню.
-
----
-
-## 3. Сохранение
-
-### 3.1 Автосохранение
-
-Работает, только если у документа есть путь на диске и его формат сохраняется
-без потерь (классы A, B, C).
-
-Срабатывает:
-
-- через 2 секунды после последнего нажатия клавиши;
-- при потере фокуса окном;
-- при закрытии окна для текущей вкладки; обработка нескольких грязных вкладок
-  ещё дорабатывается;
-- перед перечитыванием файла, изменённого на диске.
-
-Диалога «Сохранить изменения?» при закрытии сохранённой текущей вкладки нет —
-изменения уже на диске. Исключение — несохранённый документ, в котором есть
-текст; сводное решение для нескольких грязных вкладок ещё не подключено.
-
-### 3.2 Кнопки Save и Save as
-
-Живут в правой части строки меню, рядом с пометкой состояния. Там же, где в
-Блокноте пусто, а тулбар заводить ради двух кнопок не хочется.
-
-```
-File  Edit  View  Help                       ● Unsaved   [Save] [Save as…]
-```
-
-Вид зависит от состояния документа:
-
-| Состояние | Пометка | Кнопки |
+| State | Indicator | Buttons |
 | --- | --- | --- |
-| Несохранённый, есть текст | `● Unsaved` | `Save` активна, `Save as…` активна |
-| Несохранённый, пустой | `● Unsaved` приглушена | обе приглушены |
-| Сохранён, автосохранение работает | `Saved 12:04` | `Save` приглушена, `Save as…` активна |
-| Есть несохранённые правки (идёт отсчёт 2 секунд) | `Saving…` | `Save` активна |
-| Формат с потерями, RTF | `● Unsaved changes` | `Save` активна и нужна |
-| Только чтение, PDF | `Read-only` | одна кнопка `Save as Markdown…` |
+| Unsaved with text | Unsaved | Save and Save as enabled |
+| Unsaved and empty | muted Unsaved | both disabled |
+| Saved with autosave | Saved with time | Save disabled, Save as enabled |
+| Pending edits | Saving… | Save enabled |
+| Lossy RTF | Unsaved changes | Save enabled after warning |
+| Read-only PDF/DOCX/EPUB | Read-only | Save as Markdown only |
 
-Что делает `Save`:
+Save without a path opens Save as. Save with a path writes immediately.
+Lossy formats require a formatting-loss confirmation. Save as always opens the
+dialog, and the chosen extension changes the document type while leaving the
+original untouched. File menu entries and Ctrl+S/Ctrl+Shift+S provide the same
+actions.
 
-- у документа без пути — открывает диалог сохранения, то есть работает как
-  `Save as…`;
-- у документа с путём — пишет немедленно, не дожидаясь двух секунд;
-- у формата с потерями — пишет после подтверждения о потере оформления.
+### 3.3 File writes
 
-Что делает `Save as…`: всегда открывает диалог. Расширение, выбранное в
-диалоге, задаёт тип документа — так можно превратить `.txt` в `.md`. Окно
-переключается на новый файл, исходный остаётся как был.
+Writes are atomic: content goes to a temporary sibling and then replaces the
+original. Original encoding and line endings are preserved. Lossy formats are
+never written by autosave.
 
-Те же действия продублированы в меню `File` и на `Ctrl+S` / `Ctrl+Shift+S`.
+### 3.4 External changes
 
-### 3.3 Как пишется файл
+Every open file is watched with notify, and own writes are suppressed. A clean
+buffer reloads quietly while preserving cursor and scroll. A dirty buffer
+shows File changed on disk with Reload and Keep mine; autosave pauses until a
+choice. A deleted or renamed file shows File no longer exists, keeps text in
+memory, and allows the next explicit save to recreate it.
 
-Запись атомарная: содержимое пишется во временный файл в той же папке, затем
-`fs::rename` поверх оригинала. Сбой питания посреди записи не оставит
-обрезанный файл.
+## 4. Editor
 
-Сохраняются исходная кодировка и исходный тип перевода строк. Файл, открытый
-как CRLF в CP1251, таким и останется.
+### 4.1 Live preview
 
-Файлы с потерями при конвертации (RTF) автосохранение не трогает — см.
-[FORMATS.md](FORMATS.md).
+Live preview is the only reading mode. Markup is hidden until the cursor or
+selection intersects its syntax node; then the whole node becomes editable.
+Only the affected node is revealed, except heading, list, and quote markers,
+which reveal with their line.
 
-### 3.4 Изменения на диске
+### 4.2 Width and wrapping
 
-Каждый открытый файл под наблюдением (`notify`). Собственные записи
-подавляются, чтобы не реагировать на самого себя.
+The text column is centered and limited to 81ch. Longer lines wrap visually.
+No line breaks are inserted into the file; a paragraph remains one disk line,
+as in Obsidian.
 
-- Буфер чистый, файл изменился снаружи → тихая перезагрузка, позиция курсора и
-  прокрутка сохраняются.
-- Буфер грязный, файл изменился снаружи → полоса сверху: `File changed on
-  disk` с кнопками `Reload` и `Keep mine`. До выбора автосохранение
-  приостановлено.
-- Файл удалён или переименован → полоса `File no longer exists`. Текст
-  остаётся в памяти, следующее сохранение создаёт файл заново.
+### 4.3 Undo and redo
 
----
+History is unlimited. Ctrl+Z undoes; Ctrl+Shift+Z and Ctrl+Y redo. Continuous
+typing is grouped as one action and line deletion is one action.
 
-## 4. Редактор
+### 4.4 Tab and Enter
 
-### 4.1 Живой предпросмотр
+Inside a list, Tab indents and Shift+Tab outdents. Inside a table they move
+between cells. Elsewhere Tab inserts four spaces. Enter continues a list with
+the next marker or number, exits on an empty item, keeps code blocks open, and
+continues quotes.
 
-Единственный режим. Отдельного режима чтения нет.
+### 4.5 Pairing and wrappers
 
-Разметка скрыта, пока курсор не окажется внутри узла. Тогда синтаксис этого
-узла раскрывается целиком, и его можно править. Курсор ушёл — разметка снова
-спряталась.
+Typing pairs for emphasis, code, highlight, strike, links, and parentheses
+inserts the closing delimiter. With a selection, the delimiter wraps it.
+Ctrl+B, Ctrl+I, and Ctrl+E wrap the word or selection; pressing again unwraps.
 
-Узел считается активным, если:
+## 5. Markdown support
 
-- курсор находится внутри него, включая границы маркеров;
-- или узел пересекается с выделением.
+### 5.1 Inline
 
-Раскрывается только затронутый узел, не вся строка. Исключение — заголовки,
-списки и цитаты: их маркеры привязаны к строке, поэтому раскрываются по
-строке.
-
-### 4.2 Ширина строки и перенос
-
-Колонка текста ограничена 81 символом (`max-width: 81ch`) и выровнена по центру
-окна. Более длинные строки переносятся мягко — визуально.
-
-**В файл переносы никогда не вставляются.** Абзац на диске остаётся одной
-строкой любой длины. Это ровно поведение Obsidian.
-
-### 4.3 Отмена и повтор
-
-Глубина не ограничена. `Ctrl+Z` — отменить, `Ctrl+Shift+Z` и `Ctrl+Y` —
-повторить. Действия группируются по смыслу: непрерывный набор — одна операция,
-удаление строки — одна операция.
-
-### 4.4 Клавиша Tab
-
-- Внутри пункта списка — вложенность на уровень глубже, `Shift+Tab` обратно.
-- Внутри таблицы — переход к следующей ячейке.
-- В остальных случаях — четыре пробела.
-
-### 4.5 Enter
-
-- В пункте списка — новый пункт того же уровня, нумерация продолжается.
-- В пустом пункте списка — выход из списка, пустой пункт удаляется.
-- В блоке кода — обычный перевод строки, блок не закрывается.
-- В цитате — продолжение цитаты.
-
-### 4.6 Автопарность и обёртка
-
-При вводе `**`, `*`, `` ` ``, `==`, `~~`, `[`, `(` вторая половина пары
-подставляется автоматически.
-
-Если есть выделение, ввод парного символа оборачивает выделенное, а не
-заменяет его.
-
-`Ctrl+B`, `Ctrl+I`, `Ctrl+E` оборачивают выделение или слово под курсором.
-Повторное нажатие снимает обёртку.
-
----
-
-## 5. Поддерживаемая разметка
-
-### 5.1 Строчная
-
-| Разметка | Результат | Клавиши |
+| Markup | Result | Shortcut |
 | --- | --- | --- |
-| `**текст**` | жирный | `Ctrl+B` |
-| `*текст*` | курсив | `Ctrl+I` |
-| `~~текст~~` | зачёркнутый | — |
-| `==текст==` | подсвеченный | — |
-| `` `текст` `` | код | `Ctrl+E` |
-| `$формула$` | KaTeX в строке | — |
-| `%%текст%%` | комментарий, приглушён | — |
-| `[текст](адрес)` | ссылка, открывается по `Ctrl+клик` | `Ctrl+K` |
-| `![](путь)` | изображение | — |
-| `[^1]` | сноска | — |
+| **text** | bold | Ctrl+B |
+| *text* | italic | Ctrl+I |
+| ~~text~~ | strikethrough | — |
+| ==text== | highlight | — |
+| inline code | code | Ctrl+E |
+| $formula$ | inline KaTeX | — |
+| %%text%% | muted comment | — |
+| [text](address) | link opened with Ctrl-click | Ctrl+K |
+| image syntax | image | — |
+| footnote syntax | footnote | — |
 
-Комментарии `%%…%%` видны в редакторе приглушённым цветом и никуда не
-экспортируются.
+Comments are visible but muted while editing and are not exported.
 
-### 5.2 Блочная
+### 5.2 Blocks
 
-| Разметка | Результат |
+Supported blocks are six heading levels, bulleted and numbered lists, tasks
+with clickable checkboxes, quotes, callouts, horizontal rules, fenced code,
+math blocks, tables, and footnotes. Callout types are note, tip, info, success,
+question, warning, danger, example, and quote; unknown types render as note.
+Checkbox changes are document edits and enter undo history. Images resolve
+relative to the open file, respect column width, and show a named fallback
+when broken.
+
+## 6. Interface
+
+The shell contains a title bar, menu row, Save controls, permanent tab bar,
+editor, search panel, and status bar. Each tab has a close button and the plus
+button at the right. Ctrl+T creates a new start-screen tab. Explorer opening
+still routes to a free or new window rather than adding a tab.
+
+There is no formatting toolbar. Bold, italic, code, links, headings, lists,
+tasks, quotes, tables, callouts, code blocks, math blocks, horizontal rules,
+and clear-formatting are available from the context menu and editor shortcuts.
+Text editing commands remain available in every editable format. Save and
+Save as remain visible because their state is not constant.
+
+The File menu contains New, New Window, Open, Save, Save as, Settings, and
+recent files. Edit contains undo, redo, clipboard, line, find, replace, and
+go-to-line commands. View contains zoom and display options. Help contains
+shortcuts, Markdown reference, and About. Formatting is grouped in the custom
+context menu, not a top-level Format menu.
+
+The context menu replaces WebView2’s native menu. It adapts to selection,
+empty space, links, and images and supports keyboard navigation, Escape, and
+inward expansion at the window edge.
+
+The status bar shows the document type, constraints, line and column, line
+count, word count, and character count. Lines count file line endings, not
+visual wraps. Characters include spaces and markup. Words are runs of
+non-whitespace characters, and partial selected words are not counted.
+
+## 7. Find and replace
+
+Ctrl+F opens Find in the upper-right corner. Matches are highlighted and the
+current match is brighter. Enter and Shift+Enter navigate, Escape closes, and
+case, whole-word, and regular-expression switches are available. Ctrl+H adds
+Replace and Replace All. Search uses source text, including hidden markup.
+
+## 8. Keyboard shortcuts
+
+| Keys | Action |
 | --- | --- |
-| `#` … `######` | заголовки шести уровней |
-| `- пункт` | маркированный список |
-| `1. пункт` | нумерованный список |
-| `- [ ]` / `- [x]` | задача с кликабельным чекбоксом |
-| `> текст` | цитата |
-| `> [!NOTE]` | callout-блок |
-| `---` | горизонтальная линия |
-| `` ``` `` | блок кода с подсветкой языка |
-| `$$…$$` | блок формулы |
-| `\| … \|` | таблица |
-| `[^1]: текст` | определение сноски |
+| Ctrl+N | New Markdown document in a new window |
+| Ctrl+Shift+N | New document with type picker |
+| Ctrl+T | New tab with start screen |
+| Ctrl+, | Open settings |
+| Ctrl+O | Open |
+| Ctrl+S | Save now, or Save as without a path |
+| Ctrl+Shift+S | Save as |
+| Ctrl+W | Close window |
+| Ctrl+Z | Undo |
+| Ctrl+Shift+Z / Ctrl+Y | Redo |
+| Ctrl+X / C / V | Cut, copy, paste |
+| Ctrl+Shift+V | Paste as plain text |
+| Ctrl+A | Select all |
+| Ctrl+D | Delete line |
+| Alt+Up / Alt+Down | Move line |
+| Ctrl+B / Ctrl+I / Ctrl+E | Bold / italic / code |
+| Ctrl+K | Link |
+| Ctrl+1 … Ctrl+6 | Heading level |
+| Ctrl+0 | Remove heading, otherwise reset zoom |
+| Ctrl+Shift+K | Code block |
+| Tab / Shift+Tab | List indentation or table-cell movement |
+| Ctrl+F / Ctrl+H | Find / replace |
+| F3 / Shift+F3 | Next / previous match |
+| Ctrl+G | Go to line |
+| Ctrl+Home / Ctrl+End | Document start / end |
+| Ctrl+plus / Ctrl-minus | Zoom |
+| Ctrl+0 | Reset zoom when not removing a heading |
 
-Типы callout: `note`, `tip`, `info`, `success`, `question`, `warning`,
-`danger`, `example`, `quote`. Неизвестный тип отображается как `note`.
+## 9. Limits
 
-Клик по чекбоксу задачи переключает `[ ]` и `[x]` прямо в тексте — это правка
-документа, она попадает в историю отмены.
-
-Изображения ищутся относительно папки открытого файла. Ширина ограничена
-шириной колонки. Битая ссылка показывает рамку с именем файла, а не пустоту.
-
----
-
-## 6. Интерфейс
-
-### 6.1 Строение окна
-
-```
-┌────────────────────────────────────────────────────────┐
-│ note.md — MarkNote                              ─ □ ✕  │  полоса заголовка
-├────────────────────────────────────────────────────────┤
-│ File Edit View Help          Saved 12:04 [Save][Save as…]│ меню + сохранение
-├────────────────────────────────────────────────────────┤
-│ note.md · Markdown ×   Untitled · Markdown ×        +  │ вкладки (со второй)
-├────────────────────────────────────────────────────────┤
-│                                                        │
-│            ┌────── 81 символ ───────┐                  │
-│            │  текст документа       │                  │
-│            │                        │                  │
-│            └────────────────────────┘                  │
-│                                                        │
-├────────────────────────────────────────────────────────┤
-│ Markdown        Ln 12, Col 5 · 240 lines · 1823 words  │  строка состояния
-└────────────────────────────────────────────────────────┘
-   ↑ тип файла, кликабелен            ↑ счётчики, прижаты вправо
-```
-
-Полоса вкладок (`TabBar`) видна всегда, даже когда вкладка одна. Подпись
-состоит из имени файла и формата; для безымянного документа используется
-`Untitled` или начало его текста. На каждой вкладке есть кнопка закрытия `×`,
-а справа от последней вкладки — кнопка «+». Новая вкладка всегда начинается
-со стартового экрана, где можно выбрать формат или открыть файл. Сочетание
-`Ctrl+T` делает то же самое.
-
-Открытие файла из Проводника не создаёт вкладку в текущем рабочем пространстве:
-Rust маршрутизирует его в свободное стартовое окно или создаёт новое; уже
-открытый файл поднимает существующее окно, если включена соответствующая
-настройка. Это ограничение не меняется из-за наличия вкладок.
-
-Панели инструментов с кнопками форматирования нет — жирный, курсив и прочее
-доступны через контекстное меню и горячие клавиши. Это
-соответствует и Блокноту, и Obsidian.
-
-Единственное исключение — `Save` и `Save as…` в строке меню. Они нужны видимыми
-потому, что состояние сохранения в этой программе непостоянно: обычный файл
-пишется сам, несохранённый и RTF — нет. Пометка рядом с кнопками всегда
-показывает, что происходит с документом прямо сейчас.
-
-### 6.2 Меню
-
-**File** — New ▸ (все создаваемые форматы из реестра), New Window, Open…,
-Save, Save As…, Close
-
-Пункт `New ▸` создаёт документ выбранного типа в новом окне. Набор типов
-совпадает со стартовым экраном.
-**Edit** — Undo, Redo, Cut, Copy, Paste, Select All, Find…, Replace…
-**View** — Zoom In, Zoom Out, Reset Zoom
-**Help** — Keyboard Shortcuts, Markdown Reference, About
-
-Верхнего пункта `New Tab` нет: новую вкладку создают кнопкой «+» или сочетанием
-`Ctrl+T`. `New Window` по-прежнему создаёт отдельное окно.
-
-### 6.3 Контекстное меню
-
-Встроенное меню WebView2 отключается, вместо него рисуется своё.
-
-Форматирования в строке меню нет: раздел `Format` убран, а все его команды
-живут здесь. Причина простая — форматируют текст, который уже выделен, то
-есть рука в этот момент на мыши и указатель на нужном месте. Тянуться
-за этим к верхнему краю окна незачем.
-
-Команды сгруппированы в раскрывающиеся подменю, как это сделано в Obsidian:
-
-- **Formatting** — Bold, Italic, Strikethrough, Highlight, Code, Link
-- **Paragraph** — заголовки шести уровней, снятие заголовка, списки
-- **Insert** — таблица, callout, блок кода, блок формулы, горизонтальная линия
-
-Ниже, за разделителем, обычная правка: Cut, Copy, Paste, Paste as Plain
-Text, Delete, Select All. Подменю раскрывается по наведению и по стрелке
-вправо, закрывается по стрелке влево и по Escape, у края окна
-разворачивается внутрь.
-
-- **Над выделением:** Cut, Copy, Paste, Select All, разделитель, Bold, Italic,
-  Strikethrough, Highlight, Code, Link.
-- **Над пустым местом:** Paste, Select All, разделитель, Insert (таблица,
-  callout, блок кода, блок формулы, горизонтальная линия).
-- **Над ссылкой:** Open Link, Copy Link Address, Edit Link.
-- **Над изображением:** Open Image, Copy Image Path.
-
-### 6.4 Строка состояния
-
-Внизу справа. Разделитель между полями — `·`.
-
-Без выделения:
-
-```
-Ln 12, Col 5 · 240 lines · 1823 words · 11204 chars
-```
-
-С выделением:
-
-```
-Ln 11–16 selected · 42 words · 310 chars
-```
-
-Выделение внутри одной строки показывает `Ln 11 selected`.
-
-Правила подсчёта:
-
-- **Строки** — по переводам строк в файле, не по визуальным переносам.
-- **Знаки** — все символы, включая пробелы и разметку.
-- **Слова** — последовательности небелых символов. При выделении считаются
-  только **целые** слова: если выделение обрывает слово, оно не учитывается.
-  Выделенное `при` в слове `привет` даёт 0 слов и 3 знака.
-
-**Слева** — тип документа: `Markdown`, `JSON`, `Plain Text`, `RTF`. Пункт
-кликабелен и открывает список доступных типов, см. раздел 2.4.
-
-Рядом с типом — пометка ограничений, если они есть: `Read-only` для PDF и DOCX,
-`Lossy` для RTF. У обычного Markdown там пусто.
-
----
-
-## 7. Поиск и замена
-
-`Ctrl+F` открывает панель поиска в правом верхнем углу редактора. Совпадения
-подсвечиваются по всему документу, текущее выделено ярче. Счётчик вида `3/17`.
-
-- `Enter` — следующее совпадение, `Shift+Enter` — предыдущее
-- `Esc` — закрыть, вернуть фокус в текст
-- Переключатели: учёт регистра, слово целиком, регулярное выражение
-
-`Ctrl+H` добавляет поле замены, кнопки `Replace` и `Replace All`.
-
-Поиск идёт по исходному тексту, включая скрытую разметку: запрос `**` найдёт
-маркеры жирного.
-
----
-
-## 8. Горячие клавиши
-
-### Файл и окно
-| Клавиши | Действие |
-| --- | --- |
-| `Ctrl+N` | Новый документ в новом окне, тип из настройки `files.newDocumentFormat` (по умолчанию Markdown) |
-| `Ctrl+Shift+N` | Новый документ с выбором типа |
-| `Ctrl+T` | Новая вкладка со стартовым экраном |
-| `Ctrl+,` | Открыть настройки |
-| `Ctrl+O` | Открыть файл |
-| `Ctrl+S` | Сохранить немедленно; для документа без пути — диалог сохранения |
-| `Ctrl+Shift+S` | Сохранить как |
-| `Ctrl+W` | Закрыть окно |
-
-### Правка
-| Клавиши | Действие |
-| --- | --- |
-| `Ctrl+Z` | Отменить |
-| `Ctrl+Shift+Z`, `Ctrl+Y` | Повторить |
-| `Ctrl+X` / `Ctrl+C` / `Ctrl+V` | Вырезать, копировать, вставить |
-| `Ctrl+Shift+V` | Вставить как простой текст |
-| `Ctrl+A` | Выделить всё |
-| `Ctrl+D` | Удалить строку |
-| `Alt+↑` / `Alt+↓` | Переместить строку |
-
-### Форматирование
-| Клавиши | Действие |
-| --- | --- |
-| `Ctrl+B` | Жирный |
-| `Ctrl+I` | Курсив |
-| `Ctrl+E` | Код |
-| `Ctrl+K` | Ссылка |
-| `Ctrl+1` … `Ctrl+6` | Заголовок уровня |
-| `Ctrl+0` | Убрать заголовок |
-| `Ctrl+Shift+K` | Блок кода |
-| `Tab` / `Shift+Tab` | Уровень вложенности списка; в таблице — переход между ячейками |
-
-### Навигация и поиск
-| Клавиши | Действие |
-| --- | --- |
-| `Ctrl+F` | Поиск |
-| `Ctrl+H` | Замена |
-| `F3` / `Shift+F3` | Следующее и предыдущее совпадение поиска |
-| `Ctrl+G` | Перейти к строке |
-| `Ctrl+Home` / `Ctrl+End` | В начало и конец документа |
-| `Ctrl+±` | Масштаб |
-| `Ctrl+0` | Сброс масштаба — конфликт с «убрать заголовок», масштаб уступает |
-
----
-
-## 9. Ограничения
-
-- Вкладки живут внутри одного окна, полоса видна всегда. Открытие
-  файла из Проводника не добавляет вкладку: маршрутизация использует свободное
-  стартовое или новое окно. Закрытие вкладки с изменениями
-  уже спрашивает решение для активной вкладки; сводный протокол закрытия окна с
-  несколькими грязными вкладками ещё дорабатывается.
-- Наблюдение за изменениями на диске для нескольких вкладок и его окончательная
-  приёмка ещё выполняются; до завершения возможны ограничения маршрутизации
-  внешних событий между вкладками.
-- Файлы больше 5 МБ открываются с отключённым живым предпросмотром, в режиме
-  простого текста с подсветкой. Строка состояния пока не сообщает причину
-  отключения.
-- Двоичные файлы не открываются: показывается сообщение, а не мусор из байтов.
-- Изображения по http загружаются, по `file://` вне папки документа — нет.
-- Проверка орфографии — встроенная в WebView2, для выбранного языка из
-  установленных в системе словарей; подробность и ограничение выбора описаны в
-  [SETTINGS.md](SETTINGS.md).
+Tabs live inside one window and the bar is always visible. Multi-tab external
+watching and the aggregate close protocol remain areas for runtime acceptance.
+Files over 5 MiB disable live preview and use plain text with syntax
+highlighting; the status bar should report the reason. Binary files are
+rejected with a clear message. HTTP images are allowed; file URLs outside the
+document folder are not. Spellchecking is supplied by WebView2 and Windows
+chooses the dictionary from installed system languages.

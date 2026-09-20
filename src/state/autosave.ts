@@ -50,12 +50,12 @@ function snapshot(state: DocumentState): DocumentState {
 }
 
 /**
- * Применяет модификаторы текста перед сохранением:
- * - trimTrailingSpaces: удаляет хвостовые пробелы и табуляции в конце строк
- * - finalNewline: добавляет завершающий перевод строки в непустом файле, если его нет
+ * Applies text modifiers before saving:
+ * - trimTrailingSpaces: removes trailing spaces and tabs from each line
+ * - finalNewline: adds a final newline to a non-empty file when it is missing
  *
- * Модификация выполняется над сохраняемой строкой и не затрагивает живой буфер
- * CodeMirror, чтобы не смещать курсор и не засорять историю отмены (undo).
+ * The modification is applied to the string being saved and does not touch the
+ * live CodeMirror buffer, so it cannot move the cursor or pollute the undo history.
  */
 export function applySaveTextTransforms(
   text: string,
@@ -82,7 +82,7 @@ export function applySaveTextTransforms(
   return result;
 }
 
-/** Автосохранение — единственная точка, где проверяется path перед таймером. */
+/** Autosave is the single place that checks path before starting a timer. */
 export function createAutosave(options: AutosaveOptions = {}): AutosaveController {
   const getState = options.getState ?? (() => documentState);
   const getSettings = options.getSettings ?? (() => settingsState.settings);
@@ -139,7 +139,7 @@ export function createAutosave(options: AutosaveOptions = {}): AutosaveControlle
         ? settings?.files?.saveOnWindowBlur !== false
         : settings?.files?.autosave !== false);
 
-    // path === null — единственное безусловное отключение автосохранения.
+    // path === null is the only unconditional way to disable autosave.
     if (
       current.path === null ||
       current.readonly ||
@@ -310,7 +310,7 @@ export function createAutosave(options: AutosaveOptions = {}): AutosaveControlle
         fileDeletedUnlisten?.();
       }
     } catch {
-      // В обычном браузере Tauri-события отсутствуют, но DOM blur всё равно работает.
+      // In an ordinary browser Tauri events are absent, but DOM blur still works.
     }
   };
 

@@ -25,11 +25,11 @@ const MAIN_WINDOW_LABEL: &str = "main";
 const WINDOW_LABEL_PREFIX: &str = "win-";
 const CLOSE_RESPONSE_TIMEOUT_SECS: u64 = 5;
 
-/// Общее состояние процесса: реестр файлов, свободные стартовые окна и watcher.
+/// Shared process state: the file registry, free startup windows, and watcher.
 pub struct AppState {
-    /// Путь может быть одновременно зарегистрирован в нескольких окнах
-    /// (например, когда `raiseExistingWindow` выключен).  Множество владельцев
-    /// не даёт закрытию одной вкладки затереть сведения о другой.
+    /// A path can be registered in several windows at once (for example, when
+    /// `raiseExistingWindow` is disabled). A set of owners keeps one tab's
+    /// closure from overwriting another tab's record.
     pub(crate) open_files: Mutex<HashMap<PathBuf, HashSet<String>>>,
     pub(crate) empty_windows: Mutex<HashSet<String>>,
     pending_files: Mutex<HashMap<String, PathBuf>>,
@@ -101,13 +101,13 @@ impl AppState {
     }
 
     fn reserve_file(&self, key: PathBuf, label: &str) {
-        // Обычный Mutex в Rust не входит повторно: если вызвать этот метод,
-        // держа замок реестра, поток встанет навсегда. Так и случилось —
-        // программа намертво зависала при открытии файла двойным щелчком.
-        // В отладочной сборке падаем с внятным сообщением вместо зависания.
+        // A regular Rust Mutex is not reentrant: calling this method while
+        // holding the registry lock would deadlock the thread forever. That is
+        // what happened when opening a file by double-click froze the program.
+        // In debug builds, panic with a clear message instead of hanging.
         debug_assert!(
             self.open_files.try_lock().is_ok(),
-            "reserve_file вызван при уже захваченном реестре открытых файлов"
+            "reserve_file called while the open-file registry was already locked"
         );
         if let Ok(mut open_files) = self.open_files.lock() {
             open_files.entry(key).or_default().insert(label.to_owned());
@@ -305,8 +305,8 @@ impl AppState {
     }
 }
 
-/// Инициализирует главное окно, применяет системные настройки и открывает
-/// файлы, переданные первому запуску.
+/// Initializes the main window, applies system settings, and opens files passed
+/// to the first launch.
 pub fn initialize(app: &mut tauri::App) -> tauri::Result<()> {
     startup_trace::mark("windows-initialize-start");
     let state = app.state::<AppState>();
@@ -319,8 +319,8 @@ pub fn initialize(app: &mut tauri::App) -> tauri::Result<()> {
         apply_dark_titlebar(&main);
         let _ = main.set_title(INITIAL_WINDOW_TITLE);
 
-        // В конфигурации окно скрыто, чтобы не показывать белый webview до
-        // загрузки Svelte. Показ выполняется сразу после создания webview.
+        // The configured window is hidden so a white webview is not shown before
+        // Svelte loads. It is shown immediately after the webview is created.
         let _ = main.show();
         let _ = main.set_focus();
         startup_trace::mark("main-window-shown");
@@ -339,8 +339,8 @@ pub fn initialize(app: &mut tauri::App) -> tauri::Result<()> {
     Ok(())
 }
 
-/// Обработчик аргументов, которые single-instance передал уже работающему
-/// процессу.
+/// Handles arguments that the single-instance plugin passes to an existing
+/// process.
 pub fn handle_single_instance(app: &tauri::AppHandle, argv: Vec<String>) {
     let handle = app.clone();
     let result = std::thread::Builder::new()
@@ -368,9 +368,9 @@ pub fn handle_single_instance(app: &tauri::AppHandle, argv: Vec<String>) {
     }
 }
 
-/// Выбирает окно по реестру и отправляет ему запрос на открытие файла.
-/// Если свободного стартового окна нет, создаёт новое окно из конфигурации
-/// `main`, сохраняя те же размеры, тему и политики webview.
+/// Selects a window from the registry and asks it to open a file.
+/// If no startup window is free, creates one from the `main` configuration,
+/// preserving the same dimensions, theme, and webview policies.
 pub fn route_file(app: &tauri::AppHandle, path: impl AsRef<Path>) -> Result<(), String> {
     route_file_with_policy(app, path, true, None)
 }
@@ -399,10 +399,10 @@ fn route_file_with_policy(
     let target = {
         let state = app.state::<AppState>();
 
-        // Реестр открытых файлов читаем и сразу отпускаем. Держать его до
-        // конца блока нельзя: reserve_file берёт тот же замок, а обычный
-        // Mutex в Rust не входит повторно — поток встаёт навсегда. Именно
-        // так и вставала программа при открытии файла двойным щелчком.
+        // Read the open-file registry and release it immediately. Holding it to
+        // the end of this block is unsafe: reserve_file takes the same lock and
+        // a regular Rust Mutex is not reentrant, so the thread would deadlock.
+        // This was the cause of freezes when opening files by double-click.
         let existing = {
             let open_files = state.open_files.lock().map_err(|error| {
                 eprintln!("Could not lock the open-file registry: {error}");
@@ -437,7 +437,7 @@ fn route_file_with_policy(
         RouteTarget::Existing(label) => match app.get_webview_window(&label) {
             Some(window) => window,
             None => {
-                // Окно могло закрыться между чтением реестра и маршрутизацией.
+                // The window may have closed between reading the registry and routing.
                 app.state::<AppState>().forget_file(&key, &label);
                 app.state::<AppState>().forget_pending_file(&label);
                 return route_file_with_policy(
@@ -617,8 +617,9 @@ fn install_window_handlers(window: &WebviewWindow, app: &tauri::AppHandle) {
                     "save-before-close",
                     serde_json::json!({}),
                 ) {
-                    // Молчать здесь нельзя: если событие не ушло, фронтенд не
-                    // спросит про несохранённое, и окно закроет сторож.
+                    // Do not stay silent here: if the event was not delivered,
+                    // the frontend cannot ask about unsaved changes and the
+                    // watchdog will close the window.
                     eprintln!("Could not ask the window about unsaved changes: {error}");
                 }
                 let timeout_window = event_window.clone();
@@ -650,7 +651,7 @@ fn raise_window(window: &WebviewWindow) {
     let _ = window.set_focus();
 }
 
-/// Начальный заголовок окна до передачи заголовка документа фронтендом.
+/// Initial window title before the frontend supplies the document title.
 pub const INITIAL_WINDOW_TITLE: &str = "MarkNote";
 
 pub(crate) fn canonical_path(path: &Path) -> Result<PathBuf, String> {
@@ -695,7 +696,7 @@ pub fn apply_dark_titlebar(window: &WebviewWindow) {
     };
     let dark_mode: i32 = 1;
     unsafe {
-        // DWMWA_USE_IMMERSIVE_DARK_MODE = 20. Старые Windows уже отфильтрованы.
+        // DWMWA_USE_IMMERSIVE_DARK_MODE = 20. Older Windows versions were filtered out.
         let _ = DwmSetWindowAttribute(
             hwnd.0,
             20,

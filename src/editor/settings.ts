@@ -1,16 +1,16 @@
-// Настройки редактора, превращённые в расширения CodeMirror.
+// Editor settings represented as CodeMirror extensions.
 //
-// Точка стыка между окном настроек и редактором. Окно настроек пишет значения
-// в settings.json через Rust, редактор читает их отсюда. До появления этого
-// файла окно настроек было витриной: тридцать с лишним переключателей
-// сохранялись и никем не спрашивались.
+// The integration point between the settings window and editor. The settings
+// window writes values to settings.json through Rust, and the editor reads them
+// here. Before this file existed, the settings window was a facade: more than
+// thirty toggles were saved but never consulted.
 //
-// Всё, что зависит от настроек, живёт в одном отсеке (Compartment). Значит,
-// смена настройки не пересоздаёт редактор — не теряются ни история отмены, ни
-// положение курсора, ни прокрутка.
+// Everything controlled by settings lives in one compartment. Changing a
+// setting therefore does not recreate the editor, so undo history, cursor
+// position, and scroll position are preserved.
 //
-// Разделы настроек живут в отдельных файлах рядом, по одному владельцу на
-// файл. Здесь только сборка: этот файл никто, кроме координатора, не правит.
+// Settings sections live in separate neighboring files, with one owner per
+// file. This file only assembles them and should not be edited except by the coordinator.
 
 import { Compartment, StateEffect, StateField, type Extension } from "@codemirror/state";
 import type { EditorView } from "@codemirror/view";
@@ -19,12 +19,12 @@ import { editorAppearanceExtensions } from "./settings/appearance";
 import { livePreviewSettingsExtensions } from "./settings/preview";
 import { spellcheckSettingsExtensions } from "./settings/spellcheck";
 
-/** Отсек, в котором живут все зависящие от настроек расширения. */
+/** Compartment containing all settings-dependent extensions. */
 export const settingsCompartment = new Compartment();
 
-/** Последние настройки, применённые к состоянию. Нужны вкладкам: после
- * view.setState отсек перенастраивается теми же значениями, что были у
- * активного состояния, а не возвращается к устаревшему снимку вкладки. */
+/** Last settings applied to the state. Tabs need this because after view.setState
+ * the compartment is reconfigured with the active state's values instead of
+ * reverting to a stale tab snapshot. */
 export const setEditorSettingsEffect = StateEffect.define<Settings | null>();
 
 /** Tracks the active format for the settings compartment without importing
@@ -42,16 +42,16 @@ export const editorFormatSyntaxStateField = StateField.define<boolean>({
 });
 
 /**
- * Поддерживает ли открытый формат разметку Markdown. Команды разметки
- * (жирный, заголовки, вставки) читают это поле и молчат там, где разметки
- * нет: в .py или .json оборачивать текст звёздочками бессмысленно.
- * Признак приходит из состояния формата, а не из списка расширений.
+ * Whether the open format supports Markdown markup. Markup commands (bold,
+ * headings, inserts) read this field and stay silent where markup is absent:
+ * wrapping text in a .py or .json file with asterisks is pointless.
+ * The flag comes from the format state, not from the extension list.
  */
 export const setEditorMarkdownCommandsEffect = StateEffect.define<boolean>();
 
 export const editorMarkdownCommandsStateField = StateField.define<boolean>({
-  // По умолчанию разрешено: редактор вне приложения (в тестах и в браузере)
-  // работает с Markdown, и команды там должны действовать.
+  // Enabled by default: the editor outside the app (in tests and the browser)
+  // works with Markdown, and commands must work there.
   create: () => true,
   update(value, transaction) {
     for (const effect of transaction.effects) {
@@ -71,12 +71,11 @@ export const editorSettingsStateField = StateField.define<Settings | null>({
   },
 });
 
-/** Расширения, соответствующие текущим настройкам.
+/** Extensions corresponding to the current settings.
  *
- *  Настройки могут отсутствовать: редактор поднимается раньше, чем Rust
- *  успевает отдать settings.json, и до этого момента работают умолчания.
- *  Поэтому каждая проверка написана так, чтобы отсутствие значения давало то
- *  же поведение, что было зашито в createEditor до появления настроек. */
+ *  Settings may be absent: the editor starts before Rust can provide settings.json,
+ *  so defaults apply until then. Each check is therefore written so a missing
+ *  value produces the same behavior that createEditor had before settings existed. */
 export function editorSettingsExtensions(settings: Settings | null, formatHasSyntaxMode = false): Extension[] {
   return [
     ...editorAppearanceExtensions(settings, formatHasSyntaxMode),
@@ -85,7 +84,7 @@ export function editorSettingsExtensions(settings: Settings | null, formatHasSyn
   ];
 }
 
-/** Применить настройки к живому редактору, не пересоздавая его. */
+/** Applies settings to a live editor without recreating it. */
 export function applyEditorSettings(view: EditorView, settings: Settings | null): void {
   const formatHasSyntaxMode = view.state.field(editorFormatSyntaxStateField, false) ?? false;
   view.dispatch({

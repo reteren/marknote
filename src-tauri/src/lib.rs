@@ -17,7 +17,7 @@ use tauri::{
     Manager, RunEvent, Runtime, Window,
 };
 
-/// Запускает приложение Tauri и регистрирует общий IPC-контракт MarkNote.
+/// Runs the Tauri application and registers MarkNote's shared IPC contract.
 pub fn run() {
     startup_trace::begin();
     startup_trace::mark("run-start");

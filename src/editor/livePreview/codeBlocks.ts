@@ -18,11 +18,11 @@ function legacySupport(parser: StreamParser<unknown>): LanguageSupport {
 }
 
 /**
- * Языки из реестра форматов плюс часто встречающиеся языки fenced-блоков.
- * Не импортируем общий `languages` из language-data: он содержит десятки
- * динамических импортов и заставляет Vite выпускать чанк для каждого из них.
- * Каждый loader остаётся динамическим, поэтому конкретный режим загружается
- * только после появления соответствующего блока в видимой области.
+ * Languages from the format registry plus common fenced-block languages.
+ * Do not import the complete `languages` list from language-data: it contains
+ * dozens of dynamic imports and makes Vite emit a chunk for each one.
+ * Each loader remains dynamic, so a specific mode loads only after its block
+ * appears in the visible area.
  */
 const languages: readonly LanguageDescription[] = [
   LanguageDescription.of({
@@ -202,7 +202,7 @@ function hideRange(ctx: BuilderContext, from: number, to: number): void {
   ctx.atomic({ from, to, value: hidden });
 }
 
-/** Построитель визуального вида fenced code blocks. */
+/** Visual builder for fenced code blocks. */
 export const codeBlockBuilder: BlockBuilder = (ctx) => {
   if (ctx.node.name !== "FencedCode") return false;
   if (ctx.active) return true;
@@ -237,7 +237,7 @@ export const codeBlockBuilder: BlockBuilder = (ctx) => {
   return true;
 };
 
-/** Тема fenced code blocks и классов, которые выдаёт classHighlighter. */
+/** Theme for fenced code blocks and classes emitted by classHighlighter. */
 export const codeBlockTheme = EditorView.theme({
   ".cm-marknote-code-block": {
     display: "inline-block",

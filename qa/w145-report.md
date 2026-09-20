@@ -1,127 +1,129 @@
-# W145 — память WebView2
+# W145 — WebView2 memory
 
-## Итог
+## Summary
 
-В production-конфигурацию аргументы WebView2 не добавлены: ни один отдельно
-проверенный безопасный переключатель не дал требуемого снижения на 30 МБ, а
-`--disable-gpu` оставил программный GPU-процесс и требует отдельной проверки
-плавности. Это отрицательный результат измерения, а не оптимизация «на глаз».
+No WebView2 arguments were added to the production configuration: none of the
+individually tested safe switches delivered the required 30 MB reduction, and
+`--disable-gpu` left a software GPU process and requires a separate smoothness
+check. This is a negative measurement result, not a guess-based optimization.
 
-Замеры сделаны `qa/measure-memory.ps1 -SettleSeconds 6` на одном release
-`target/release/marknote.exe`, с временным `MARKNOTE_CONFIG_DIR`. Скрипт теперь
-принимает `-AdditionalBrowserArgs` для A/B-проб и `-OutputPath` для сохранения
-полных командных строк и ролей процессов.
+Measurements used `qa/measure-memory.ps1 -SettleSeconds 6` on one release
+`target/release/marknote.exe`, with a temporary `MARKNOTE_CONFIG_DIR`. The
+script now accepts `-AdditionalBrowserArgs` for A/B trials and `-OutputPath`
+to save complete command lines and process roles.
 
-## Процессы и числа
+## Processes and numbers
 
-| Процесс / аргумент | Роль | Working set |
+| Process / argument | Role | Working set |
 |---|---|---:|
-| `marknote.exe` | приложение | 25.8 MB |
-| `msedgewebview2.exe` без `--type` | browser | 125.3 MB |
+| `marknote.exe` | application | 25.8 MB |
+| `msedgewebview2.exe` without `--type` | browser | 125.3 MB |
 | `--type=renderer` | renderer | 84.2 MB |
 | `--type=gpu-process` | GPU | 72.3 MB |
-| `--type=utility --utility-sub-type=network.mojom.NetworkService` | сеть | 36.8 MB |
+| `--type=utility --utility-sub-type=network.mojom.NetworkService` | network | 36.8 MB |
 | `--type=utility --utility-sub-type=storage.mojom.StorageService` | storage | 19.6 MB |
-| `--type=crashpad-handler` (1) | отчёты о сбоях | 11.4 MB |
-| `--type=crashpad-handler` (2) | отчёты о сбоях | 10.2 MB |
-| **Итого** | **8 процессов** | **385.6 MB** |
+| `--type=crashpad-handler` (1) | crash reports | 11.4 MB |
+| `--type=crashpad-handler` (2) | crash reports | 10.2 MB |
+| **Total** | **8 processes** | **385.6 MB** |
 
-Полные command line сохранены в `qa/w145-baseline.json`.
+Full command lines are saved in `qa/w145-baseline.json`.
 
-| Вариант | Процессы | Было | Стало | Разница | Аргументы |
+| Variant | Processes | Before | After | Difference | Arguments |
 |---|---:|---:|---:|---:|---|
 | baseline | 8 | — | 385.6 MB | — | wry defaults |
 | crash reporter | 7 | 385.6 MB | 375.0 MB | −10.6 MB | `--disable-crash-reporter` |
 | GPU | 8 | 385.6 MB | 360.7 MB | −24.9 MB | `--disable-gpu` |
 
-Оба A/B-прогона явно передавали сохранённый набор wry defaults:
-`--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection`. Вариант
-`--disable-crash-reporter` убрал только один из двух crashpad-процессов, поэтому
-экономия оказалась 10.6 MB, а не ожидаемые 20–23 MB. Вариант `--disable-gpu`
-не отключил процесс полностью: он стал программным и занимал 46.8 MB, поэтому
-экономия составила 24.9 MB и не достигла критерия 30 MB; его в конфигурацию не
-вносил.
+Both A/B runs explicitly passed the saved set of wry defaults:
+`--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection`. The
+`--disable-crash-reporter` variant removed only one of the two crashpad
+processes, so the saving was 10.6 MB rather than the expected 20–23 MB. The
+`--disable-gpu` variant did not disable the process completely: it became a
+software process using 46.8 MB, so the saving was 24.9 MB and did not reach the
+30 MB criterion; it was not added to the configuration.
 
-Network и storage utility-процессы нужны самому WebView2 для загрузки приложения,
-IPC и хранения данных. В baseline отдельного audio utility нет, поэтому
-отключать служебные процессы без доказанного переключателя и регрессионной
-проверки нельзя.
+The network and storage utility processes are needed by WebView2 itself to load
+the application, handle IPC, and store data. There is no separate audio
+utility in the baseline, so service processes must not be disabled without a
+proven switch and regression check.
 
-Комбинированный эксперимент был отброшен: во время повторного запуска другой
-QA-агент занял single-instance release-процесс своим `w146-fixtures` документом,
-и запуск получил нулевое дерево. Ноль не считается замером; production-изменение
-на его основе не сделано.
+The combined experiment was discarded: during a repeat run, another QA agent
+occupied the single-instance release process with its `w146-fixtures`
+document, and the launch received an empty process tree. Zero is not a
+measurement; no production change was made based on it.
 
-## Конфигурация и окна
+## Configuration and windows
 
-Tauri 2 документирует `app.windows[].additionalBrowserArgs` как строковое поле:
-<https://v2.tauri.app/reference/config/#windowconfig>. Документация отдельно
-предупреждает, что это поле заменяет аргументы wry и при его задании нужно
-самостоятельно сохранить `--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection`.
-Это совпадает с локальным `wry-0.55.1/src/webview2/mod.rs:294-327`.
+Tauri 2 documents `app.windows[].additionalBrowserArgs` as a string field:
+<https://v2.tauri.app/reference/config/#windowconfig>. The documentation
+separately warns that this field replaces wry arguments and that, when set, you
+must preserve `--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection`
+yourself. This matches local
+`wry-0.55.1/src/webview2/mod.rs:294-327`.
 
-Динамические окна в `src-tauri/src/windows.rs:create_window` копируют конфигурацию
-главного окна и меняют только label/title/visibility; `additionalBrowserArgs` и
-data directory остаются одинаковыми. Значит, они настроены на общее окружение
-WebView2, а не на второй комплект аргументов/данных. Из-за другого активного
-QA-процесса отдельный живой замер второго окна в этой задаче не выполнялся;
-создание окна не менялось.
+Dynamic windows in `src-tauri/src/windows.rs:create_window` copy the main-window
+configuration and change only label/title/visibility;
+`additionalBrowserArgs` and the data directory remain the same. Therefore they
+use the same WebView2 environment rather than a second set of arguments/data.
+Because another QA process was active, a separate live measurement of the
+second window was not performed in this task; window creation was not changed.
 
-## Проверено, но не менялось
+## Tested but unchanged
 
-- Crashpad: измерен отдельно, −10.6 MB — ниже порога.
-- GPU: измерен отдельно, −24.9 MB, но software GPU остался; без живого теста
-  длинной прокрутки, KaTeX, изображений, таблиц и диалогов сохранения изменение
-  не принимается.
-- Network/storage/audio: в дереве обнаружены network и storage, audio не
-  обнаружен; отключение необходимых utility-процессов не предпринималось.
-- Дефолтные wry-фичи: сохранены в обоих A/B-аргументах и в production не
-  переопределялись.
-- Второе окно: код копирует одну конфигурацию; отдельный process-tree A/B не
-  получен из-за concurrent single-instance QA запуска.
+- Crashpad: measured separately, −10.6 MB — below the threshold.
+- GPU: measured separately, −24.9 MB, but software GPU remained; without a
+  live test of long scrolling, KaTeX, images, tables, and save dialogs, the
+  change is not accepted.
+- Network/storage/audio: network and storage were found in the tree; audio was
+  not found. Disabling required utility processes was not attempted.
+- Default wry features: preserved in both A/B argument sets and not overridden
+  in production.
+- Second window: the code copies one configuration; a separate process-tree A/B
+  result was not obtained because of the concurrent single-instance QA launch.
 
-## Проверки
+## Checks
 
-- `cargo test -j 2`: 94 + 56 тестов прошли.
-- `cargo fmt --check`: чисто.
-- `npx tsc --noEmit`: чисто.
-- `npx vitest run --poolOptions.threads.maxThreads=3`: 51 файл, 433 теста
-  прошли.
+- `cargo test -j 2`: 94 + 56 tests passed.
+- `cargo fmt --check`: clean.
+- `npx tsc --noEmit`: clean.
+- `npx vitest run --poolOptions.threads.maxThreads=3`: 51 files, 433 tests
+  passed.
 
-## W147 — принятое решение
+## W147 — accepted decision
 
-По решению владельца отключение crash reporter принято несмотря на порог
-30 MB: эти отчёты MarkNote не собирает и не читает, поэтому риск отсутствует.
-В `src-tauri/tauri.conf.json` добавлена строка
-`app.windows[0].additionalBrowserArgs` с `--disable-crash-reporter` и полным
-набором wry defaults. Число после пересборки и проверка двух окон должны быть
-добавлены после разрешения нативного слота W146; до этого запусков не делать.
+By the owner's decision, disabling the crash reporter was accepted despite the
+30 MB threshold: MarkNote neither collects nor reads these reports, so the
+risk is absent. `src-tauri/tauri.conf.json` now contains
+`app.windows[0].additionalBrowserArgs` with `--disable-crash-reporter` and the
+full set of wry defaults. The post-rebuild number and the two-window check must
+be added after the W146 native slot is available; do not launch before then.
 
-## Дополнение координатора, 20.09.2026
+## Coordinator addendum, 20.09.2026
 
-Решение по вариантам принято так: графический процесс не трогаем (выигрыш
-24.9 МБ при 46.8 МБ программной отрисовки и риске дёрганой прокрутки),
-сборщик отчётов о сбоях отключаем — риска нет, эти отчёты никуда не
-собираются.
+The decision was made as follows: do not touch the graphics process (a 24.9 MB
+saving with 46.8 MB of software rendering and a risk of jerky scrolling);
+disable crash reporting because there is no risk and the reports are not
+collected anywhere.
 
-Правка: `additionalBrowserArgs` в `src-tauri/tauri.conf.json`, стандартные
-аргументы wry сохранены.
+Change: `additionalBrowserArgs` in `src-tauri/tauri.conf.json`; the standard wry
+arguments are preserved.
 
-| Замер | До | После |
+| Measurement | Before | After |
 |---|---:|---:|
-| Чистый запуск без файла | 8 процессов, 385.6 МБ | 7 процессов, 376.2 МБ |
+| Clean launch without a file | 8 processes, 385.6 MB | 7 processes, 376.2 MB |
 
-Проверка делом на собранной программе с отключённым сборщиком: формула
-KaTeX отрисована, блоки кода и сноски на месте, прокрутка работает, ошибок
-на странице нет (снимок `qa/shots/crashoff-check.png`).
+A live check on the built application with crash reporting disabled confirmed:
+the KaTeX formula rendered, code blocks and footnotes were present, scrolling
+worked, and there were no page errors (snapshot
+`qa/shots/crashoff-check.png`).
 
-### Второе окно делит движок
+### The second window shares the engine
 
-| Состояние | Процессов | Память поддерева |
+| State | Processes | Subtree memory |
 |---|---:|---:|
-| Одно окно с документом | 8 | 399.1 МБ |
-| Два окна | 9 | 487.7 МБ |
+| One window with a document | 8 | 399.1 MB |
+| Two windows | 9 | 487.7 MB |
 
-Второе окно стоит около 89 МБ — добавляется только процесс отрисовки, а
-основной процесс, графика и служебные общие. Это отвечает на главный вопрос
-задачи: комплект процессов не удваивается.
+The second window costs about 89 MB: only a renderer is added, while the main
+process, graphics, and utility processes are shared. This answers the task's
+main question: the process set does not double.

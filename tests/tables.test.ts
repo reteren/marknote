@@ -202,8 +202,8 @@ describe("tableBuilder", () => {
     const rowDom = addRowWidget.toDOM(view);
     const colDom = addColWidget.toDOM(view);
 
-    expect(rowDom.querySelector("button")?.getAttribute("title")).toBe("Добавить строку снизу");
-    expect(colDom.getAttribute("title")).toBe("Добавить столбец справа");
+    expect(rowDom.querySelector("button")?.getAttribute("title")).toBe("Add row below");
+    expect(colDom.getAttribute("title")).toBe("Add column to the right");
   });
 
   it("attaches row and col movement drag handles with tooltips", () => {
@@ -231,15 +231,15 @@ describe("tableBuilder", () => {
     const lastRowDom = rowControls[1].toDOM(view);
 
     // Each row control has a single thick drag handle line
-    expect(firstRowDom.querySelector(".cm-marknote-table-row-handle")?.getAttribute("title")).toBe("Переместить строку");
-    expect(lastRowDom.querySelector(".cm-marknote-table-row-handle")?.getAttribute("title")).toBe("Переместить строку");
+    expect(firstRowDom.querySelector(".cm-marknote-table-row-handle")?.getAttribute("title")).toBe("Move row");
+    expect(lastRowDom.querySelector(".cm-marknote-table-row-handle")?.getAttribute("title")).toBe("Move row");
 
     const firstColDom = colControls[0].toDOM(view);
     const lastColDom = colControls[2].toDOM(view);
 
     // Each column control has a hitarea and a single thick drag handle line
-    expect(firstColDom.querySelector(".cm-marknote-table-col-handle")?.getAttribute("title")).toBe("Переместить столбец");
-    expect(lastColDom.querySelector(".cm-marknote-table-col-handle")?.getAttribute("title")).toBe("Переместить столбец");
+    expect(firstColDom.querySelector(".cm-marknote-table-col-handle")?.getAttribute("title")).toBe("Move column");
+    expect(lastColDom.querySelector(".cm-marknote-table-col-handle")?.getAttribute("title")).toBe("Move column");
   });
 
   it("marks only the dragged control while the table drag mode is active", () => {

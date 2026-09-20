@@ -1,404 +1,198 @@
-# Дорожная карта
+# Roadmap
 
-Восемь вех. Порядок важен: каждая опирается на предыдущую. Оценки — в часах
-чистой работы для одного разработчика, знакомого с Rust, но не с CodeMirror.
+Eight milestones build on one another. Estimates are hours of focused work for
+one developer familiar with Rust but new to CodeMirror. The original estimate
+to v1.0 was about 166 hours, with roughly one third spent on live preview.
 
-Итог до v1.0: **примерно 166 часов**. Из них треть уходит на веху M2 — это
-нормально, живой предпросмотр и есть проект, остальное обвязка.
+| Milestone | Result | Hours |
+| --- | --- | ---: |
+| M0 | Shell: window opens and reads a file | 6 |
+| M1 | Editor core: editing, undo, wrapping | 12 |
+| M2 | Live preview | 45 |
+| M3 | Files, windows, tabs, creation, saving | 28 |
+| M4 | Blocks: tables, callouts, formulas, images | 25 |
+| M5 | UI shell, start screen, status bar, search, tabs | 22 |
+| M6 | Additional formats | 18 |
+| M7 | Build, associations, release | 10 |
 
-| Веха | Что получаем | Часы |
+The format registry appears in M3 because the start screen, save controls, and
+type switching depend on it. It began with Markdown and plain text and is now
+expanded by the M6 adapters; the interface remains generated from the Rust
+registry.
+
+## M0 — Shell · 6 h
+
+Goal: tauri dev opens a dark window showing the command-line file.
+
+- [x] Initialize Tauri 2, Svelte 5, TypeScript, and Vite.
+- [x] Connect theme.css and the dark native title bar.
+- [x] Embed plain CodeMirror 6.
+- [x] Add the open_file IPC command.
+- [x] Read process arguments and load a file.
+- [x] Add Git and .gitignore.
+- [ ] Confirm the first commit and repeat launch acceptance in one controlled
+      run; old reports describe different sessions.
+
+Done means marknote.exe test.md displays the file contents.
+
+## M1 — Editor core · 12 h
+
+- [x] Markdown syntax highlighting.
+- [x] Unlimited undo/redo and Ctrl+Z/Ctrl+Shift+Z/Ctrl+Y.
+- [x] Centered 81ch visual wrapping; disk text never receives hard breaks.
+- [x] Tab indents lists, Shift+Tab outdents, and ordinary text receives four
+      spaces.
+- [x] Enter continues a list and exits on an empty item.
+- [x] Auto-pairing for emphasis, code, highlight, strike, links, and brackets.
+- [x] Ctrl+B/I/E wraps and unwraps selected text.
+- [x] Select all, cut, copy, and paste.
+
+## M2 — Live preview · 45 h
+
+The main milestone: markup is hidden until the cursor or selection intersects
+its syntax node. ViewPlugin walks visible Lezer nodes and updates only affected
+decorations.
+
+- [x] ViewPlugin recalculation on document and selection changes.
+- [x] isNodeActive and atomic ranges for hidden markers.
+- [x] Bold, italic, strike, highlight, code, comments, inline math, nesting,
+      and links.
+- [x] Six headings, bulleted and numbered lists, and task checkboxes.
+- [x] KaTeX is lazy and cached by source formula.
+- [x] Cursor, mouse selection, Home/End, and word navigation remain stable.
+- [x] The 10,000-line test reached a 3.43 ms median and 5.97 ms worst case
+      against a 16 ms target.
+- [ ] Profile decoration recalculation and decide whether a line-number cache
+      is worthwhile.
+
+Done means mixed Markdown looks like Obsidian and the cursor remains predictable.
+
+## M3 — Files, windows, and saving · 28 h
+
+### Format registry and document state
+
+- [x] FormatCapabilities and Rust registry.
+- [x] list_creatable_formats, new_document, and format_for_extension.
+- [x] Registry contains 21 formats, 17 creatable.
+- [x] Frontend DocumentState tracks path, type, and save state.
+- [x] A null path is the single source of truth for disabling autosave.
+
+### Document creation
+
+- [x] Start screen tiles, Open file, and file drop.
+- [x] Typing without selecting a type creates Markdown.
+- [x] Templates: {} for JSON, an HTML skeleton, and empty for other formats.
+- [x] Untitled.ext native titles.
+- [x] Ctrl+N opens a new window; Ctrl+Shift+N opens the format picker.
+- [x] Type changes preserve text and editor capabilities.
+- [x] Tabs, plus button, Ctrl+T, names, formats, and close buttons.
+
+### Saving
+
+- [x] Save and Save as controls with Unsaved, Saving, Saved, and Read-only.
+- [x] Save without a path opens the save dialog.
+- [x] Save As chooses a format from the extension.
+- [x] Rust detects external metadata changes and returns a conflict.
+- [x] Autosave after two seconds and on focus loss.
+- [x] Atomic sibling write followed by rename.
+- [x] Unsaved close asks Save, Discard, or Cancel.
+- [x] Dropped files open in the window.
+
+### Windows and disk
+
+- [ ] Complete multi-tab file watching and acceptance.
+- [ ] Confirm Explorer routing, external reload/Keep mine, deletion/recreate,
+      rename, and multi-dirty-tab close.
+- [x] Single-instance routing.
+- [x] raiseExistingWindow and rememberSizeAndPosition settings.
+
+Done means opening and editing three files does not lose data, and a newly
+created file can be saved, closed, and reopened intact.
+
+## M4 — Block elements · 25 h
+
+- [x] Fenced code with language highlighting loaded on demand.
+- [x] Display math blocks with KaTeX.
+- [x] Tables with aligned columns and cell navigation.
+- [x] Nested quotes with a quiet vertical rule.
+- [x] Obsidian-style callouts with icon, color, and title.
+- [x] Footnotes with hover text.
+- [x] Horizontal rules.
+- [x] Images relative to the document, data/http URLs, width limits, and a
+      broken-image fallback.
+- [ ] Repeat visual acceptance of table and formula geometry.
+
+## M5 — UI shell and tabs · 22 h
+
+- [x] File, Edit, View, and Help menus; formatting in ContextMenu.
+- [x] File/New uses the registry and start screen.
+- [x] Permanent TabBar with switching and per-document state.
+- [x] Start screen formats, Open file, and drop.
+- [x] Status-bar type picker, Read-only and Lossy markers.
+- [x] Context menu adapts to selection, blank space, links, and images.
+- [x] Status statistics for cursor, lines, words, and characters.
+- [x] Find/replace, counts, navigation, case, whole-word, and regex options.
+- [x] Keyboard shortcuts route file actions through App; Ctrl+G opens go-to-line.
+- [x] Ctrl+0 resolves heading removal before zoom reset.
+- [ ] Repeat manual acceptance of search and menus without competing processes.
+
+## M6 — Additional formats · 18 h
+
+- [x] FormatAdapter registry with 21 formats, including EPUB; 17 creatable.
+- [x] JSON and HTML templates; plain text extensions.
+- [x] JSON, JSONC, YAML, TOML, XML, HTML, CSS, JavaScript, TypeScript, Rust,
+      Python, Go, C/C++, and Shell highlighting.
+- [x] JSON validation and formatting through IPC and context menu.
+- [x] UTF-8, BOM, UTF-16, and CP1251 detection with original encoding on save.
+- [x] CRLF preservation.
+- [x] Lossy RTF conversion, disabled autosave, and warning.
+- [x] PDF, DOCX, and EPUB read-only extraction with Save as Markdown.
+- [x] Status marks for Read-only and Lossy.
+- [ ] Add positive extraction tests and repeat conversion acceptance.
+
+## M7 — Build and release · 10 h
+
+- [x] Application icons in the bundle.
+- [x] NSIS installation without administrator rights.
+- [x] WebView2 bootstrapper for clean Windows 10.
+- [ ] Per-file icons for associated types.
+- [ ] Verify Windows associations and default-app registration.
+- [ ] Test a clean Windows 10 VM without WebView2.
+- [ ] Measure cold start to first text.
+- [ ] Update tag and workflow paths for the selected release version.
+- [ ] Sign the installer if a certificate becomes available.
+- [ ] Keep release notes and tag aligned with the release version.
+
+## Practical lessons
+
+Wiring tests catch routes between components and commands, but they do not prove
+runtime behavior after the call. Integration and acceptance scenarios are
+required. Red acceptance tests can be defects in the test itself: prove that
+input reached the editor before fixing the product. Earlier sessions found that
+Rust events were broadcast globally instead of targeted to one window; events
+are now addressed to the specific WebViewWindow.
+
+## After v1.0
+
+Possible growth, not a promise: PDF/HTML export through WebView printing,
+Ctrl+P printing, an outline panel, improved WebView2 spellchecking, and
+tauri-plugin-updater.
+
+## Risks
+
+| Risk | Rating | Mitigation |
 | --- | --- | --- |
-| M0 | Скелет: окно открывается, файл читается | 6 |
-| M1 | Ядро редактора: правка, отмена, перенос строк | 12 |
-| M2 | Живой предпросмотр | 45 |
-| M3 | Файлы, окна, вкладки, создание документов, сохранение | 28 |
-| M4 | Блочные элементы: таблицы, callout, формулы, картинки | 25 |
-| M5 | Обвязка интерфейса: меню, стартовый экран, строка состояния, поиск, вкладки | 22 |
-| M6 | Остальные форматы | 18 |
-| M7 | Сборка, ассоциации, релиз | 10 |
-
-**Важно про порядок.** Реестр форматов появляется в M3, а не в M6, — от него
-зависят стартовый экран, кнопки сохранения и смена типа документа. Планом
-предполагалось, что в M3 в реестре будут два типа, Markdown и простой текст;
-в текущем коде он уже расширен адаптерами M6. Интерфейс при этом не меняется:
-он целиком строится из списка, который отдаёт Rust.
-
----
-
-## M0 — Скелет · 6 ч
-
-Цель: `npm run tauri dev` открывает тёмное окно, в котором виден текст файла,
-переданного аргументом командной строки.
-
-- [x] Инициализировать Tauri 2 + Svelte 5 + TypeScript + Vite
-- [x] Подключить `theme.css`, включить тёмный заголовок окна через
-      `DWMWA_USE_IMMERSIVE_DARK_MODE`
-- [x] Вставить CodeMirror 6 в чистом виде, без расширений
-- [x] IPC-команда `open_file(path) -> { text, meta }`
-- [x] Прочитать `std::env::args()` при старте и загрузить файл
-- [x] Создать Git-репозиторий и `.gitignore`
-- [ ] Подтвердить наличие первого коммита (не проверялось в этой сверке)
-
-**Готово, когда:** `marknote.exe test.md` показывает содержимое файла.
-
-Осталось: подтвердить первый коммит и повторить приёмку запуска в одном
-контролируемом прогоне: отчёты W46 и текущий `acceptance-summary.json`
-содержат результаты разных сессий.
-
----
-
-## M1 — Ядро редактора · 12 ч
-
-Цель: в окне можно печатать. Пока сырой Markdown с подсветкой, без скрытия
-разметки.
-
-- [x] `@codemirror/lang-markdown` + подсветка синтаксиса
-- [x] История отмены без ограничений, `Ctrl+Z` / `Ctrl+Shift+Z` / `Ctrl+Y`
-- [x] Мягкий перенос: колонка текста `max-width: 81ch`, по центру окна,
-      `EditorView.lineWrapping`. Файл на диске не меняется — в него никогда не
-      пишутся переносы
-- [x] Поведение `Tab`: внутри списка — вложенность на уровень, `Shift+Tab` —
-      обратно; вне списка — четыре пробела
-- [x] `Enter` в списке продолжает список; на пустом пункте — выходит из него
-- [x] Автопарность: `**`, `*`, `` ` ``, `==`, `~~`, `[`, `(`
-- [x] Обёртка выделения: `Ctrl+B`, `Ctrl+I`, `Ctrl+E` (код) оборачивают
-      выделенный текст, повторное нажатие снимает обёртку
-- [x] Базовая правка: выделить всё, вырезать, копировать, вставить
-
-**Готово, когда:** файл можно осмысленно редактировать и отменять правки, а
-длинные абзацы переносятся по ширине колонки.
-
----
-
-## M2 — Живой предпросмотр · 45 ч
-
-Главная веха. Разметка скрыта, пока курсор не внутри узла.
-
-Механика: `ViewPlugin` строит `DecorationSet`. Для каждого узла дерева
-`@lezer/markdown` в видимой области решаем — прятать маркеры или показать.
-Узел раскрывается, если пересекается с выделением или содержит курсор. При
-`selectionSet` декорации пересчитываются только для затронутых строк.
-
-### M2.1 — Каркас · 10 ч
-- [x] `ViewPlugin` с пересчётом на `docChanged` и `selectionSet`
-- [x] Обход `syntaxTree` в пределах `view.visibleRanges`
-- [x] Функция `isNodeActive(node, selection)` — единая точка правды о раскрытии
-- [x] Атомарные диапазоны (`EditorView.atomicRanges`), чтобы стрелка не
-      застревала внутри скрытых маркеров
-
-### M2.2 — Строчная разметка · 12 ч
-- [x] `**жирный**`, `*курсив*`, `~~зачёркнутый~~`, `==подсветка==`
-- [x] `` `код` `` — фон и моноширинный шрифт
-- [x] `%%комментарий%%` — приглушённый цвет, целиком скрывается при уходе курсора
-- [x] `$формула$` — inline-KaTeX, при курсоре внутри возвращается исходный текст
-- [x] Вложенность: `**жирный *и курсив* внутри**`
-- [x] Ссылки `[текст](url)`: виден только текст, `Ctrl+клик` открывает в браузере
-
-### M2.3 — Заголовки и списки · 10 ч
-- [x] `#`–`######`: решётки скрыты, размер и вес по уровню
-- [x] Маркированные списки: `-` превращается в буллет, отступы по уровням
-- [x] Нумерованные списки: номер остаётся, точка форматируется
-- [x] Задачи `- [ ]` / `- [x]`: рисуется чекбокс, клик переключает состояние и
-      правит документ; выполненные — зачёркнуты и приглушены
-
-### M2.4 — Производительность · 8 ч
-- [x] Тест на файле 10 000 строк: последний прогон показал медиану 3,43 мс и
-      худшее значение 5,97 мс при цели 16 мс
-- [ ] Профилирование пересчёта декораций, кэш по номеру строки
-- [x] KaTeX рендерится лениво и кэшируется по исходной строке формулы
-
-### M2.5 — Шлифовка · 5 ч
-- [x] Курсор не прыгает при раскрытии и схлопывании разметки
-- [x] Выделение мышью через границу скрытого маркера не рвётся
-- [x] `Home` / `End` / `Ctrl+←` ведут себя как ожидается на скрытых участках
-
-Осталось: профилировать пересчёт декораций и решить, нужен ли кэш по номеру
-строки (M2.4); один успешный тест не заменяет измерения на живых заметках.
-
-**Готово, когда:** файл с любым сочетанием разметки выглядит как в Obsidian, а
-курсор ведёт себя предсказуемо. Это единственная веха, которую стоит проверять
-на живых заметках, а не на синтетических примерах.
-
----
-
-## M3 — Файлы, окна и сохранение · 28 ч
-
-### M3.1 — Реестр форматов и состояние документа · 5 ч
-- [x] Структура `FormatCapabilities` и реестр типов на стороне Rust
-- [x] Команды `list_creatable_formats`, `new_document`, `format_for_extension`
-- [x] Реестр содержит 21 формат, 17 доступны для создания
-- [x] `DocumentState` на фронтенде: путь, тип, состояние сохранения
-- [x] `path === null` отключает автосохранение — единая точка правды
-
-Осталось: нет по этой подвехе.
-
-### M3.2 — Создание документов · 6 ч
-- [x] Стартовый экран с плитками типов и `Open file…`; список берётся из
-      реестра, поддерживается перетаскивание файла
-- [x] Начать печатать, не выбрав тип, — документ создаётся как Markdown
-- [x] Заготовки нового документа по типу: `{}` для JSON, каркас для HTML,
-      пусто для остальных
-- [x] Заголовок окна `Untitled.json — MarkNote`
-- [x] Сочетания создания совпадают с пунктами File: `Ctrl+N` создаёт новый
-      документ в отдельном окне с форматом из настроек, `Ctrl+Shift+N`
-      открывает диалог выбора формата от App
-- [x] Смена типа документа без потери текста, пересчёт возможностей
-- [x] Вкладки внутри окна: кнопка «+» и `Ctrl+T` создают новую вкладку со
-      стартовым экраном; полоса вкладок видна всегда и содержит
-      имя, формат и кнопку закрытия
-
-Осталось: нет по перечисленным функциям; ручная приёмка сочетаний выполняется
-в общей проверке M5.
-
-### M3.3 — Сохранение · 7 ч
-- [x] Кнопки `Save` и `Save as…` и пометка состояния (`Unsaved`, `Saving…`,
-      `Saved 12:04`, `Read-only`) подключены в правой части строки меню
-- [x] `Save` у документа без пути открывает диалог сохранения
-- [x] `Save as…` показывает фильтр текущего типа; выбранное расширение
-      определяет формат сохранённого документа
-- [x] Перед заменой существующего файла Rust сверяет сохранённый снимок
-      метаданных; внешняя правка возвращает конфликт вместо молчаливой записи
-- [x] Автосохранение после 2 секунд простоя и при потере фокуса; при закрытии
-      изменённого документа пользователь выбирает `Save`, `Discard` или `Cancel`
-- [x] Атомарная запись: временный файл рядом → `fs::rename`. Никогда не писать
-      поверх оригинала напрямую
-- [x] Закрытие окна с одним непустым несохранённым документом спрашивает
-      `Save` / `Discard` / `Cancel`; сводный сценарий для нескольких вкладок
-      вынесен в незавершённую задачу M3.4
-- [x] Перетаскивание файла в окно открывает его
-
-### M3.4 — Окна и диск · 10 ч
-- [ ] Наблюдение за диском (`notify`) для нескольких вкладок: набор путей на окно
-      уже хранится, но окончательная маршрутизация и приёмка ещё в работе
-- [ ] Открытие файла из Проводника не добавляет вкладку; `route_file` сейчас
-      переиспользует свободное стартовое окно, иначе создаёт новое. Условие
-      «всегда новое окно» из контракта требует отдельного решения.
-- [ ] Внешнее изменение при чистом буфере — тихая перезагрузка с сохранением
-      позиции курсора; многовкладочная маршрутизация события ещё на приёмке
-- [ ] Внешнее изменение при грязном буфере — верхняя полоса `File changed on
-      disk` с действиями `Reload` / `Keep mine`; финальная проверка по вкладкам
-      ещё в работе
-- [ ] Файл удалён снаружи помечается в окне; следующее обычное сохранение
-      воссоздаёт файл. Для вкладок и переименования требуется отдельная приёмка
-- [x] `tauri-plugin-single-instance`: второй запуск не плодит процесс, а
-      маршрутизирует файл в свободное стартовое или новое окно существующего
-      процесса
-- [x] Файл уже открыт — при включённой настройке
-      `windows.raiseExistingWindow` не дублировать окно, а поднять и
-      сфокусировать; при выключенной создать новое
-- [x] Запоминание размера и позиции окна управляется настройкой
-      `windows.rememberSizeAndPosition` (при выключении восстановление и
-      сохранение отключаются)
-- [ ] Закрытие окна с несколькими грязными вкладками: сводный протокол решений
-      ещё дорабатывается; сейчас UI обрабатывает одну вкладку за запрос
-
-Осталось: завершить многовкладочный watcher, отдельно принять сценарий
-переименования и повторить приёмку окон/закрытия без параллельных запусков.
-
-**Готово, когда:** можно открыть три файла из проводника, править их
-одновременно и не потерять ни байта при закрытии. И отдельно: запустить
-программу без файла, создать документ, сохранить его под именем, закрыть,
-открыть снова — содержимое на месте. Многовкладочный сценарий пока не считается
-закрытым до окончания работ над watcher и протоколом закрытия.
-
----
-
-## M4 — Блочные элементы · 25 ч
-
-- [x] Блоки кода ` ``` ` с подсветкой языка (`@codemirror/language-data`,
-      языки грузятся по требованию)
-- [x] Блоки формул `$$ … $$`, KaTeX в display-режиме
-- [x] Таблицы: выравнивание колонок при отображении; редактирование остаётся
-      текстовым, `Tab` и `Shift+Tab` переходят к соседней ячейке
-- [x] Цитаты `>` с вертикальной линией слева, вложенные уровни
-- [x] Callout-блоки `> [!NOTE]`: иконка, цвет, заголовок. Типы Obsidian —
-      note, tip, warning, danger, info, success, question, quote, example
-- [x] Сноски `[^1]` и их определения: подсветка, всплывающая подсказка с
-      текстом сноски при наведении
-- [x] Горизонтальная линия `---`
-- [x] Изображения `![](path)`: отрисовка относительно папки файла, поддержка
-      `data:` и http-адресов, ограничение по ширине колонки, запасной вид при
-      битой ссылке
-
-Осталось: нет по перечисленным элементам M4; проверить визуальную геометрию
-таблиц и формул при следующем разрешённом ручном прогоне.
-
-**Готово, когда:** файл из вашей спецификации `marknote.md` отображается
-целиком и правильно.
-
----
-
-## M5 — Обвязка интерфейса и вкладки · 22 ч
-
-- [x] Меню `File`, `Edit`, `View`, `Help`; действия маршрутизируются
-      обработчиком App, а форматирование доступно в контекстном меню
-- [x] Подменю `File ▸ New` использует тот же реестр, что и стартовый экран
-- [x] `TabBar` виден всегда; подпись показывает имя и формат,
-      кнопка «+» создаёт вкладку со стартовым экраном, переключение сохраняет
-      состояние документа
-- [x] Стартовый экран показывает типы из реестра, открывает файл и принимает
-      перетаскивание
-- [x] Тип документа слева в строке состояния открывает список смены типа
-- [x] Пометки `Read-only` и `Lossy` рядом с типом
-- [x] Контекстное меню по правой кнопке: действия зависят от выделения,
-      пустого места, ссылки или изображения; штатное меню WebView2 отключается
-- [x] Строка состояния снизу справа:
-      - без выделения: `Ln 12, Col 5 · 240 lines · 1823 words · 11204 chars`
-      - с выделением: `Ln 11–16 · 42 words · 310 chars`
-      - слова считаются только целые: если выделение обрывает слово, оно не в счёт
-- [x] `Ctrl+F` — поиск с подсветкой совпадений, счётчиком и переходом через
-      `Enter` / `Shift+Enter`
-- [x] `Ctrl+H` — замена одного или всех совпадений
-- [x] Настройки регистра, целого слова и регулярных выражений подключены
-- [x] Сверить весь список горячих клавиш со [SPEC.md](docs/SPEC.md#горячие-клавиши):
-      файловые действия маршрутизируются через App, `Ctrl+Shift+N` получает
-      chooser, а `Ctrl+G` открывает переход к строке
-- [ ] Устранить конфликт `Ctrl+0`, одновременно назначенного снятию заголовка
-      и сбросу масштаба (масштаб уступает)
-
-Осталось: принять конфликт `Ctrl+0` и повторить ручную приёмку поиска и меню.
-
-**Готово, когда:** до любой функции можно добраться мышью и клавиатурой, не
-зная разметки.
-
----
-
-## M6 — Остальные форматы · 18 ч
-
-Реализация по [docs/FORMATS.md](docs/FORMATS.md). Реестр и трейт уже есть с
-M3 — эта веха наполняет их адаптерами. Фронтенд при этом не трогается: новые
-типы сами появляются на стартовом экране, в меню `New` и в списке смены типа.
-
-- [x] Трейт `FormatAdapter` и диспетчер есть; реестр содержит 21 формат,
-      включая EPUB (17 форматов доступны для создания)
-- [x] Флаг `creatable` и заготовки: `{}` для JSON, каркас для HTML, пусто для
-      остальных
-- [x] Простой текст: адаптер перечисляет `.txt`, `.log`, `.ini`, `.cfg`,
-      `.conf`, `.env`, `.csv`, `.tsv`, `.text`
-- [x] Код и данные: зарегистрированные JSON, JSONC, YAML, TOML, XML, HTML, CSS,
-      JavaScript, TypeScript, Rust, Python, Go, C/C++, Shell получают свою
-      подсветку и сохраняются без изменений
-- [x] JSON: проверка синтаксиса, подсветка ошибки и команда «Отформатировать»
-      подключены через IPC и контекстное меню
-- [x] Определение кодировки при открытии (UTF-8, UTF-8 BOM, UTF-16, CP1251),
-      сохранение в исходной кодировке
-- [x] Нормализация переводов строк: файл с CRLF сохраняется с CRLF
-- [x] RTF: открытие и обратная конвертация поддерживаемого подмножества;
-      автосохранение выключено, формат отмечен `Lossy`, перед сохранением
-      показывается предупреждение о потерях
-- [x] Создание нового RTF намеренно не предлагается: его capability
-      `creatable` выключена
-- [x] PDF: read-only адаптер `pdf-extract`; `Save as Markdown` создаёт новый
-      Markdown-файл
-- [x] DOCX: read-only адаптер `docx-rs`; `Save as Markdown` создаёт новый
-      Markdown-файл
-- [x] EPUB: read-only адаптер; `Save as Markdown` создаёт новый Markdown-файл
-- [x] Строка состояния показывает формат и режим: «Только чтение», «С потерями»
-
-Осталось: закрепить PDF/DOCX/EPUB извлечение положительными тестами и
-повторить ручную приёмку конвертаций; создание RTF остаётся запрещённым по
-capability.
-
-**Готово, когда:** ассоциация с любым из перечисленных расширений даёт
-осмысленный результат, а не пустое окно. И: любой тип из стартового экрана
-создаётся, сохраняется и переоткрывается без потерь, кроме RTF, который теряет
-оформление честно и с предупреждением.
-
----
-
-## M7 — Сборка и релиз · 10 ч
-
-- [x] Иконки приложения включены в bundle
-- [ ] Отдельные иконки для ассоциированных типов файлов
-- [x] NSIS-установщик, установка без прав администратора
-- [x] WebView2 bootstrapper для чистой Windows 10
-- [ ] Ассоциации Windows заданы только для основных расширений и не охватывают
-      все 21 формат реестра; проверить RTF/PDF/DOCX и остальные кодовые типы
-- [ ] Проверка на чистой виртуалке с Windows 10 без WebView2
-- [ ] Замер холодного старта — цель ниже 500 мс до появления текста
-- [ ] Workflow запускается по тегу, но путь загружаемого установщика пока
-      жёстко задан для старой версии; обновить его после выбора версии релиза
-- [ ] Подпись установщика, если появится сертификат. Без неё SmartScreen будет
-      ругаться — это ожидаемо для первых сборок
-- [ ] Заметки к релизу и тег должны соответствовать выбранной версии релиза
-
-Осталось: проверить установку на чистой Windows 10, отдельно измерить холодный
-старт до первой строки текста, подтвердить релизный тег и выпускать подписанный
-установщик при появлении сертификата. Единый зелёный прогон приёмки пока не
-подтверждён.
-
-**Готово, когда:** установщик с чистой машины ставится, ассоциирует `.md` и
-открывает файл по двойному клику быстрее, чем запускается Блокнот с картинками.
-
-## Что выяснилось на практике
-
-За предыдущие заходы находили дефекты класса «написано, но не подключено».
-`tests/wiring/wiring.test.ts` проверяет маршруты между компонентами и командами,
-а `tests/wiring/exports.test.ts` ищет экспортируемые функции и значения,
-которых приложение не использует. Эти проверки ловят потерянные связи, но не
-доказывают правильность поведения после вызова — для этого нужны интеграционные
-и приёмочные сценарии.
-
----
-
-## После v1.0
-
-Не обещания, а список того, куда расти, если захочется:
-
-- Экспорт в PDF и HTML через печать WebView
-- Печать (`Ctrl+P`)
-- Панель структуры документа по заголовкам
-- Проверка орфографии через встроенную в WebView2
-- Автообновление через `tauri-plugin-updater`
-
-## Риски
-
-| Риск | Оценка | Что делать |
-| --- | --- | --- |
-| Живой предпросмотр окажется сложнее ожидаемого | Высокая | M2 разбита на подвехи. Если M2.2 занимает больше 20 часов — урезать `%%комментарии%%` и вложенность до v1.1 |
-| Курсор странно ведёт себя на скрытых маркерах | Высокая | Полагаться на `atomicRanges`, а не на собственную обработку клавиш |
-| Обратная конвертация RTF теряет оформление | Средняя | Автосохранение выключено; предупреждение показывается до первого сохранения |
-| Извлечение текста из PDF даёт кашу на сложной вёрстке | Средняя | Режим только для чтения, честная пометка в строке состояния |
-| Реестр форматов в M3 окажется мал для M6 | Средняя | Реестр уже содержит 21 формат; новые адаптеры должны сохранять `FormatCapabilities` |
-| Тормоза на файлах в мегабайты | Низкая | Декорации только в видимой области. Порог: выше 5 МБ предпросмотр отключается |
-| SmartScreen блокирует неподписанный установщик | Точно случится | Либо сертификат, либо инструкция в заметках к релизу |
-
----
-
-## Замечено при визуальной проверке, не закрыто
-
-- **Цена PDF и DOCX пока не решена.** Их зависимости увеличивают размер
-  установщика; точные замеры нужно повторить для выбранной версии релиза и
-  решить, оправдывает ли чтение PDF/DOCX такой прирост.
-- **Приёмка требует повторного контролируемого прогона.** Отчёт W46 фиксирует
-  7/10: TC-08 не нашёл ожидаемый текст отказа, TC-09 завершился до проверки
-  закрытия, TC-10 не дошёл до Ctrl+F. Текущий `acceptance-summary.json`
-  показывает 5/10 и другие наблюдения для TC-09/10; W46 уже предупреждал, что
-  сводка относится к другой сессии. Причины нельзя считать установленными,
-  пока приёмка не будет запущена без конкурирующих процессов и с сохранённым
-  журналом того же запуска.
-
-Отдельные незавершённые функции и ограничения перечислены в соответствующих
-вехах выше; этот раздел оставляет только вопросы, которые требуют визуальной
-или полной приёмочной проверки.
-
-### Разбор двух красных приёмочных сценариев
-
-Оба оказались дефектами самой приёмки, а не программы, и это стоит помнить.
-
-- **TC-09** считал пометку `Unsaved` подтверждением того, что текст введён.
-  Снимок доказывает обратное: в момент «успешного ввода» счётчик показывал
-  0 знаков. Текст не доходил до редактора, документ не становился грязным,
-  и диалог правильно не появлялся. Программа была права, тест — нет.
-- **TC-08** искал русскую строку, которой больше нет: интерфейс переведён на
-  английский. Снимок показывает, что уведомление об отказе для двоичного
-  файла видно и работает.
-
-Попутно нашёлся настоящий дефект продукта: события из Rust рассылались
-глобально, а не в конкретное окно, поэтому запрос на открытие файла
-отрабатывали **все** окна сразу — в журнале TC-06 видно, как crlf.md
-открывается в обоих. Теперь события адресуются конкретному WebviewWindow.
-
-Вывод на будущее: красный приёмочный тест — такая же гипотеза, как и
-зелёный. Прежде чем чинить программу, нужно доказать, что тест проверяет
-то, что думает, что проверяет.
+| Live preview is more complex than expected | High | Split M2 into submilestones and trim comments/nesting if needed |
+| Cursor behaves strangely around hidden markers | High | Use atomicRanges rather than custom key handling |
+| RTF conversion loses formatting | Medium | Disable autosave and warn before the first save |
+| Complex PDF layouts extract poorly | Medium | Keep read-only mode and explain the limitation |
+| Registry is too small for future formats | Medium | Preserve FormatCapabilities for every adapter |
+| Large files become slow | Low | Decorate visible ranges only; disable preview above 5 MiB |
+| SmartScreen flags an unsigned installer | Certain | Provide a certificate or release instructions |
+
+## Open visual and release checks
+
+PDF/DOCX dependencies affect installer size and need a fresh measurement. A
+single controlled acceptance run must cover file opening, close flows, search,
+and external changes without competing processes. The release checklist should
+preserve the run log and distinguish application failures from harness failures.

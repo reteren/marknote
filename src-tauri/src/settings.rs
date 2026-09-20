@@ -53,7 +53,7 @@ impl Default for Settings {
 }
 
 impl Settings {
-    /// Ограничивает значения, пришедшие из IPC или файла, безопасными диапазонами.
+    /// Clamps values received from IPC or the file to safe ranges.
     pub fn validate(&mut self) {
         self.language = normalize_language(&self.language, true);
         self.editor.zoom_percent = self
@@ -67,7 +67,7 @@ impl Settings {
             .clamp(MIN_AUTOSAVE_DELAY_MS, MAX_AUTOSAVE_DELAY_MS);
     }
 
-    /// Разрешает `system` в язык системы и при отсутствии перевода выбирает английский.
+    /// Resolves `system` to the system language and falls back to English when no translation exists.
     pub fn resolved_language(&self) -> String {
         resolve_language(&self.language, &system_language_code())
     }
@@ -296,7 +296,7 @@ struct SettingsDocument {
     raw: Value,
 }
 
-/// Настройки приложения и исходный JSON для сохранения неизвестных будущих полей.
+/// Application settings and the original JSON used to preserve unknown future fields.
 pub struct SettingsState {
     path: PathBuf,
     document: Mutex<SettingsDocument>,
@@ -325,20 +325,20 @@ fn set_migration_applied(raw: &mut Value, migration_name: &str) {
     migrations.insert(migration_name.to_string(), Value::Bool(true));
 }
 
-/// Проставляет отметки обо всех переносах: файл, записанный этой версией,
-/// уже в новом виде, и переносить в нём нечего.
+/// Marks every migration as complete: a file written by this version is already
+/// in the new shape, so there is nothing left to migrate.
 fn mark_all_migrations_applied(raw: &mut Value) {
     set_migration_applied(raw, MIGRATION_FONT_FAMILY_DEFAULT);
     set_migration_applied(raw, MIGRATION_SPELLCHECK_SINGLE_LANGUAGE);
 }
 
-/// Выполняет разовые переносы устаревших умолчаний в файле настроек.
-/// Возвращает true, если файл был изменён и требует перезаписи на диск.
+/// Applies one-time migrations for obsolete defaults in the settings file.
+/// Returns true when the file changed and must be rewritten to disk.
 fn migrate_document(document: &mut SettingsDocument) -> bool {
     migrate_font_family_default(document)
 }
 
-/// Старое умолчание шрифта (`system-serif`) заменяется на нынешнее.
+/// Replaces the old font default (`system-serif`) with the current one.
 fn migrate_font_family_default(document: &mut SettingsDocument) -> bool {
     if is_migration_applied(&document.raw, MIGRATION_FONT_FAMILY_DEFAULT) {
         return false;
@@ -380,7 +380,7 @@ impl SettingsState {
         }
     }
 
-    /// Читает файл один раз. Отсутствующий файл нормален, повреждённый уносится в backup.
+    /// Reads the file once. A missing file is normal; a corrupt file is moved to a backup.
     pub fn load(path: impl Into<PathBuf>) -> Result<Self, SettingsError> {
         let path = path.into();
         let (document, should_save) = match fs::read(&path) {
@@ -427,7 +427,7 @@ impl SettingsState {
         self.save(Settings::default())
     }
 
-    /// Создаёт файл при явном запросе «Показать файл настроек», если его ещё нет.
+    /// Creates the file when explicitly asked to “Show settings file”, if it does not exist.
     pub fn ensure_file_exists(&self) -> Result<PathBuf, SettingsError> {
         let mut document = self.lock_document();
         if !self.path.exists() {
@@ -520,11 +520,11 @@ pub fn resolve_language(preference: &str, system_language: &str) -> String {
     }
 }
 
-/// Возвращает код локали интерфейса Windows, ограниченный переводами MarkNote.
+/// Returns the Windows UI locale code, limited to MarkNote's available translations.
 pub fn system_language_code() -> String {
     #[cfg(windows)]
     {
-        // GetUserDefaultUILanguage возвращает язык интерфейса пользователя Windows.
+        // GetUserDefaultUILanguage returns the user's Windows UI language.
         #[link(name = "kernel32")]
         extern "system" {
             fn GetUserDefaultUILanguage() -> u16;
@@ -562,9 +562,9 @@ fn default_language() -> String {
     "en".to_owned()
 }
 
-// Умолчания совпадают с тем, как программа выглядит сегодня: --font-text в
-// src/styles/theme.css это Inter, --font-size-text это 16px. Иначе обновление
-// молча сменило бы шрифт и кегль у всех, кто ни одной настройки не трогал.
+// Defaults match the current appearance: --font-text in src/styles/theme.css is
+// Inter and --font-size-text is 16px. Otherwise an update would silently change
+// the font and size for everyone who never touched a setting.
 fn default_font_family() -> String {
     "system-sans".to_owned()
 }

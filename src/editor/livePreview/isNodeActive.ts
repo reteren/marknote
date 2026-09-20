@@ -3,8 +3,8 @@ import type { SyntaxNode } from "@lezer/common";
 import type { MarkupRevealMode } from "../../state/settings.svelte";
 
 const lineScopedNames = new Set([
-  // Блок формулы раскрывается, пока курсор на любой его строке: иначе только
-  // что набранные `$$` прячутся под виджет и дописать формулу невозможно.
+  // A formula block stays open while the cursor is on any of its lines:
+  // otherwise newly typed `$$` would hide under the widget and could not be completed.
   "MathBlock",
   "ATXHeading1",
   "ATXHeading2",
@@ -22,7 +22,7 @@ const lineScopedNames = new Set([
   "CalloutTitle",
 ]);
 
-/** Возвращает зону, которую нужно считать раскрытой для конкретного узла. */
+/** Returns the zone considered active for a specific node. */
 export function nodeActivationRange(node: SyntaxNode, doc?: Text): { from: number; to: number } {
   if (!doc || !lineScopedNames.has(node.name)) return { from: node.from, to: node.to };
   const fromLine = doc.lineAt(Math.min(node.from, doc.length));
@@ -31,17 +31,16 @@ export function nodeActivationRange(node: SyntaxNode, doc?: Text): { from: numbe
 }
 
 /**
- * Единое правило живого предпросмотра: выделение пересекает узел, включая
- * обе границы. Для маркеров заголовка, списка и цитаты берётся вся строка.
+ * Live preview has one rule: a selection intersects a node, including both
+ * boundaries. For heading, list, and quote markers, the whole line is used.
  *
- * Режим revealMarkup управляет тем, когда разметка раскрывается:
- * - "cursor": узел раскрывается только когда курсор пересекает его зону;
- * - "line": раскрывается вся строка с курсором;
- * - "never": разметка не прячется вообще (узел всегда активен).
+ * The revealMarkup mode controls when markup is shown:
+ * - "cursor": the node opens only when the cursor crosses its zone;
+ * - "line": the entire cursor line opens;
+ * - "never": markup is never hidden (the node is always active).
  *
- * Исключение: TaskMarker остаётся виджетом-чекбоксом даже когда курсор находится
- * на той же строке в тексте задачи, и раскрывается в исходный текст только при
- * взаимодействии с самим маркером.
+ * Exception: TaskMarker remains a checkbox widget even when the cursor is on
+ * the task's text line and opens into source text only when the marker itself is used.
  */
 export function isNodeActive(
   node: SyntaxNode,

@@ -1,52 +1,53 @@
-# W143 — отвязывать ли HTML-разбор от Markdown
+# W143 — should HTML parsing be detached from Markdown
 
-## Решение
+## Decision
 
-Рекомендация: **менять в production**, но только вместе с заменой
-`insertNewlineContinueMarkup`, а не оставляя импорт `@codemirror/lang-markdown`
-в `keymap.ts`. Эксперимент пересёк установленный порог по размеру: основной
-JS-чанк уменьшился на 148142 B (>100 KB), а обычный Markdown, таблицы, fenced
-code и формулы сохранились. Цена — ожидаемая и зафиксированная на снимках:
-HTML внутри Markdown больше не получает подсветку тегов/атрибутов и не имеет
-HTML completion.
+Recommendation: **change it in production**, but only together with replacing
+`insertNewlineContinueMarkup`, not while leaving the
+`@codemirror/lang-markdown` import in `keymap.ts`. The experiment crossed the
+agreed size threshold: the main JS chunk shrank by 148142 B (>100 KB), while
+ordinary Markdown, tables, fenced code and formulas survived. The price is
+expected and recorded in the screenshots: HTML inside Markdown no longer has
+its tags and attributes highlighted, and has no HTML completion.
 
-Production-код не менялся. Вариант для измерения находится в
-`qa/w143-nohtml-markdown.ts`; он строит CodeMirror LanguageSupport напрямую из
-`@lezer/markdown` и `@codemirror/language`, передаёт `marknoteMarkdown`, но не
-передаёт `htmlParser` в `parseCode`. Для `keymap.ts` в эксперименте добавлена
-компактная замена Enter-команды; проверка через настоящий CDP-ввод дала
-одинаковое продолжение `1. first` → `2. second` в baseline и эксперименте.
+Production code was not changed. The variant used for the measurement is in
+`qa/w143-nohtml-markdown.ts`; it builds the CodeMirror LanguageSupport straight
+out of `@lezer/markdown` and `@codemirror/language`, passes `marknoteMarkdown`,
+and does not pass `htmlParser` to `parseCode`. For `keymap.ts` the experiment
+adds a compact replacement of the Enter command; checked through real CDP
+input, the continuation came out the same in the baseline and the experiment:
+`1. first` → `2. second`.
 
-## Парные измерения
+## Paired measurements
 
-Инструменты запускаются воспроизводимо из корня репозитория. Baseline использует
-текущую production-сборку MarkNote (чанк из `qa/w143-baseline-build-report.json`),
-эксперимент — `node qa/w143-build-experiment.mjs` и
-`qa/w143-vite.config.ts`.
+The tools run reproducibly from the root of the repository. The baseline uses
+the current production build of MarkNote (the chunk from
+`qa/w143-baseline-build-report.json`), the experiment uses
+`node qa/w143-build-experiment.mjs` and `qa/w143-vite.config.ts`.
 
-| Метрика | Baseline | Direct Lezer, без HTML | Разница | Доказательство |
+| Metric | Baseline | Direct Lezer, no HTML | Difference | Evidence |
 |---|---:|---:|---:|---|
-| Основной JS-чaнк | 538570 B | 390428 B | −148142 B (−27.5%) | `w143-baseline-build-report.json`, `w143-nohtml-build-report.json` |
-| Первая отрисовка, документ 200 KB, медиана 3 прогонов | 111.070 ms | 107.406 ms | −3.664 ms | `w143-baseline.json`, `w143-nohtml-benchmark.json` |
-| Первая отрисовка, документ 1 MB, медиана 3 прогонов | 151.954 ms | 162.825 ms | +10.871 ms | те же benchmark JSON |
-| Startup browser heap после GC | 11212056 B | 10096788 B | −1115268 B (~1.06 MiB) | `w143-startup-heap-baseline.json`, `w143-startup-heap-nohtml.json` |
+| Main JS chunk | 538570 B | 390428 B | −148142 B (−27.5%) | `w143-baseline-build-report.json`, `w143-nohtml-build-report.json` |
+| First render, 200 KB document, median of 3 runs | 111.070 ms | 107.406 ms | −3.664 ms | `w143-baseline.json`, `w143-nohtml-benchmark.json` |
+| First render, 1 MB document, median of 3 runs | 151.954 ms | 162.825 ms | +10.871 ms | the same benchmark JSON |
+| Startup browser heap after GC | 11212056 B | 10096788 B | −1115268 B (~1.06 MiB) | `w143-startup-heap-baseline.json`, `w143-startup-heap-nohtml.json` |
 
-Все прогоны benchmark используют `qa/w140-benchmark.mjs`, одинаковые 3 запуска
-и CDP Input; у baseline и experiment разные Vite/CDP порты только для
-изоляции процессов (1420/9555 и 1423/9557).
+Every benchmark run uses `qa/w140-benchmark.mjs`, the same 3 runs and CDP
+input; the baseline and the experiment differ only in their Vite/CDP ports, to
+keep the processes apart (1420/9555 and 1423/9557).
 
-## Что осталось от основного чанка
+## What is left of the main chunk
 
-В экспериментальном основном чанке исчезли `@lezer/javascript` (81155 B),
-`@codemirror/lang-html` (22334 B) и связанная HTML/CSS ветка. Крупнейшие модули
-экспериментального чанка: `@lezer/markdown` 59246 B, `@codemirror/commands`
-46356 B, `src/App.svelte` 40122 B, `src/editor/livePreview/tables.ts` 38185 B,
-`@codemirror/language-data` 31619 B, `src/state/actions.ts` 30254 B и
+The experimental main chunk lost `@lezer/javascript` (81155 B),
+`@codemirror/lang-html` (22334 B) and the HTML/CSS branch that hangs off them.
+Its largest modules: `@lezer/markdown` 59246 B, `@codemirror/commands` 46356 B,
+`src/App.svelte` 40122 B, `src/editor/livePreview/tables.ts` 38185 B,
+`@codemirror/language-data` 31619 B, `src/state/actions.ts` 30254 B and
 `@codemirror/search` 27755 B.
 
-## Проверка потерь
+## What is lost
 
-Один и тот же fixture проверен настоящим вводом через CDP:
+The same fixture was checked with real input through CDP:
 
 ```html
 <div><span style="color:red">text</span></div>
@@ -57,36 +58,37 @@ console.log(value);
 </script>
 ```
 
-| Наблюдение | Baseline | Без HTML |
+| Observation | Baseline | Without HTML |
 |---|---:|---:|
-| Токенизированные span в HTML fixture | 37 | 0 |
-| HTML token-классы | 6 видов | 0 |
-| Снимок | `qa/shots/w143-html-baseline.png` | `qa/shots/w143-html-nohtml.png` |
+| Tokenized spans in the HTML fixture | 37 | 0 |
+| HTML token classes | 6 kinds | 0 |
+| Screenshot | `qa/shots/w143-html-baseline.png` | `qa/shots/w143-html-nohtml.png` |
 
-В baseline тег/атрибуты/строки и JavaScript визуально окрашены; в эксперименте
-текст тот же, но весь fixture обычного цвета. Это сознательная потеря,
-не дефект измерительного harness.
+In the baseline the tag, the attributes, the strings and the JavaScript are
+visibly coloured; in the experiment the text is the same but the whole fixture
+is one plain colour. That is a deliberate loss, not a defect in the measuring
+harness.
 
-Обычный Markdown не пострадал — оба CDP-прогона дали одинаковые значения:
+Ordinary Markdown was unharmed — both CDP runs gave identical values:
 
-| Проверка | Baseline | Без HTML |
+| Check | Baseline | Without HTML |
 |---|---:|---:|
-| Заголовок | 1 | 1 |
-| Маркер списка виден | да | да |
-| Ячейки таблицы | 4 | 4 |
-| Fenced-code блок | 1 | 1 |
-| Токены fenced-code | 5 | 5 |
+| Heading | 1 | 1 |
+| List marker visible | yes | yes |
+| Table cells | 4 | 4 |
+| Fenced code block | 1 | 1 |
+| Fenced code tokens | 5 | 5 |
 | KaTeX widget | 1 | 1 |
-| Enter после `1. first` | `1. first` → `2. second` | то же |
+| Enter after `1. first` | `1. first` → `2. second` | the same |
 
-Доказательства: `w143-integrity-baseline.json`, `w143-integrity-nohtml.json`,
-`w143-enter-baseline.json`, `w143-enter-nohtml.json` и
+Evidence: `w143-integrity-baseline.json`, `w143-integrity-nohtml.json`,
+`w143-enter-baseline.json`, `w143-enter-nohtml.json` and
 `w143-html-baseline.json`/`w143-html-nohtml.json`.
 
-## Проверки репозитория
+## Repository checks
 
-- `npx tsc --noEmit` — чисто.
-- `npx vitest run --poolOptions.threads.maxThreads=3` — 50 файлов, 429 тестов,
-  все зелёные.
-- Production-код и `src-tauri/**` не изменялись, установщик не собирался.
-
+- `npx tsc --noEmit` — clean.
+- `npx vitest run --poolOptions.threads.maxThreads=3` — 50 files, 429 tests,
+  all green.
+- Production code and `src-tauri/**` were not changed, and no installer was
+  built.
