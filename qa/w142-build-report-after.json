@@ -1,0 +1,1394 @@
+{
+  "generatedAt": "2026-09-20T02:56:26.976Z",
+  "command": "npm run build",
+  "mainChunk": "assets/index-BzKe89PI.js",
+  "mainChunkBytes": 538570,
+  "chunks": [
+    {
+      "fileName": "assets/index-BzKe89PI.js",
+      "bytes": 538570,
+      "gzipBytes": null
+    },
+    {
+      "fileName": "assets/SettingsWindow-D0qcdfyy.js",
+      "bytes": 20631,
+      "gzipBytes": null
+    },
+    {
+      "fileName": "assets/apl-HgHEXXot.js",
+      "bytes": 2293,
+      "gzipBytes": null
+    },
+    {
+      "fileName": "assets/ar-_RZpi2OH.js",
+      "bytes": 19050,
+      "gzipBytes": null
+    },
+    {
+      "fileName": "assets/asciiarmor-BCMA6NWE.js",
+      "bytes": 784,
+      "gzipBytes": null
+    },
+    {
+      "fileName": "assets/asn1-Kzy7voXy.js",
+      "bytes": 3987,
+      "gzipBytes": null
+    },
+    {
+      "fileName": "assets/asterisk-ChB64vS0.js",
+      "bytes": 4461,
+      "gzipBytes": null
+    },
+    {
+      "fileName": "assets/brainfuck-CMTsipah.js",
+      "bytes": 600,
+      "gzipBytes": null
+    },
+    {
+      "fileName": "assets/clike-BevCOpZ6.js",
+      "bytes": 22211,
+      "gzipBytes": null
+    },
+    {
+      "fileName": "assets/clojure-Cj19RBE9.js",
+      "bytes": 10813,
+      "gzipBytes": null
+    },
+    {
+      "fileName": "assets/cmake-U5GsXmRz.js",
+      "bytes": 781,
+      "gzipBytes": null
+    },
+    {
+      "fileName": "assets/cobol-DmYfZL7R.js",
+      "bytes": 6230,
+      "gzipBytes": null
+    },
+    {
+      "fileName": "assets/coffeescript-sEBj_57X.js",
+      "bytes": 3858,
+      "gzipBytes": null
+    },
+    {
+      "fileName": "assets/commonlisp-Bw-z7IkA.js",
+      "bytes": 2321,
+      "gzipBytes": null
+    },
+    {
+      "fileName": "assets/crystal-B9RjEXPe.js",
+      "bytes": 5120,
+      "gzipBytes": null
+    },
+    {
+      "fileName": "assets/css-osG3334y.js",
+      "bytes": 27010,
+      "gzipBytes": null
+    },
+    {
+      "fileName": "assets/cypher-CDAKrY0K.js",
+      "bytes": 3555,
+      "gzipBytes": null
+    },
+    {
+      "fileName": "assets/d-G8gZfho_.js",
+      "bytes": 3707,
+      "gzipBytes": null
+    },
+    {
+      "fileName": "assets/de-BhA38bnG.js",
+      "bytes": 15812,
+      "gzipBytes": null
+    },
+    {
+      "fileName": "assets/diff-CkUo3vbi.js",
+      "bytes": 303,
+      "gzipBytes": null
+    },
+    {
+      "fileName": "assets/dist-0lg4wfEv.js",
+      "bytes": 20780,
+      "gzipBytes": null
+    },
+    {
+      "fileName": "assets/dist-BAaK5W6j.js",
+      "bytes": 1960,
+      "gzipBytes": null
+    },
+    {
+      "fileName": "assets/dist-Bmd0q21Q.js",
+      "bytes": 21035,
+      "gzipBytes": null
+    },
+    {
+      "fileName": "assets/dist-Bsjndpbm.js",
+      "bytes": 231741,
+      "gzipBytes": null
+    },
+    {
+      "fileName": "assets/dist-C8cU2nEh.js",
+      "bytes": 4925,
+      "gzipBytes": null
+    },
+    {
+      "fileName": "assets/dist-CuINOZDT.js",
+      "bytes": 98131,
+      "gzipBytes": null
+    },
+    {
+      "fileName": "assets/dist-CuzekCC2.js",
+      "bytes": 3266,
+      "gzipBytes": null
+    },
+    {
+      "fileName": "assets/dist-CwXL44DT.js",
+      "bytes": 2578,
+      "gzipBytes": null
+    },
+    {
+      "fileName": "assets/dist-CwYdLv_h.js",
+      "bytes": 40193,
+      "gzipBytes": null
+    },
+    {
+      "fileName": "assets/dist-CwpD8ssT.js",
+      "bytes": 44971,
+      "gzipBytes": null
+    },
+    {
+      "fileName": "assets/dist-CzfyC1fe.js",
+      "bytes": 16204,
+      "gzipBytes": null
+    },
+    {
+      "fileName": "assets/dist-D16-jvjK.js",
+      "bytes": 12364,
+      "gzipBytes": null
+    },
+    {
+      "fileName": "assets/dist-D9IBZceC.js",
+      "bytes": 8562,
+      "gzipBytes": null
+    },
+    {
+      "fileName": "assets/dist-D9MlXFyg.js",
+      "bytes": 22941,
+      "gzipBytes": null
+    },
+    {
+      "fileName": "assets/dist-D9bHfB6_.js",
+      "bytes": 30706,
+      "gzipBytes": null
+    },
+    {
+      "fileName": "assets/dist-DcMrwk97.js",
+      "bytes": 14581,
+      "gzipBytes": null
+    },
+    {
+      "fileName": "assets/dist-DmCDUfLG.js",
+      "bytes": 32262,
+      "gzipBytes": null
+    },
+    {
+      "fileName": "assets/dist-MB6nBJM9.js",
+      "bytes": 103861,
+      "gzipBytes": null
+    },
+    {
+      "fileName": "assets/dist-q2JKqdOW.js",
+      "bytes": 87856,
+      "gzipBytes": null
+    },
+    {
+      "fileName": "assets/dist-ywyidao9.js",
+      "bytes": 70739,
+      "gzipBytes": null
+    },
+    {
+      "fileName": "assets/dockerfile-DX_VfMW1.js",
+      "bytes": 1935,
+      "gzipBytes": null
+    },
+    {
+      "fileName": "assets/dtd-DeaIxSc8.js",
+      "bytes": 2057,
+      "gzipBytes": null
+    },
+    {
+      "fileName": "assets/dylan-Yac_wH_X.js",
+      "bytes": 4031,
+      "gzipBytes": null
+    },
+    {
+      "fileName": "assets/ebnf-VNZi7k5n.js",
+      "bytes": 1980,
+      "gzipBytes": null
+    },
+    {
+      "fileName": "assets/ecl-DIrkXxFx.js",
+      "bytes": 5126,
+      "gzipBytes": null
+    },
+    {
+      "fileName": "assets/eiffel-H873bhsD.js",
+      "bytes": 1810,
+      "gzipBytes": null
+    },
+    {
+      "fileName": "assets/elm-ClUTGo5O.js",
+      "bytes": 1867,
+      "gzipBytes": null
+    },
+    {
+      "fileName": "assets/erlang-Bqdi3Bi8.js",
+      "bytes": 8093,
+      "gzipBytes": null
+    },
+    {
+      "fileName": "assets/es-bbEl9nTh.js",
+      "bytes": 15717,
+      "gzipBytes": null
+    },
+    {
+      "fileName": "assets/factor-aVI-w_hC.js",
+      "bytes": 1670,
+      "gzipBytes": null
+    },
+    {
+      "fileName": "assets/fcl-BAuNlvTV.js",
+      "bytes": 2063,
+      "gzipBytes": null
+    },
+    {
+      "fileName": "assets/forth-9Oqcr2hv.js",
+      "bytes": 2540,
+      "gzipBytes": null
+    },
+    {
+      "fileName": "assets/fortran-DTMl8J_7.js",
+      "bytes": 4650,
+      "gzipBytes": null
+    },
+    {
+      "fileName": "assets/fr-BORuWAkA.js",
+      "bytes": 16451,
+      "gzipBytes": null
+    },
+    {
+      "fileName": "assets/gas-C05ow7k1.js",
+      "bytes": 4553,
+      "gzipBytes": null
+    },
+    {
+      "fileName": "assets/gherkin-MY0AvnMW.js",
+      "bytes": 10157,
+      "gzipBytes": null
+    },
+    {
+      "fileName": "assets/groovy-DyP1Fpyw.js",
+      "bytes": 4137,
+      "gzipBytes": null
+    },
+    {
+      "fileName": "assets/haskell-Bo1ZIvh5.js",
+      "bytes": 4160,
+      "gzipBytes": null
+    },
+    {
+      "fileName": "assets/haxe-DRLWKgjc.js",
+      "bytes": 7882,
+      "gzipBytes": null
+    },
+    {
+      "fileName": "assets/http-UMnO1pa3.js",
+      "bytes": 846,
+      "gzipBytes": null
+    },
+    {
+      "fileName": "assets/idl-D1SpNDuX.js",
+      "bytes": 11632,
+      "gzipBytes": null
+    },
+    {
+      "fileName": "assets/it-DayLCqBH.js",
+      "bytes": 15991,
+      "gzipBytes": null
+    },
+    {
+      "fileName": "assets/ja-CbmwyCGL.js",
+      "bytes": 17024,
+      "gzipBytes": null
+    },
+    {
+      "fileName": "assets/javascript-Dpv-sTo5.js",
+      "bytes": 17048,
+      "gzipBytes": null
+    },
+    {
+      "fileName": "assets/julia-xNPhGaGn.js",
+      "bytes": 5383,
+      "gzipBytes": null
+    },
+    {
+      "fileName": "assets/katex-DmOvGsTh.js",
+      "bytes": 260832,
+      "gzipBytes": null
+    },
+    {
+      "fileName": "assets/livescript-zjWWle_Z.js",
+      "bytes": 4090,
+      "gzipBytes": null
+    },
+    {
+      "fileName": "assets/lua-5dyAxH4Z.js",
+      "bytes": 3405,
+      "gzipBytes": null
+    },
+    {
+      "fileName": "assets/mathematica-CRuBwcU2.js",
+      "bytes": 1912,
+      "gzipBytes": null
+    },
+    {
+      "fileName": "assets/mbox-BvIJCs03.js",
+      "bytes": 1395,
+      "gzipBytes": null
+    },
+    {
+      "fileName": "assets/mirc-WDl4E_V9.js",
+      "bytes": 5918,
+      "gzipBytes": null
+    },
+    {
+      "fileName": "assets/mllike-YIlOgzvN.js",
+      "bytes": 4824,
+      "gzipBytes": null
+    },
+    {
+      "fileName": "assets/modelica-B5lJKsMe.js",
+      "bytes": 2786,
+      "gzipBytes": null
+    },
+    {
+      "fileName": "assets/mscgen-CINNGGuz.js",
+      "bytes": 3508,
+      "gzipBytes": null
+    },
+    {
+      "fileName": "assets/mumps-Dk8iJohU.js",
+      "bytes": 2063,
+      "gzipBytes": null
+    },
+    {
+      "fileName": "assets/nginx-xWbMltqE.js",
+      "bytes": 7339,
+      "gzipBytes": null
+    },
+    {
+      "fileName": "assets/nsis-Dn6O1rXh.js",
+      "bytes": 7062,
+      "gzipBytes": null
+    },
+    {
+      "fileName": "assets/ntriples-BJmuWkiw.js",
+      "bytes": 2100,
+      "gzipBytes": null
+    },
+    {
+      "fileName": "assets/octave-CXDj0uyJ.js",
+      "bytes": 2304,
+      "gzipBytes": null
+    },
+    {
+      "fileName": "assets/oz-CqyT75hx.js",
+      "bytes": 2894,
+      "gzipBytes": null
+    },
+    {
+      "fileName": "assets/pascal-D4V8WzY2.js",
+      "bytes": 2299,
+      "gzipBytes": null
+    },
+    {
+      "fileName": "assets/perl-uhCCAAVy.js",
+      "bytes": 9751,
+      "gzipBytes": null
+    },
+    {
+      "fileName": "assets/pig-BbLsR4pf.js",
+      "bytes": 2514,
+      "gzipBytes": null
+    },
+    {
+      "fileName": "assets/powershell-BUvok8HH.js",
+      "bytes": 7723,
+      "gzipBytes": null
+    },
+    {
+      "fileName": "assets/properties-S0qkYrRb.js",
+      "bytes": 665,
+      "gzipBytes": null
+    },
+    {
+      "fileName": "assets/protobuf-DxFWsHLN.js",
+      "bytes": 862,
+      "gzipBytes": null
+    },
+    {
+      "fileName": "assets/pt-DeOjM29N.js",
+      "bytes": 16047,
+      "gzipBytes": null
+    },
+    {
+      "fileName": "assets/pug-BuNNmWOl.js",
+      "bytes": 6671,
+      "gzipBytes": null
+    },
+    {
+      "fileName": "assets/puppet-BLE7Ro_J.js",
+      "bytes": 2541,
+      "gzipBytes": null
+    },
+    {
+      "fileName": "assets/python-m4uYbAuQ.js",
+      "bytes": 6437,
+      "gzipBytes": null
+    },
+    {
+      "fileName": "assets/q-pnYhjEv1.js",
+      "bytes": 4030,
+      "gzipBytes": null
+    },
+    {
+      "fileName": "assets/r-Bpos9fnB.js",
+      "bytes": 2940,
+      "gzipBytes": null
+    },
+    {
+      "fileName": "assets/rolldown-runtime-BQ-_32WO.js",
+      "bytes": 164,
+      "gzipBytes": null
+    },
+    {
+      "fileName": "assets/rpm-CSlbpSDJ.js",
+      "bytes": 1598,
+      "gzipBytes": null
+    },
+    {
+      "fileName": "assets/ru-D3BJAaSj.js",
+      "bytes": 20797,
+      "gzipBytes": null
+    },
+    {
+      "fileName": "assets/ruby-B_MU5FGb.js",
+      "bytes": 5210,
+      "gzipBytes": null
+    },
+    {
+      "fileName": "assets/sas-DGRGofQt.js",
+      "bytes": 9332,
+      "gzipBytes": null
+    },
+    {
+      "fileName": "assets/scheme-6o3npgZL.js",
+      "bytes": 6366,
+      "gzipBytes": null
+    },
+    {
+      "fileName": "assets/shell-B_MNADuE.js",
+      "bytes": 2569,
+      "gzipBytes": null
+    },
+    {
+      "fileName": "assets/sieve-QxZfwjiW.js",
+      "bytes": 1616,
+      "gzipBytes": null
+    },
+    {
+      "fileName": "assets/simple-mode-Dt5axubo.js",
+      "bytes": 2292,
+      "gzipBytes": null
+    },
+    {
+      "fileName": "assets/smalltalk-DQ4VSJkY.js",
+      "bytes": 1997,
+      "gzipBytes": null
+    },
+    {
+      "fileName": "assets/solr-BSz0AZOi.js",
+      "bytes": 864,
+      "gzipBytes": null
+    },
+    {
+      "fileName": "assets/sparql-Ba6wVavx.js",
+      "bytes": 3543,
+      "gzipBytes": null
+    },
+    {
+      "fileName": "assets/spreadsheet-DiqxJV4y.js",
+      "bytes": 1136,
+      "gzipBytes": null
+    },
+    {
+      "fileName": "assets/sql-YkF1z3DZ.js",
+      "bytes": 36912,
+      "gzipBytes": null
+    },
+    {
+      "fileName": "assets/stex-CsQikr8H.js",
+      "bytes": 3100,
+      "gzipBytes": null
+    },
+    {
+      "fileName": "assets/stylus-Cqzo5uS7.js",
+      "bytes": 25793,
+      "gzipBytes": null
+    },
+    {
+      "fileName": "assets/swift-DFCua_GN.js",
+      "bytes": 3951,
+      "gzipBytes": null
+    },
+    {
+      "fileName": "assets/tcl-CnSuC1oG.js",
+      "bytes": 2354,
+      "gzipBytes": null
+    },
+    {
+      "fileName": "assets/textile-D_DpZr83.js",
+      "bytes": 6776,
+      "gzipBytes": null
+    },
+    {
+      "fileName": "assets/tiddlywiki-bEePZ2Ra.js",
+      "bytes": 2761,
+      "gzipBytes": null
+    },
+    {
+      "fileName": "assets/tiki-BsiOUmcZ.js",
+      "bytes": 3226,
+      "gzipBytes": null
+    },
+    {
+      "fileName": "assets/toml-Cr58a6NH.js",
+      "bytes": 1136,
+      "gzipBytes": null
+    },
+    {
+      "fileName": "assets/troff-8UDMOo-3.js",
+      "bytes": 958,
+      "gzipBytes": null
+    },
+    {
+      "fileName": "assets/ttcn-CYYHMuI4.js",
+      "bytes": 4855,
+      "gzipBytes": null
+    },
+    {
+      "fileName": "assets/ttcn-cfg-GPY3QPal.js",
+      "bytes": 4109,
+      "gzipBytes": null
+    },
+    {
+      "fileName": "assets/turtle-DzlWuZvW.js",
+      "bytes": 1963,
+      "gzipBytes": null
+    },
+    {
+      "fileName": "assets/vb-LZAplkc9.js",
+      "bytes": 3925,
+      "gzipBytes": null
+    },
+    {
+      "fileName": "assets/vbscript-CiHBNs7b.js",
+      "bytes": 5788,
+      "gzipBytes": null
+    },
+    {
+      "fileName": "assets/velocity-Z2yLaCKG.js",
+      "bytes": 2669,
+      "gzipBytes": null
+    },
+    {
+      "fileName": "assets/verilog-BdGaR9ZS.js",
+      "bytes": 8482,
+      "gzipBytes": null
+    },
+    {
+      "fileName": "assets/vhdl-DxqozbPM.js",
+      "bytes": 3346,
+      "gzipBytes": null
+    },
+    {
+      "fileName": "assets/webidl-BNiC0yJq.js",
+      "bytes": 2507,
+      "gzipBytes": null
+    },
+    {
+      "fileName": "assets/xquery-kQB9s-mX.js",
+      "bytes": 6596,
+      "gzipBytes": null
+    },
+    {
+      "fileName": "assets/yacas-Dw-sAHuw.js",
+      "bytes": 2150,
+      "gzipBytes": null
+    },
+    {
+      "fileName": "assets/z80-B8w_N1kM.js",
+      "bytes": 1739,
+      "gzipBytes": null
+    },
+    {
+      "fileName": "assets/zh-vzQQMjWO.js",
+      "bytes": 14441,
+      "gzipBytes": null
+    }
+  ],
+  "mainModules": [
+    {
+      "id": "C:/marknote/node_modules/@lezer/javascript/dist/index.js",
+      "renderedBytes": 81155
+    },
+    {
+      "id": "C:/marknote/node_modules/@lezer/markdown/dist/index.js",
+      "renderedBytes": 59346
+    },
+    {
+      "id": "C:/marknote/node_modules/@codemirror/commands/dist/index.js",
+      "renderedBytes": 46356
+    },
+    {
+      "id": "C:/marknote/src/App.svelte",
+      "renderedBytes": 40122
+    },
+    {
+      "id": "C:/marknote/src/editor/livePreview/tables.ts",
+      "renderedBytes": 38185
+    },
+    {
+      "id": "C:/marknote/node_modules/@codemirror/language-data/dist/index.js",
+      "renderedBytes": 31614
+    },
+    {
+      "id": "C:/marknote/src/state/actions.ts",
+      "renderedBytes": 30254
+    },
+    {
+      "id": "C:/marknote/node_modules/@codemirror/search/dist/index.js",
+      "renderedBytes": 27755
+    },
+    {
+      "id": "C:/marknote/src/editor/keymap.ts",
+      "renderedBytes": 23298
+    },
+    {
+      "id": "C:/marknote/node_modules/@codemirror/lang-html/dist/index.js",
+      "renderedBytes": 22334
+    },
+    {
+      "id": "C:/marknote/node_modules/@lezer/html/dist/index.js",
+      "renderedBytes": 20193
+    },
+    {
+      "id": "C:/marknote/src/ui/ContextMenu.svelte",
+      "renderedBytes": 20093
+    },
+    {
+      "id": "C:/marknote/node_modules/@lezer/css/dist/index.js",
+      "renderedBytes": 19585
+    },
+    {
+      "id": "C:/marknote/src/ui/MenuBar.svelte",
+      "renderedBytes": 17327
+    },
+    {
+      "id": "C:/marknote/node_modules/svelte/src/internal/client/reactivity/batch.js",
+      "renderedBytes": 17047
+    },
+    {
+      "id": "C:/marknote/node_modules/@tauri-apps/api/window.js",
+      "renderedBytes": 16502
+    },
+    {
+      "id": "C:/marknote/node_modules/@codemirror/lang-markdown/dist/index.js",
+      "renderedBytes": 16007
+    },
+    {
+      "id": "C:/marknote/src/i18n/locales/en.ts",
+      "renderedBytes": 15361
+    },
+    {
+      "id": "C:/marknote/node_modules/@codemirror/lang-css/dist/index.js",
+      "renderedBytes": 15084
+    },
+    {
+      "id": "C:/marknote/src/ui/FindPanel.svelte",
+      "renderedBytes": 13922
+    },
+    {
+      "id": "C:/marknote/node_modules/@codemirror/lang-javascript/dist/index.js",
+      "renderedBytes": 11459
+    },
+    {
+      "id": "C:/marknote/node_modules/svelte/src/internal/client/runtime.js",
+      "renderedBytes": 11291
+    },
+    {
+      "id": "C:/marknote/src/editor/livePreview/callouts.ts",
+      "renderedBytes": 11264
+    },
+    {
+      "id": "C:/marknote/node_modules/svelte/src/internal/client/dom/blocks/each.js",
+      "renderedBytes": 10805
+    },
+    {
+      "id": "C:/marknote/src/editor/livePreview/blocks.ts",
+      "renderedBytes": 10540
+    },
+    {
+      "id": "C:/marknote/src/editor/createEditor.ts",
+      "renderedBytes": 10078
+    },
+    {
+      "id": "C:/marknote/src/ui/HelpDialog.svelte",
+      "renderedBytes": 9178
+    },
+    {
+      "id": "C:/marknote/src/state/autosave.ts",
+      "renderedBytes": 8485
+    },
+    {
+      "id": "C:/marknote/src/editor/livePreview/codeBlocks.ts",
+      "renderedBytes": 8318
+    },
+    {
+      "id": "C:/marknote/node_modules/svelte/src/internal/client/dom/blocks/boundary.js",
+      "renderedBytes": 8309
+    },
+    {
+      "id": "C:/marknote/node_modules/svelte/src/internal/client/reactivity/effects.js",
+      "renderedBytes": 8298
+    },
+    {
+      "id": "C:/marknote/src/editor/search.ts",
+      "renderedBytes": 8122
+    },
+    {
+      "id": "C:/marknote/src/ui/FormatPicker.svelte",
+      "renderedBytes": 7389
+    },
+    {
+      "id": "C:/marknote/src/editor/markdownExtensions.ts",
+      "renderedBytes": 7304
+    },
+    {
+      "id": "C:/marknote/src/ui/StartScreen.svelte",
+      "renderedBytes": 7150
+    },
+    {
+      "id": "C:/marknote/node_modules/svelte/src/internal/client/proxy.js",
+      "renderedBytes": 6741
+    },
+    {
+      "id": "C:/marknote/src/editor/livePreview/plugin.ts",
+      "renderedBytes": 6630
+    },
+    {
+      "id": "C:/marknote/node_modules/svelte/src/internal/client/errors.js",
+      "renderedBytes": 6564
+    },
+    {
+      "id": "C:/marknote/src/ui/menuModel.ts",
+      "renderedBytes": 6556
+    },
+    {
+      "id": "C:/marknote/src/ui/TitleBar.svelte",
+      "renderedBytes": 6293
+    },
+    {
+      "id": "C:/marknote/node_modules/svelte/src/internal/client/reactivity/deriveds.js",
+      "renderedBytes": 5893
+    },
+    {
+      "id": "C:/marknote/src/editor/livePreview/footnotes.ts",
+      "renderedBytes": 5877
+    },
+    {
+      "id": "C:/marknote/src/ui/Notice.svelte",
+      "renderedBytes": 5416
+    },
+    {
+      "id": "C:/marknote/node_modules/@tauri-apps/api/webview.js",
+      "renderedBytes": 5154
+    },
+    {
+      "id": "C:/marknote/src/state/settings.svelte.ts",
+      "renderedBytes": 5111
+    },
+    {
+      "id": "C:/marknote/src/editor/tableOperations.ts",
+      "renderedBytes": 4938
+    },
+    {
+      "id": "C:/marknote/src/ui/SaveControls.svelte",
+      "renderedBytes": 4866
+    },
+    {
+      "id": "C:/marknote/node_modules/svelte/src/internal/client/reactivity/sources.js",
+      "renderedBytes": 4571
+    },
+    {
+      "id": "C:/marknote/src/state/document.svelte.ts",
+      "renderedBytes": 4542
+    },
+    {
+      "id": "C:/marknote/node_modules/svelte/src/internal/client/dom/elements/custom-element.js",
+      "renderedBytes": 4518
+    },
+    {
+      "id": "C:/marknote/src/editor/livePreview/inline.ts",
+      "renderedBytes": 4516
+    },
+    {
+      "id": "C:/marknote/src/ui/StatusBar.svelte",
+      "renderedBytes": 4487
+    },
+    {
+      "id": "C:/marknote/src/ui/TabBar.svelte",
+      "renderedBytes": 4224
+    },
+    {
+      "id": "C:/marknote/node_modules/svelte/src/internal/client/render.js",
+      "renderedBytes": 4126
+    },
+    {
+      "id": "C:/marknote/node_modules/svelte/src/internal/client/dom/elements/attributes.js",
+      "renderedBytes": 3871
+    },
+    {
+      "id": "C:/marknote/src/i18n/index.ts",
+      "renderedBytes": 3801
+    },
+    {
+      "id": "C:/marknote/src/state/workspace.svelte.ts",
+      "renderedBytes": 3781
+    },
+    {
+      "id": "C:/marknote/node_modules/svelte/src/internal/client/dom/operations.js",
+      "renderedBytes": 3706
+    },
+    {
+      "id": "C:/marknote/node_modules/svelte/src/internal/client/dom/elements/events.js",
+      "renderedBytes": 3644
+    },
+    {
+      "id": "C:/marknote/node_modules/svelte/src/internal/client/warnings.js",
+      "renderedBytes": 3530
+    },
+    {
+      "id": "C:/marknote/node_modules/@tauri-apps/api/dpi.js",
+      "renderedBytes": 3451
+    },
+    {
+      "id": "C:/marknote/node_modules/@tauri-apps/api/core.js",
+      "renderedBytes": 3272
+    },
+    {
+      "id": "C:/marknote/node_modules/svelte/src/internal/shared/attributes.js",
+      "renderedBytes": 3126
+    },
+    {
+      "id": "C:/marknote/node_modules/svelte/src/internal/client/dom/blocks/branches.js",
+      "renderedBytes": 3053
+    },
+    {
+      "id": "C:/marknote/src/editor/zoom.ts",
+      "renderedBytes": 2984
+    },
+    {
+      "id": "C:/marknote/node_modules/svelte/src/internal/client/dom/template.js",
+      "renderedBytes": 2923
+    },
+    {
+      "id": "C:/marknote/node_modules/svelte/src/internal/client/reactivity/async.js",
+      "renderedBytes": 2694
+    },
+    {
+      "id": "C:/marknote/node_modules/@tauri-apps/api/webviewWindow.js",
+      "renderedBytes": 2676
+    },
+    {
+      "id": "C:/marknote/node_modules/svelte/src/internal/client/dom/elements/bindings/select.js",
+      "renderedBytes": 2458
+    },
+    {
+      "id": "C:/marknote/node_modules/svelte/src/internal/client/reactivity/props.js",
+      "renderedBytes": 2440
+    },
+    {
+      "id": "C:/marknote/src/editor/autoCorrect.ts",
+      "renderedBytes": 2377
+    },
+    {
+      "id": "C:/marknote/src/editor/livePreview/widgets/Math.ts",
+      "renderedBytes": 2198
+    },
+    {
+      "id": "\u0000vite/preload-helper.js",
+      "renderedBytes": 2170
+    },
+    {
+      "id": "C:/marknote/node_modules/@tauri-apps/api/event.js",
+      "renderedBytes": 2167
+    },
+    {
+      "id": "C:/marknote/node_modules/svelte/src/legacy/legacy-client.js",
+      "renderedBytes": 2142
+    },
+    {
+      "id": "C:/marknote/src/editor/spellcheck.ts",
+      "renderedBytes": 2066
+    },
+    {
+      "id": "C:/marknote/node_modules/svelte/src/internal/client/dom/elements/bindings/input.js",
+      "renderedBytes": 1917
+    },
+    {
+      "id": "C:/marknote/src/editor/theme.ts",
+      "renderedBytes": 1901
+    },
+    {
+      "id": "C:/marknote/node_modules/svelte/src/internal/client/error-handling.js",
+      "renderedBytes": 1891
+    },
+    {
+      "id": "C:/marknote/src/editor/settings/appearance.ts",
+      "renderedBytes": 1792
+    },
+    {
+      "id": "C:/marknote/src/editor/settings.ts",
+      "renderedBytes": 1558
+    },
+    {
+      "id": "C:/marknote/src/state/recentFiles.svelte.ts",
+      "renderedBytes": 1533
+    },
+    {
+      "id": "C:/marknote/node_modules/svelte/src/internal/client/dev/equality.js",
+      "renderedBytes": 1457
+    },
+    {
+      "id": "C:/marknote/src/editor/livePreview/blockMath.ts",
+      "renderedBytes": 1404
+    },
+    {
+      "id": "C:/marknote/node_modules/svelte/src/internal/client/context.js",
+      "renderedBytes": 1380
+    },
+    {
+      "id": "C:/marknote/node_modules/svelte/src/internal/client/dom/hydration.js",
+      "renderedBytes": 1373
+    },
+    {
+      "id": "C:/marknote/package.json",
+      "renderedBytes": 1322
+    },
+    {
+      "id": "C:/marknote/src/state/formats.svelte.ts",
+      "renderedBytes": 1307
+    },
+    {
+      "id": "C:/marknote/src/editor/livePreview/isNodeActive.ts",
+      "renderedBytes": 1304
+    },
+    {
+      "id": "C:/marknote/node_modules/svelte/src/internal/client/constants.js",
+      "renderedBytes": 1288
+    },
+    {
+      "id": "C:/marknote/src/editor/livePreview/widgets/Image.ts",
+      "renderedBytes": 1249
+    },
+    {
+      "id": "C:/marknote/node_modules/svelte/src/utils.js",
+      "renderedBytes": 1248
+    },
+    {
+      "id": "C:/marknote/node_modules/svelte/src/internal/client/dom/elements/bindings/this.js",
+      "renderedBytes": 1233
+    },
+    {
+      "id": "C:/marknote/src/editor/imageResolver.ts",
+      "renderedBytes": 1233
+    },
+    {
+      "id": "\u0000vite/modulepreload-polyfill.js",
+      "renderedBytes": 1205
+    },
+    {
+      "id": "C:/marknote/node_modules/svelte/src/internal/shared/dev.js",
+      "renderedBytes": 1152
+    },
+    {
+      "id": "C:/marknote/node_modules/svelte/src/internal/client/dom/blocks/svelte-head.js",
+      "renderedBytes": 1106
+    },
+    {
+      "id": "C:/marknote/src/editor/livePreview/widgets/Checkbox.ts",
+      "renderedBytes": 1096
+    },
+    {
+      "id": "C:/marknote/node_modules/@tauri-apps/api/external/tslib/tslib.es6.js",
+      "renderedBytes": 1038
+    },
+    {
+      "id": "C:/marknote/node_modules/svelte/src/internal/client/dom/elements/style.js",
+      "renderedBytes": 998
+    },
+    {
+      "id": "C:/marknote/node_modules/svelte/src/index-client.js",
+      "renderedBytes": 993
+    },
+    {
+      "id": "C:/marknote/src/editor/livePreview/settings.ts",
+      "renderedBytes": 993
+    },
+    {
+      "id": "C:/marknote/node_modules/svelte/src/internal/shared/errors.js",
+      "renderedBytes": 955
+    },
+    {
+      "id": "C:/marknote/node_modules/crelt/index.js",
+      "renderedBytes": 936
+    },
+    {
+      "id": "C:/marknote/node_modules/@tauri-apps/api/image.js",
+      "renderedBytes": 913
+    },
+    {
+      "id": "C:/marknote/node_modules/svelte/src/internal/client/dom/blocks/if.js",
+      "renderedBytes": 842
+    },
+    {
+      "id": "C:/marknote/node_modules/svelte/src/internal/client/dom/elements/class.js",
+      "renderedBytes": 839
+    },
+    {
+      "id": "C:/marknote/node_modules/svelte/src/internal/client/dom/blocks/svelte-component.js",
+      "renderedBytes": 828
+    },
+    {
+      "id": "C:/marknote/node_modules/svelte/src/internal/shared/utils.js",
+      "renderedBytes": 825
+    },
+    {
+      "id": "C:/marknote/node_modules/svelte/src/internal/client/dom/elements/bindings/shared.js",
+      "renderedBytes": 764
+    },
+    {
+      "id": "C:/marknote/node_modules/svelte/src/reactivity/create-subscriber.js",
+      "renderedBytes": 627
+    },
+    {
+      "id": "C:/marknote/src/editor/livePreview/mathBlockSource.ts",
+      "renderedBytes": 572
+    },
+    {
+      "id": "C:/marknote/node_modules/svelte/src/internal/client/reactivity/utils.js",
+      "renderedBytes": 540
+    },
+    {
+      "id": "C:/marknote/node_modules/svelte/src/internal/client/dom/reconciler.js",
+      "renderedBytes": 521
+    },
+    {
+      "id": "C:/marknote/node_modules/svelte/src/internal/client/dom/task.js",
+      "renderedBytes": 489
+    },
+    {
+      "id": "C:/marknote/node_modules/svelte/src/internal/client/dom/elements/misc.js",
+      "renderedBytes": 439
+    },
+    {
+      "id": "C:/marknote/node_modules/svelte/src/internal/client/reactivity/status.js",
+      "renderedBytes": 407
+    },
+    {
+      "id": "C:/marknote/node_modules/svelte/src/internal/client/dom/blocks/snippet.js",
+      "renderedBytes": 386
+    },
+    {
+      "id": "C:/marknote/node_modules/svelte/src/internal/client/reactivity/store.js",
+      "renderedBytes": 375
+    },
+    {
+      "id": "C:/marknote/node_modules/svelte/src/internal/client/reactivity/equality.js",
+      "renderedBytes": 346
+    },
+    {
+      "id": "C:/marknote/src/editor/livePreview/widgets/Hr.ts",
+      "renderedBytes": 339
+    },
+    {
+      "id": "C:/marknote/src/editor/settings/spellcheck.ts",
+      "renderedBytes": 328
+    },
+    {
+      "id": "C:/marknote/src/i18n/types.ts",
+      "renderedBytes": 301
+    },
+    {
+      "id": "C:/marknote/node_modules/svelte/src/internal/client/dev/tracing.js",
+      "renderedBytes": 300
+    },
+    {
+      "id": "C:/marknote/src/editor/livePreview/index.ts",
+      "renderedBytes": 285
+    },
+    {
+      "id": "C:/marknote/node_modules/svelte/src/constants.js",
+      "renderedBytes": 219
+    },
+    {
+      "id": "C:/marknote/node_modules/svelte/src/internal/disclose-version.js",
+      "renderedBytes": 180
+    },
+    {
+      "id": "C:/marknote/src/main.ts",
+      "renderedBytes": 173
+    },
+    {
+      "id": "C:/marknote/node_modules/svelte/src/internal/flags/index.js",
+      "renderedBytes": 161
+    },
+    {
+      "id": "C:/marknote/src/editor/settings/preview.ts",
+      "renderedBytes": 161
+    },
+    {
+      "id": "C:/marknote/src/i18n/state.svelte.ts",
+      "renderedBytes": 115
+    },
+    {
+      "id": "C:/marknote/node_modules/svelte/src/internal/client/legacy.js",
+      "renderedBytes": 102
+    },
+    {
+      "id": "C:/marknote/node_modules/svelte/src/internal/shared/clone.js",
+      "renderedBytes": 0
+    },
+    {
+      "id": "C:/marknote/node_modules/svelte/src/store/utils.js",
+      "renderedBytes": 0
+    },
+    {
+      "id": "C:/marknote/node_modules/svelte/src/store/shared/index.js",
+      "renderedBytes": 0
+    },
+    {
+      "id": "C:/marknote/node_modules/svelte/src/internal/client/dev/debug.js",
+      "renderedBytes": 0
+    },
+    {
+      "id": "C:/marknote/node_modules/svelte/src/attachments/index.js",
+      "renderedBytes": 0
+    },
+    {
+      "id": "C:/marknote/node_modules/svelte/src/internal/client/dev/assign.js",
+      "renderedBytes": 0
+    },
+    {
+      "id": "C:/marknote/node_modules/svelte/src/internal/client/dev/elements.js",
+      "renderedBytes": 0
+    },
+    {
+      "id": "C:/marknote/node_modules/svelte/src/internal/client/dev/hmr.js",
+      "renderedBytes": 0
+    },
+    {
+      "id": "C:/marknote/node_modules/svelte/src/internal/client/dev/ownership.js",
+      "renderedBytes": 0
+    },
+    {
+      "id": "C:/marknote/node_modules/svelte/src/internal/client/dev/legacy.js",
+      "renderedBytes": 0
+    },
+    {
+      "id": "C:/marknote/node_modules/svelte/src/internal/client/dev/inspect.js",
+      "renderedBytes": 0
+    },
+    {
+      "id": "C:/marknote/node_modules/svelte/src/internal/client/dom/blocks/async.js",
+      "renderedBytes": 0
+    },
+    {
+      "id": "C:/marknote/node_modules/svelte/src/internal/client/dom/blocks/await.js",
+      "renderedBytes": 0
+    },
+    {
+      "id": "C:/marknote/node_modules/svelte/src/internal/client/dom/blocks/key.js",
+      "renderedBytes": 0
+    },
+    {
+      "id": "C:/marknote/node_modules/svelte/src/internal/client/dom/blocks/css-props.js",
+      "renderedBytes": 0
+    },
+    {
+      "id": "C:/marknote/node_modules/svelte/src/internal/client/dom/blocks/html.js",
+      "renderedBytes": 0
+    },
+    {
+      "id": "C:/marknote/node_modules/svelte/src/internal/client/dom/blocks/slot.js",
+      "renderedBytes": 0
+    },
+    {
+      "id": "C:/marknote/node_modules/svelte/src/internal/shared/validate.js",
+      "renderedBytes": 0
+    },
+    {
+      "id": "C:/marknote/node_modules/svelte/src/internal/client/timing.js",
+      "renderedBytes": 0
+    },
+    {
+      "id": "C:/marknote/node_modules/svelte/src/internal/client/loop.js",
+      "renderedBytes": 0
+    },
+    {
+      "id": "C:/marknote/node_modules/svelte/src/internal/client/dom/elements/transitions.js",
+      "renderedBytes": 0
+    },
+    {
+      "id": "C:/marknote/node_modules/svelte/src/internal/client/dom/blocks/svelte-element.js",
+      "renderedBytes": 0
+    },
+    {
+      "id": "C:/marknote/node_modules/svelte/src/internal/client/dom/css.js",
+      "renderedBytes": 0
+    },
+    {
+      "id": "C:/marknote/node_modules/svelte/src/internal/client/dom/elements/actions.js",
+      "renderedBytes": 0
+    },
+    {
+      "id": "C:/marknote/node_modules/svelte/src/internal/client/dom/elements/attachments.js",
+      "renderedBytes": 0
+    },
+    {
+      "id": "C:/marknote/node_modules/svelte/src/internal/client/dom/elements/customizable-select.js",
+      "renderedBytes": 0
+    },
+    {
+      "id": "C:/marknote/node_modules/svelte/src/internal/client/dom/elements/bindings/document.js",
+      "renderedBytes": 0
+    },
+    {
+      "id": "C:/marknote/node_modules/svelte/src/internal/client/dom/elements/bindings/media.js",
+      "renderedBytes": 0
+    },
+    {
+      "id": "C:/marknote/node_modules/svelte/src/internal/client/dom/elements/bindings/navigator.js",
+      "renderedBytes": 0
+    },
+    {
+      "id": "C:/marknote/node_modules/svelte/src/internal/client/dom/elements/bindings/props.js",
+      "renderedBytes": 0
+    },
+    {
+      "id": "C:/marknote/node_modules/svelte/src/internal/client/dom/elements/bindings/size.js",
+      "renderedBytes": 0
+    },
+    {
+      "id": "C:/marknote/node_modules/svelte/src/internal/client/dom/elements/bindings/universal.js",
+      "renderedBytes": 0
+    },
+    {
+      "id": "C:/marknote/node_modules/svelte/src/internal/client/dom/elements/bindings/window.js",
+      "renderedBytes": 0
+    },
+    {
+      "id": "C:/marknote/node_modules/svelte/src/internal/client/dom/legacy/event-modifiers.js",
+      "renderedBytes": 0
+    },
+    {
+      "id": "C:/marknote/node_modules/svelte/src/internal/client/dom/legacy/lifecycle.js",
+      "renderedBytes": 0
+    },
+    {
+      "id": "C:/marknote/node_modules/svelte/src/internal/client/dom/legacy/misc.js",
+      "renderedBytes": 0
+    },
+    {
+      "id": "C:/marknote/node_modules/svelte/src/internal/client/validate.js",
+      "renderedBytes": 0
+    },
+    {
+      "id": "C:/marknote/node_modules/svelte/src/internal/client/dev/console-log.js",
+      "renderedBytes": 0
+    },
+    {
+      "id": "C:/marknote/node_modules/svelte/src/internal/client/index.js",
+      "renderedBytes": 0
+    },
+    {
+      "id": "C:/marknote/node_modules/svelte/src/internal/client/hydratable.js",
+      "renderedBytes": 0
+    },
+    {
+      "id": "C:/marknote/src/ui/MenuBar.svelte?svelte&type=style&lang.css",
+      "renderedBytes": 0
+    },
+    {
+      "id": "C:/marknote/src/ui/SaveControls.svelte?svelte&type=style&lang.css",
+      "renderedBytes": 0
+    },
+    {
+      "id": "C:/marknote/src/ui/FormatPicker.svelte?svelte&type=style&lang.css",
+      "renderedBytes": 0
+    },
+    {
+      "id": "C:/marknote/src/ui/StartScreen.svelte?svelte&type=style&lang.css",
+      "renderedBytes": 0
+    },
+    {
+      "id": "C:/marknote/src/ui/StatusBar.svelte?svelte&type=style&lang.css",
+      "renderedBytes": 0
+    },
+    {
+      "id": "C:/marknote/src/ui/FindPanel.svelte?svelte&type=style&lang.css",
+      "renderedBytes": 0
+    },
+    {
+      "id": "C:/marknote/src/ui/ContextMenu.svelte?svelte&type=style&lang.css",
+      "renderedBytes": 0
+    },
+    {
+      "id": "C:/marknote/src/ui/Notice.svelte?svelte&type=style&lang.css",
+      "renderedBytes": 0
+    },
+    {
+      "id": "C:/marknote/src/ui/HelpDialog.svelte?svelte&type=style&lang.css",
+      "renderedBytes": 0
+    },
+    {
+      "id": "C:/marknote/src/ui/TabBar.svelte?svelte&type=style&lang.css",
+      "renderedBytes": 0
+    },
+    {
+      "id": "C:/marknote/src/ui/TitleBar.svelte?svelte&type=style&lang.css",
+      "renderedBytes": 0
+    },
+    {
+      "id": "C:/marknote/src/App.svelte?svelte&type=style&lang.css",
+      "renderedBytes": 0
+    },
+    {
+      "id": "C:/marknote/src/styles/theme.css",
+      "renderedBytes": 0
+    },
+    {
+      "id": "C:/marknote/index.html",
+      "renderedBytes": 0
+    }
+  ]
+}

@@ -1,0 +1,1205 @@
+{
+  "generatedAt": "2026-09-20T02:51:25.147Z",
+  "cdpPort": 9555,
+  "vitePort": 1420,
+  "note": "Process samples include every matching process currently running; stop unrelated MarkNote/WebView2 instances before comparing runs.",
+  "samples": [
+    {
+      "label": "startup",
+      "timestamp": "2026-09-20T02:49:26.346Z",
+      "browserHeap": {
+        "usedBytes": 9964620,
+        "totalBytes": 10739712
+      },
+      "processMemory": {
+        "processes": [
+          {
+            "id": 2600,
+            "name": "msedgewebview2",
+            "workingSetBytes": 1728512,
+            "privateBytes": 374042624
+          },
+          {
+            "id": 2604,
+            "name": "msedgewebview2",
+            "workingSetBytes": 532480,
+            "privateBytes": 17068032
+          },
+          {
+            "id": 3496,
+            "name": "msedgewebview2",
+            "workingSetBytes": 16384,
+            "privateBytes": 14114816
+          },
+          {
+            "id": 4732,
+            "name": "msedgewebview2",
+            "workingSetBytes": 565248,
+            "privateBytes": 174583808
+          },
+          {
+            "id": 17568,
+            "name": "msedgewebview2",
+            "workingSetBytes": 39596032,
+            "privateBytes": 101449728
+          },
+          {
+            "id": 20496,
+            "name": "msedgewebview2",
+            "workingSetBytes": 11616256,
+            "privateBytes": 15708160
+          },
+          {
+            "id": 20992,
+            "name": "msedgewebview2",
+            "workingSetBytes": 3366912,
+            "privateBytes": 9662464
+          },
+          {
+            "id": 21180,
+            "name": "msedgewebview2",
+            "workingSetBytes": 1417216,
+            "privateBytes": 3100672
+          },
+          {
+            "id": 23072,
+            "name": "msedgewebview2",
+            "workingSetBytes": 913408,
+            "privateBytes": 2928640
+          },
+          {
+            "id": 24256,
+            "name": "msedgewebview2",
+            "workingSetBytes": 9330688,
+            "privateBytes": 48136192
+          },
+          {
+            "id": 24280,
+            "name": "msedgewebview2",
+            "workingSetBytes": 1626112,
+            "privateBytes": 3170304
+          },
+          {
+            "id": 24396,
+            "name": "msedgewebview2",
+            "workingSetBytes": 933888,
+            "privateBytes": 2945024
+          },
+          {
+            "id": 27500,
+            "name": "msedgewebview2",
+            "workingSetBytes": 18305024,
+            "privateBytes": 232230912
+          },
+          {
+            "id": 28656,
+            "name": "msedgewebview2",
+            "workingSetBytes": 33320960,
+            "privateBytes": 50397184
+          },
+          {
+            "id": 37752,
+            "name": "msedgewebview2",
+            "workingSetBytes": 56823808,
+            "privateBytes": 42381312
+          },
+          {
+            "id": 45124,
+            "name": "msedgewebview2",
+            "workingSetBytes": 18268160,
+            "privateBytes": 63401984
+          },
+          {
+            "id": 48292,
+            "name": "msedgewebview2",
+            "workingSetBytes": 13213696,
+            "privateBytes": 3059712
+          },
+          {
+            "id": 53516,
+            "name": "msedgewebview2",
+            "workingSetBytes": 17092608,
+            "privateBytes": 31203328
+          },
+          {
+            "id": 53904,
+            "name": "msedgewebview2",
+            "workingSetBytes": 49098752,
+            "privateBytes": 22130688
+          },
+          {
+            "id": 54304,
+            "name": "msedgewebview2",
+            "workingSetBytes": 18558976,
+            "privateBytes": 9490432
+          },
+          {
+            "id": 55468,
+            "name": "msedgewebview2",
+            "workingSetBytes": 51707904,
+            "privateBytes": 37998592
+          },
+          {
+            "id": 56064,
+            "name": "msedgewebview2",
+            "workingSetBytes": 18604032,
+            "privateBytes": 31465472
+          },
+          {
+            "id": 57924,
+            "name": "msedgewebview2",
+            "workingSetBytes": 21860352,
+            "privateBytes": 16125952
+          },
+          {
+            "id": 59476,
+            "name": "msedgewebview2",
+            "workingSetBytes": 13631488,
+            "privateBytes": 3125248
+          },
+          {
+            "id": 62240,
+            "name": "msedgewebview2",
+            "workingSetBytes": 14012416,
+            "privateBytes": 13295616
+          },
+          {
+            "id": 65568,
+            "name": "msedgewebview2",
+            "workingSetBytes": 35549184,
+            "privateBytes": 97009664
+          },
+          {
+            "id": 66936,
+            "name": "msedgewebview2",
+            "workingSetBytes": 92090368,
+            "privateBytes": 71757824
+          },
+          {
+            "id": 67676,
+            "name": "msedgewebview2",
+            "workingSetBytes": 96481280,
+            "privateBytes": 68132864
+          },
+          {
+            "id": 68360,
+            "name": "msedgewebview2",
+            "workingSetBytes": 23588864,
+            "privateBytes": 188612608
+          },
+          {
+            "id": 69000,
+            "name": "msedgewebview2",
+            "workingSetBytes": 12533760,
+            "privateBytes": 2936832
+          }
+        ],
+        "totals": {
+          "workingSetBytes": 676384768,
+          "privateBytes": 1751666688
+        }
+      },
+      "tabs": 1,
+      "documentBytes": 0,
+      "status": " Ln 1, Col 1 · 1 line · 0 words · 0 chars"
+    },
+    {
+      "label": "one-megabyte-document",
+      "timestamp": "2026-09-20T02:49:46.327Z",
+      "browserHeap": {
+        "usedBytes": 37439148,
+        "totalBytes": 38621184
+      },
+      "processMemory": {
+        "processes": [
+          {
+            "id": 2600,
+            "name": "msedgewebview2",
+            "workingSetBytes": 1744896,
+            "privateBytes": 374059008
+          },
+          {
+            "id": 2604,
+            "name": "msedgewebview2",
+            "workingSetBytes": 532480,
+            "privateBytes": 17068032
+          },
+          {
+            "id": 3496,
+            "name": "msedgewebview2",
+            "workingSetBytes": 16384,
+            "privateBytes": 14114816
+          },
+          {
+            "id": 4732,
+            "name": "msedgewebview2",
+            "workingSetBytes": 565248,
+            "privateBytes": 174583808
+          },
+          {
+            "id": 17568,
+            "name": "msedgewebview2",
+            "workingSetBytes": 39596032,
+            "privateBytes": 101449728
+          },
+          {
+            "id": 20496,
+            "name": "msedgewebview2",
+            "workingSetBytes": 11616256,
+            "privateBytes": 15708160
+          },
+          {
+            "id": 20992,
+            "name": "msedgewebview2",
+            "workingSetBytes": 3366912,
+            "privateBytes": 9662464
+          },
+          {
+            "id": 21180,
+            "name": "msedgewebview2",
+            "workingSetBytes": 1417216,
+            "privateBytes": 3100672
+          },
+          {
+            "id": 23072,
+            "name": "msedgewebview2",
+            "workingSetBytes": 913408,
+            "privateBytes": 2928640
+          },
+          {
+            "id": 24256,
+            "name": "msedgewebview2",
+            "workingSetBytes": 9330688,
+            "privateBytes": 48136192
+          },
+          {
+            "id": 24280,
+            "name": "msedgewebview2",
+            "workingSetBytes": 1626112,
+            "privateBytes": 3170304
+          },
+          {
+            "id": 24396,
+            "name": "msedgewebview2",
+            "workingSetBytes": 933888,
+            "privateBytes": 2945024
+          },
+          {
+            "id": 27500,
+            "name": "msedgewebview2",
+            "workingSetBytes": 18337792,
+            "privateBytes": 232263680
+          },
+          {
+            "id": 28656,
+            "name": "msedgewebview2",
+            "workingSetBytes": 33320960,
+            "privateBytes": 50397184
+          },
+          {
+            "id": 37752,
+            "name": "msedgewebview2",
+            "workingSetBytes": 56823808,
+            "privateBytes": 42381312
+          },
+          {
+            "id": 45124,
+            "name": "msedgewebview2",
+            "workingSetBytes": 18268160,
+            "privateBytes": 63401984
+          },
+          {
+            "id": 48292,
+            "name": "msedgewebview2",
+            "workingSetBytes": 13213696,
+            "privateBytes": 3059712
+          },
+          {
+            "id": 53516,
+            "name": "msedgewebview2",
+            "workingSetBytes": 17092608,
+            "privateBytes": 31203328
+          },
+          {
+            "id": 53904,
+            "name": "msedgewebview2",
+            "workingSetBytes": 49098752,
+            "privateBytes": 22130688
+          },
+          {
+            "id": 54304,
+            "name": "msedgewebview2",
+            "workingSetBytes": 18558976,
+            "privateBytes": 9490432
+          },
+          {
+            "id": 55468,
+            "name": "msedgewebview2",
+            "workingSetBytes": 51691520,
+            "privateBytes": 37998592
+          },
+          {
+            "id": 56064,
+            "name": "msedgewebview2",
+            "workingSetBytes": 18604032,
+            "privateBytes": 31465472
+          },
+          {
+            "id": 57924,
+            "name": "msedgewebview2",
+            "workingSetBytes": 21860352,
+            "privateBytes": 16125952
+          },
+          {
+            "id": 59476,
+            "name": "msedgewebview2",
+            "workingSetBytes": 13631488,
+            "privateBytes": 3125248
+          },
+          {
+            "id": 62240,
+            "name": "msedgewebview2",
+            "workingSetBytes": 14012416,
+            "privateBytes": 13295616
+          },
+          {
+            "id": 65568,
+            "name": "msedgewebview2",
+            "workingSetBytes": 35549184,
+            "privateBytes": 97009664
+          },
+          {
+            "id": 66936,
+            "name": "msedgewebview2",
+            "workingSetBytes": 92090368,
+            "privateBytes": 71757824
+          },
+          {
+            "id": 67676,
+            "name": "msedgewebview2",
+            "workingSetBytes": 96481280,
+            "privateBytes": 68132864
+          },
+          {
+            "id": 68360,
+            "name": "msedgewebview2",
+            "workingSetBytes": 23588864,
+            "privateBytes": 188612608
+          },
+          {
+            "id": 69000,
+            "name": "msedgewebview2",
+            "workingSetBytes": 12533760,
+            "privateBytes": 2936832
+          }
+        ],
+        "totals": {
+          "workingSetBytes": 676417536,
+          "privateBytes": 1751715840
+        }
+      },
+      "tabs": 1,
+      "documentBytes": 1048576,
+      "status": "Markdown   Ln 1, Col 1,048,577 · 1 line · 1 word · 1,048,576 chars"
+    },
+    {
+      "label": "ten-tabs",
+      "timestamp": "2026-09-20T02:49:47.988Z",
+      "browserHeap": {
+        "usedBytes": 38180884,
+        "totalBytes": 39407616
+      },
+      "processMemory": {
+        "processes": [
+          {
+            "id": 2600,
+            "name": "msedgewebview2",
+            "workingSetBytes": 1744896,
+            "privateBytes": 374059008
+          },
+          {
+            "id": 2604,
+            "name": "msedgewebview2",
+            "workingSetBytes": 532480,
+            "privateBytes": 17068032
+          },
+          {
+            "id": 3496,
+            "name": "msedgewebview2",
+            "workingSetBytes": 16384,
+            "privateBytes": 14114816
+          },
+          {
+            "id": 4732,
+            "name": "msedgewebview2",
+            "workingSetBytes": 565248,
+            "privateBytes": 174583808
+          },
+          {
+            "id": 17568,
+            "name": "msedgewebview2",
+            "workingSetBytes": 39596032,
+            "privateBytes": 101449728
+          },
+          {
+            "id": 20496,
+            "name": "msedgewebview2",
+            "workingSetBytes": 11616256,
+            "privateBytes": 15708160
+          },
+          {
+            "id": 20992,
+            "name": "msedgewebview2",
+            "workingSetBytes": 3366912,
+            "privateBytes": 9662464
+          },
+          {
+            "id": 21180,
+            "name": "msedgewebview2",
+            "workingSetBytes": 1417216,
+            "privateBytes": 3100672
+          },
+          {
+            "id": 23072,
+            "name": "msedgewebview2",
+            "workingSetBytes": 913408,
+            "privateBytes": 2928640
+          },
+          {
+            "id": 24256,
+            "name": "msedgewebview2",
+            "workingSetBytes": 9330688,
+            "privateBytes": 48136192
+          },
+          {
+            "id": 24280,
+            "name": "msedgewebview2",
+            "workingSetBytes": 1626112,
+            "privateBytes": 3170304
+          },
+          {
+            "id": 24396,
+            "name": "msedgewebview2",
+            "workingSetBytes": 933888,
+            "privateBytes": 2945024
+          },
+          {
+            "id": 27500,
+            "name": "msedgewebview2",
+            "workingSetBytes": 18337792,
+            "privateBytes": 232263680
+          },
+          {
+            "id": 28656,
+            "name": "msedgewebview2",
+            "workingSetBytes": 33296384,
+            "privateBytes": 50372608
+          },
+          {
+            "id": 37752,
+            "name": "msedgewebview2",
+            "workingSetBytes": 56823808,
+            "privateBytes": 42381312
+          },
+          {
+            "id": 45124,
+            "name": "msedgewebview2",
+            "workingSetBytes": 18268160,
+            "privateBytes": 63401984
+          },
+          {
+            "id": 48292,
+            "name": "msedgewebview2",
+            "workingSetBytes": 13213696,
+            "privateBytes": 3059712
+          },
+          {
+            "id": 53516,
+            "name": "msedgewebview2",
+            "workingSetBytes": 17092608,
+            "privateBytes": 31203328
+          },
+          {
+            "id": 53904,
+            "name": "msedgewebview2",
+            "workingSetBytes": 49098752,
+            "privateBytes": 22130688
+          },
+          {
+            "id": 54304,
+            "name": "msedgewebview2",
+            "workingSetBytes": 18558976,
+            "privateBytes": 9490432
+          },
+          {
+            "id": 55468,
+            "name": "msedgewebview2",
+            "workingSetBytes": 51691520,
+            "privateBytes": 37998592
+          },
+          {
+            "id": 56064,
+            "name": "msedgewebview2",
+            "workingSetBytes": 18604032,
+            "privateBytes": 31465472
+          },
+          {
+            "id": 57924,
+            "name": "msedgewebview2",
+            "workingSetBytes": 21860352,
+            "privateBytes": 16125952
+          },
+          {
+            "id": 59476,
+            "name": "msedgewebview2",
+            "workingSetBytes": 13631488,
+            "privateBytes": 3125248
+          },
+          {
+            "id": 62240,
+            "name": "msedgewebview2",
+            "workingSetBytes": 14012416,
+            "privateBytes": 13295616
+          },
+          {
+            "id": 65568,
+            "name": "msedgewebview2",
+            "workingSetBytes": 35549184,
+            "privateBytes": 97009664
+          },
+          {
+            "id": 66936,
+            "name": "msedgewebview2",
+            "workingSetBytes": 92090368,
+            "privateBytes": 71757824
+          },
+          {
+            "id": 67676,
+            "name": "msedgewebview2",
+            "workingSetBytes": 96481280,
+            "privateBytes": 68132864
+          },
+          {
+            "id": 68360,
+            "name": "msedgewebview2",
+            "workingSetBytes": 23588864,
+            "privateBytes": 188612608
+          },
+          {
+            "id": 69000,
+            "name": "msedgewebview2",
+            "workingSetBytes": 12533760,
+            "privateBytes": 2936832
+          }
+        ],
+        "totals": {
+          "workingSetBytes": 676392960,
+          "privateBytes": 1751691264
+        }
+      },
+      "tabs": 10,
+      "documentBytes": 0,
+      "status": " Ln 1, Col 1 · 1 line · 0 words · 0 chars"
+    },
+    {
+      "label": "tabs-closed",
+      "timestamp": "2026-09-20T02:49:49.185Z",
+      "browserHeap": {
+        "usedBytes": 37873984,
+        "totalBytes": 39145472
+      },
+      "processMemory": {
+        "processes": [
+          {
+            "id": 2600,
+            "name": "msedgewebview2",
+            "workingSetBytes": 1744896,
+            "privateBytes": 374059008
+          },
+          {
+            "id": 2604,
+            "name": "msedgewebview2",
+            "workingSetBytes": 532480,
+            "privateBytes": 17068032
+          },
+          {
+            "id": 3496,
+            "name": "msedgewebview2",
+            "workingSetBytes": 16384,
+            "privateBytes": 14114816
+          },
+          {
+            "id": 4732,
+            "name": "msedgewebview2",
+            "workingSetBytes": 565248,
+            "privateBytes": 174583808
+          },
+          {
+            "id": 17568,
+            "name": "msedgewebview2",
+            "workingSetBytes": 39596032,
+            "privateBytes": 101449728
+          },
+          {
+            "id": 20496,
+            "name": "msedgewebview2",
+            "workingSetBytes": 11616256,
+            "privateBytes": 15708160
+          },
+          {
+            "id": 20992,
+            "name": "msedgewebview2",
+            "workingSetBytes": 3366912,
+            "privateBytes": 9662464
+          },
+          {
+            "id": 21180,
+            "name": "msedgewebview2",
+            "workingSetBytes": 1417216,
+            "privateBytes": 3100672
+          },
+          {
+            "id": 23072,
+            "name": "msedgewebview2",
+            "workingSetBytes": 913408,
+            "privateBytes": 2928640
+          },
+          {
+            "id": 24256,
+            "name": "msedgewebview2",
+            "workingSetBytes": 9330688,
+            "privateBytes": 48136192
+          },
+          {
+            "id": 24280,
+            "name": "msedgewebview2",
+            "workingSetBytes": 1626112,
+            "privateBytes": 3170304
+          },
+          {
+            "id": 24396,
+            "name": "msedgewebview2",
+            "workingSetBytes": 933888,
+            "privateBytes": 2945024
+          },
+          {
+            "id": 27500,
+            "name": "msedgewebview2",
+            "workingSetBytes": 18337792,
+            "privateBytes": 232263680
+          },
+          {
+            "id": 28656,
+            "name": "msedgewebview2",
+            "workingSetBytes": 33296384,
+            "privateBytes": 50372608
+          },
+          {
+            "id": 37752,
+            "name": "msedgewebview2",
+            "workingSetBytes": 56823808,
+            "privateBytes": 42381312
+          },
+          {
+            "id": 45124,
+            "name": "msedgewebview2",
+            "workingSetBytes": 18268160,
+            "privateBytes": 63401984
+          },
+          {
+            "id": 48292,
+            "name": "msedgewebview2",
+            "workingSetBytes": 13213696,
+            "privateBytes": 3059712
+          },
+          {
+            "id": 53516,
+            "name": "msedgewebview2",
+            "workingSetBytes": 17092608,
+            "privateBytes": 31203328
+          },
+          {
+            "id": 53904,
+            "name": "msedgewebview2",
+            "workingSetBytes": 49098752,
+            "privateBytes": 22130688
+          },
+          {
+            "id": 54304,
+            "name": "msedgewebview2",
+            "workingSetBytes": 18558976,
+            "privateBytes": 9490432
+          },
+          {
+            "id": 55468,
+            "name": "msedgewebview2",
+            "workingSetBytes": 51691520,
+            "privateBytes": 37998592
+          },
+          {
+            "id": 56064,
+            "name": "msedgewebview2",
+            "workingSetBytes": 18604032,
+            "privateBytes": 31465472
+          },
+          {
+            "id": 57924,
+            "name": "msedgewebview2",
+            "workingSetBytes": 21860352,
+            "privateBytes": 16125952
+          },
+          {
+            "id": 59476,
+            "name": "msedgewebview2",
+            "workingSetBytes": 13631488,
+            "privateBytes": 3125248
+          },
+          {
+            "id": 62240,
+            "name": "msedgewebview2",
+            "workingSetBytes": 14012416,
+            "privateBytes": 13295616
+          },
+          {
+            "id": 65568,
+            "name": "msedgewebview2",
+            "workingSetBytes": 35549184,
+            "privateBytes": 97009664
+          },
+          {
+            "id": 66936,
+            "name": "msedgewebview2",
+            "workingSetBytes": 92090368,
+            "privateBytes": 71757824
+          },
+          {
+            "id": 67676,
+            "name": "msedgewebview2",
+            "workingSetBytes": 96481280,
+            "privateBytes": 68132864
+          },
+          {
+            "id": 68360,
+            "name": "msedgewebview2",
+            "workingSetBytes": 23588864,
+            "privateBytes": 188612608
+          },
+          {
+            "id": 69000,
+            "name": "msedgewebview2",
+            "workingSetBytes": 12533760,
+            "privateBytes": 2936832
+          }
+        ],
+        "totals": {
+          "workingSetBytes": 676392960,
+          "privateBytes": 1751691264
+        }
+      },
+      "tabs": 1,
+      "documentBytes": 1048576,
+      "status": "Markdown   Ln 1, Col 1,048,577 · 1 line · 1 word · 1,048,576 chars"
+    },
+    {
+      "label": "five-hundred-edits",
+      "timestamp": "2026-09-20T02:49:52.113Z",
+      "browserHeap": {
+        "usedBytes": 37809556,
+        "totalBytes": 38883328
+      },
+      "processMemory": {
+        "processes": [
+          {
+            "id": 2600,
+            "name": "msedgewebview2",
+            "workingSetBytes": 1744896,
+            "privateBytes": 374059008
+          },
+          {
+            "id": 2604,
+            "name": "msedgewebview2",
+            "workingSetBytes": 528384,
+            "privateBytes": 17063936
+          },
+          {
+            "id": 3496,
+            "name": "msedgewebview2",
+            "workingSetBytes": 16384,
+            "privateBytes": 14114816
+          },
+          {
+            "id": 4732,
+            "name": "msedgewebview2",
+            "workingSetBytes": 548864,
+            "privateBytes": 174551040
+          },
+          {
+            "id": 17568,
+            "name": "msedgewebview2",
+            "workingSetBytes": 39596032,
+            "privateBytes": 101449728
+          },
+          {
+            "id": 20496,
+            "name": "msedgewebview2",
+            "workingSetBytes": 11616256,
+            "privateBytes": 15708160
+          },
+          {
+            "id": 20992,
+            "name": "msedgewebview2",
+            "workingSetBytes": 3366912,
+            "privateBytes": 9662464
+          },
+          {
+            "id": 21180,
+            "name": "msedgewebview2",
+            "workingSetBytes": 1417216,
+            "privateBytes": 3100672
+          },
+          {
+            "id": 23072,
+            "name": "msedgewebview2",
+            "workingSetBytes": 913408,
+            "privateBytes": 2928640
+          },
+          {
+            "id": 24256,
+            "name": "msedgewebview2",
+            "workingSetBytes": 9330688,
+            "privateBytes": 48136192
+          },
+          {
+            "id": 24280,
+            "name": "msedgewebview2",
+            "workingSetBytes": 1626112,
+            "privateBytes": 3170304
+          },
+          {
+            "id": 24396,
+            "name": "msedgewebview2",
+            "workingSetBytes": 933888,
+            "privateBytes": 2945024
+          },
+          {
+            "id": 27500,
+            "name": "msedgewebview2",
+            "workingSetBytes": 18337792,
+            "privateBytes": 232263680
+          },
+          {
+            "id": 28656,
+            "name": "msedgewebview2",
+            "workingSetBytes": 33300480,
+            "privateBytes": 50376704
+          },
+          {
+            "id": 37752,
+            "name": "msedgewebview2",
+            "workingSetBytes": 56823808,
+            "privateBytes": 42381312
+          },
+          {
+            "id": 45124,
+            "name": "msedgewebview2",
+            "workingSetBytes": 18268160,
+            "privateBytes": 63401984
+          },
+          {
+            "id": 48292,
+            "name": "msedgewebview2",
+            "workingSetBytes": 13213696,
+            "privateBytes": 3059712
+          },
+          {
+            "id": 53516,
+            "name": "msedgewebview2",
+            "workingSetBytes": 17092608,
+            "privateBytes": 31203328
+          },
+          {
+            "id": 53904,
+            "name": "msedgewebview2",
+            "workingSetBytes": 49745920,
+            "privateBytes": 22425600
+          },
+          {
+            "id": 54304,
+            "name": "msedgewebview2",
+            "workingSetBytes": 18558976,
+            "privateBytes": 9490432
+          },
+          {
+            "id": 55468,
+            "name": "msedgewebview2",
+            "workingSetBytes": 53440512,
+            "privateBytes": 40038400
+          },
+          {
+            "id": 56064,
+            "name": "msedgewebview2",
+            "workingSetBytes": 18604032,
+            "privateBytes": 31465472
+          },
+          {
+            "id": 57924,
+            "name": "msedgewebview2",
+            "workingSetBytes": 21860352,
+            "privateBytes": 16125952
+          },
+          {
+            "id": 59476,
+            "name": "msedgewebview2",
+            "workingSetBytes": 13631488,
+            "privateBytes": 3125248
+          },
+          {
+            "id": 62240,
+            "name": "msedgewebview2",
+            "workingSetBytes": 14012416,
+            "privateBytes": 13295616
+          },
+          {
+            "id": 65568,
+            "name": "msedgewebview2",
+            "workingSetBytes": 35549184,
+            "privateBytes": 97009664
+          },
+          {
+            "id": 66936,
+            "name": "msedgewebview2",
+            "workingSetBytes": 93618176,
+            "privateBytes": 73351168
+          },
+          {
+            "id": 67676,
+            "name": "msedgewebview2",
+            "workingSetBytes": 121270272,
+            "privateBytes": 91529216
+          },
+          {
+            "id": 68360,
+            "name": "msedgewebview2",
+            "workingSetBytes": 23588864,
+            "privateBytes": 188612608
+          },
+          {
+            "id": 69000,
+            "name": "msedgewebview2",
+            "workingSetBytes": 12533760,
+            "privateBytes": 2936832
+          }
+        ],
+        "totals": {
+          "workingSetBytes": 705089536,
+          "privateBytes": 1778982912
+        }
+      },
+      "tabs": 1,
+      "documentBytes": 1048576,
+      "status": "Markdown   Ln 1, Col 1,048,577 · 1 line · 1 word · 1,048,576 chars",
+      "edits": 500,
+      "uniqueFormulas": 500
+    },
+    {
+      "label": "two-hundred-open-close-cycles",
+      "timestamp": "2026-09-20T02:51:24.853Z",
+      "browserHeap": {
+        "usedBytes": 39215584,
+        "totalBytes": 40456192
+      },
+      "processMemory": {
+        "processes": [
+          {
+            "id": 2600,
+            "name": "msedgewebview2",
+            "workingSetBytes": 1724416,
+            "privateBytes": 374038528
+          },
+          {
+            "id": 2604,
+            "name": "msedgewebview2",
+            "workingSetBytes": 532480,
+            "privateBytes": 17068032
+          },
+          {
+            "id": 3496,
+            "name": "msedgewebview2",
+            "workingSetBytes": 16384,
+            "privateBytes": 14114816
+          },
+          {
+            "id": 4732,
+            "name": "msedgewebview2",
+            "workingSetBytes": 561152,
+            "privateBytes": 174579712
+          },
+          {
+            "id": 17568,
+            "name": "msedgewebview2",
+            "workingSetBytes": 21512192,
+            "privateBytes": 101421056
+          },
+          {
+            "id": 20496,
+            "name": "msedgewebview2",
+            "workingSetBytes": 11583488,
+            "privateBytes": 15708160
+          },
+          {
+            "id": 20992,
+            "name": "msedgewebview2",
+            "workingSetBytes": 3366912,
+            "privateBytes": 9662464
+          },
+          {
+            "id": 21180,
+            "name": "msedgewebview2",
+            "workingSetBytes": 1404928,
+            "privateBytes": 3072000
+          },
+          {
+            "id": 23072,
+            "name": "msedgewebview2",
+            "workingSetBytes": 892928,
+            "privateBytes": 2928640
+          },
+          {
+            "id": 24256,
+            "name": "msedgewebview2",
+            "workingSetBytes": 9330688,
+            "privateBytes": 48136192
+          },
+          {
+            "id": 24280,
+            "name": "msedgewebview2",
+            "workingSetBytes": 1626112,
+            "privateBytes": 3170304
+          },
+          {
+            "id": 24396,
+            "name": "msedgewebview2",
+            "workingSetBytes": 917504,
+            "privateBytes": 2945024
+          },
+          {
+            "id": 27500,
+            "name": "msedgewebview2",
+            "workingSetBytes": 16740352,
+            "privateBytes": 232230912
+          },
+          {
+            "id": 28656,
+            "name": "msedgewebview2",
+            "workingSetBytes": 33140736,
+            "privateBytes": 50368512
+          },
+          {
+            "id": 37752,
+            "name": "msedgewebview2",
+            "workingSetBytes": 56598528,
+            "privateBytes": 42381312
+          },
+          {
+            "id": 45124,
+            "name": "msedgewebview2",
+            "workingSetBytes": 18276352,
+            "privateBytes": 63401984
+          },
+          {
+            "id": 48292,
+            "name": "msedgewebview2",
+            "workingSetBytes": 13213696,
+            "privateBytes": 3059712
+          },
+          {
+            "id": 53516,
+            "name": "msedgewebview2",
+            "workingSetBytes": 17092608,
+            "privateBytes": 31207424
+          },
+          {
+            "id": 54304,
+            "name": "msedgewebview2",
+            "workingSetBytes": 18554880,
+            "privateBytes": 9490432
+          },
+          {
+            "id": 55468,
+            "name": "msedgewebview2",
+            "workingSetBytes": 51851264,
+            "privateBytes": 37998592
+          },
+          {
+            "id": 56064,
+            "name": "msedgewebview2",
+            "workingSetBytes": 18382848,
+            "privateBytes": 31469568
+          },
+          {
+            "id": 57924,
+            "name": "msedgewebview2",
+            "workingSetBytes": 21442560,
+            "privateBytes": 16105472
+          },
+          {
+            "id": 59476,
+            "name": "msedgewebview2",
+            "workingSetBytes": 13635584,
+            "privateBytes": 3129344
+          },
+          {
+            "id": 62240,
+            "name": "msedgewebview2",
+            "workingSetBytes": 14016512,
+            "privateBytes": 13299712
+          },
+          {
+            "id": 65568,
+            "name": "msedgewebview2",
+            "workingSetBytes": 37216256,
+            "privateBytes": 97009664
+          },
+          {
+            "id": 66936,
+            "name": "msedgewebview2",
+            "workingSetBytes": 91852800,
+            "privateBytes": 71806976
+          },
+          {
+            "id": 67592,
+            "name": "msedgewebview2",
+            "workingSetBytes": 48521216,
+            "privateBytes": 22503424
+          },
+          {
+            "id": 67676,
+            "name": "msedgewebview2",
+            "workingSetBytes": 102359040,
+            "privateBytes": 74858496
+          },
+          {
+            "id": 68360,
+            "name": "msedgewebview2",
+            "workingSetBytes": 23592960,
+            "privateBytes": 188616704
+          },
+          {
+            "id": 69000,
+            "name": "msedgewebview2",
+            "workingSetBytes": 12533760,
+            "privateBytes": 2936832
+          }
+        ],
+        "totals": {
+          "workingSetBytes": 662491136,
+          "privateBytes": 1758720000
+        }
+      },
+      "tabs": 1,
+      "documentBytes": 1048576,
+      "status": "Markdown   Ln 1, Col 1,048,577 · 1 line · 1 word · 1,048,576 chars",
+      "cycles": 200
+    }
+  ]
+}
