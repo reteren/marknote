@@ -13,7 +13,8 @@ import { livePreviewConfigFacet } from "./settings";
 import { mathBlockSource, spansSeveralLines } from "./mathBlockSource";
 import { MathWidget } from "./widgets/Math";
 
-function byteLength(state: EditorState): number {
+function byteLength(state: EditorState, maxBytes = Number.POSITIVE_INFINITY): number {
+  if (state.doc.length > maxBytes) return maxBytes + 1;
   const text = state.doc.toString();
   return typeof TextEncoder === "undefined" ? text.length : new TextEncoder().encode(text).byteLength;
 }
@@ -21,7 +22,7 @@ function byteLength(state: EditorState): number {
 export function blockMathDecorations(state: EditorState): DecorationSet {
   const config = state.facet(livePreviewConfigFacet);
   if (!config.enabled || !config.renderFormulas) return Decoration.none;
-  if (byteLength(state) > config.disableAboveBytes) return Decoration.none;
+  if (byteLength(state, config.disableAboveBytes) > config.disableAboveBytes) return Decoration.none;
 
   const ranges: Array<Range<Decoration>> = [];
   syntaxTree(state).iterate({

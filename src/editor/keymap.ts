@@ -13,6 +13,7 @@ import { ChangeSet, EditorSelection, EditorState, Transaction, type Extension } 
 import { keymap, EditorView, type Command, type KeyBinding } from "@codemirror/view";
 import { insertNewlineContinueMarkup } from "@codemirror/lang-markdown";
 import { editorMarkdownCommandsStateField } from "./settings";
+import { profileMeasure } from "./profile";
 
 type Pair = { open: string; close: string };
 
@@ -282,7 +283,7 @@ function getMarkerChangesForTransaction(transaction: Transaction): MarkerChange[
  */
 export const orderedListNormalization: Extension = EditorState.transactionFilter.of((transaction) => {
   if (!transaction.docChanged) return transaction;
-  const changes = getMarkerChangesForTransaction(transaction);
+  const changes = profileMeasure("lists.filter", () => getMarkerChangesForTransaction(transaction));
   if (!changes.length) return transaction;
   // Возвращаем исходную транзакцию как есть и добавляем перенумерацию отдельной
   // последующей правкой. Так положение курсора, эффекты и все пометки — включая

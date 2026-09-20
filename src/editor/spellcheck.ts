@@ -10,6 +10,7 @@ import { syntaxTree } from "@codemirror/language";
 import type { EditorState, Extension, Range } from "@codemirror/state";
 import { Decoration, type DecorationSet, EditorView, ViewPlugin, type ViewUpdate } from "@codemirror/view";
 import type { SyntaxNode } from "@lezer/common";
+import { profileMeasure } from "./profile";
 
 const CODE_FORMULA_LINK_NODES = new Set([
   "FencedCode",
@@ -75,10 +76,10 @@ export function isInsideCodeFormulaOrLink(state: EditorState, pos: number): bool
 const skipSpellcheckMark = Decoration.mark({ attributes: { spellcheck: "false" } });
 
 function buildSkipDecorations(state: EditorState): DecorationSet {
-  const tree = syntaxTree(state);
+  const tree = profileMeasure("spellcheck.parse", () => syntaxTree(state));
   const ranges: Range<Decoration>[] = [];
 
-  tree.iterate({
+  profileMeasure("spellcheck.decorate", () => tree.iterate({
     enter(node) {
       if (TOP_LEVEL_SKIP_NODES.has(node.name)) {
         if (node.to > node.from) {
@@ -87,7 +88,7 @@ function buildSkipDecorations(state: EditorState): DecorationSet {
         return false;
       }
     },
-  });
+  }));
 
   return Decoration.set(ranges, true);
 }

@@ -1,0 +1,274 @@
+{
+  "generatedAt": "2026-09-20T15:13:22.597Z",
+  "cdpPort": 9558,
+  "vitePort": 1424,
+  "runs": 1,
+  "mode": "normal",
+  "results": [
+    {
+      "bytes": 1048576,
+      "label": "1024KB",
+      "profile": {
+        "cdpDispatchMs": 22.3596,
+        "cdpToFrameMs": 48.414300000000026,
+        "postDispatchFrameMs": 26.054700000000025,
+        "phases": {
+          "lists.filter": 0.19999999925494194,
+          "preview.decorate": 0.2999999998137355,
+          "preview.finalize": 0,
+          "preview.parse": 0,
+          "preview.rebuild": 3.400000000372529,
+          "spellcheck.decorate": 1.099999999627471,
+          "spellcheck.parse": 0,
+          "transaction.apply": 16.90000000037253
+        },
+        "raw": [
+          {
+            "cdpDispatchMs": 22.3596,
+            "cdpToFrameMs": 48.414300000000026,
+            "postDispatchFrameMs": 26.054700000000025,
+            "entries": [
+              {
+                "name": "lists.filter",
+                "duration": 0.19999999925494194
+              },
+              {
+                "name": "spellcheck.parse",
+                "duration": 0
+              },
+              {
+                "name": "spellcheck.decorate",
+                "duration": 0
+              },
+              {
+                "name": "preview.parse",
+                "duration": 0
+              },
+              {
+                "name": "preview.decorate",
+                "duration": 0.2999999998137355
+              },
+              {
+                "name": "preview.finalize",
+                "duration": 0
+              },
+              {
+                "name": "preview.rebuild",
+                "duration": 3.400000000372529
+              },
+              {
+                "name": "transaction.apply",
+                "duration": 16.90000000037253
+              },
+              {
+                "name": "spellcheck.parse",
+                "duration": 0
+              },
+              {
+                "name": "spellcheck.decorate",
+                "duration": 1.099999999627471
+              },
+              {
+                "name": "transaction.apply",
+                "duration": 1.7000000001862645
+              }
+            ],
+            "cpu": [
+              {
+                "frame": "(program) @ native:-1",
+                "milliseconds": 171.27399999999997
+              },
+              {
+                "frame": "getEditorStats @ http://localhost:1424/src/editor/createEditor.ts?t=1789917103389:31",
+                "milliseconds": 6.87
+              },
+              {
+                "frame": "parse @ http://localhost:1424/node_modules/.vite/deps/@lezer_markdown.js?v=1bae7b01:1856",
+                "milliseconds": 6.805
+              },
+              {
+                "frame": "parseInline @ http://localhost:1424/node_modules/.vite/deps/@lezer_markdown.js?v=1bae7b01:996",
+                "milliseconds": 5.183
+              },
+              {
+                "frame": "finishLeaf @ http://localhost:1424/node_modules/.vite/deps/@lezer_markdown.js?v=1bae7b01:846",
+                "milliseconds": 3.674
+              },
+              {
+                "frame": "encode @ native:-1",
+                "milliseconds": 2.5629999999999997
+              },
+              {
+                "frame": "readTextNode @ http://localhost:1424/node_modules/.vite/deps/dist-7Dsd9j37.js?v=219f5f77:3530",
+                "milliseconds": 1.991
+              },
+              {
+                "frame": "strict_equals @ http://localhost:1424/node_modules/.vite/deps/runtime-BON0u2xn.js?v=219f5f77:3593",
+                "milliseconds": 1.789
+              },
+              {
+                "frame": "buildTree @ http://localhost:1424/node_modules/.vite/deps/dist-C676Sjjn.js?v=219f5f77:1163",
+                "milliseconds": 1.54
+              },
+              {
+                "frame": "documentByteLength @ http://localhost:1424/src/editor/livePreview/plugin.ts?t=1789917103389:18",
+                "milliseconds": 1.535
+              },
+              {
+                "frame": "(garbage collector) @ native:-1",
+                "milliseconds": 1.527
+              },
+              {
+                "frame": "compare @ http://localhost:1424/node_modules/.vite/deps/dist-1JlpyTd9.js?v=219f5f77:3406",
+                "milliseconds": 1.525
+              },
+              {
+                "frame": "get hasFocus @ http://localhost:1424/node_modules/.vite/deps/dist-7Dsd9j37.js?v=219f5f77:7319",
+                "milliseconds": 1.512
+              },
+              {
+                "frame": "formatNumber @ http://localhost:1424/src/i18n/index.ts:87",
+                "milliseconds": 1.509
+              },
+              {
+                "frame": "HardBreak @ http://localhost:1424/node_modules/.vite/deps/@lezer_markdown.js?v=1bae7b01:1199",
+                "milliseconds": 1.509
+              },
+              {
+                "frame": "advance @ http://localhost:1424/node_modules/.vite/deps/dist-C676Sjjn.js?v=219f5f77:1614",
+                "milliseconds": 1.503
+              },
+              {
+                "frame": "lineInner @ http://localhost:1424/node_modules/.vite/deps/dist-1JlpyTd9.js?v=219f5f77:206",
+                "milliseconds": 1.502
+              },
+              {
+                "frame": "byteLength @ http://localhost:1424/src/editor/livePreview/blockMath.ts:13",
+                "milliseconds": 1.492
+              },
+              {
+                "frame": "LinkEnd @ http://localhost:1424/node_modules/.vite/deps/@lezer_markdown.js?v=1bae7b01:1214",
+                "milliseconds": 1.045
+              },
+              {
+                "frame": "(idle) @ native:-1",
+                "milliseconds": 1.045
+              },
+              {
+                "frame": "countWords @ http://localhost:1424/src/editor/createEditor.ts?t=1789917103389:17",
+                "milliseconds": 0.859
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "bytes": 5242880,
+      "label": "5120KB",
+      "profile": {
+        "cdpDispatchMs": 78.63699999999994,
+        "cdpToFrameMs": 97.33220000000006,
+        "postDispatchFrameMs": 18.695200000000114,
+        "phases": {
+          "lists.filter": 0,
+          "preview.rebuild": 0.10000000055879354,
+          "spellcheck.decorate": 0.8999999994412065,
+          "spellcheck.parse": 0,
+          "transaction.apply": 66
+        },
+        "raw": [
+          {
+            "cdpDispatchMs": 78.63699999999994,
+            "cdpToFrameMs": 97.33220000000006,
+            "postDispatchFrameMs": 18.695200000000114,
+            "entries": [
+              {
+                "name": "lists.filter",
+                "duration": 0
+              },
+              {
+                "name": "spellcheck.parse",
+                "duration": 0
+              },
+              {
+                "name": "spellcheck.decorate",
+                "duration": 0.8999999994412065
+              },
+              {
+                "name": "preview.rebuild",
+                "duration": 0.10000000055879354
+              },
+              {
+                "name": "transaction.apply",
+                "duration": 66
+              }
+            ],
+            "cpu": [
+              {
+                "frame": "(program) @ native:-1",
+                "milliseconds": 54.373999999999995
+              },
+              {
+                "frame": "getEditorStats @ http://localhost:1424/src/editor/createEditor.ts?t=1789917103389:31",
+                "milliseconds": 36
+              },
+              {
+                "frame": "(idle) @ native:-1",
+                "milliseconds": 18.267
+              },
+              {
+                "frame": "encode @ native:-1",
+                "milliseconds": 10.131
+              },
+              {
+                "frame": "strict_equals @ http://localhost:1424/node_modules/.vite/deps/runtime-BON0u2xn.js?v=219f5f77:3593",
+                "milliseconds": 8.213
+              },
+              {
+                "frame": "(garbage collector) @ native:-1",
+                "milliseconds": 5.586
+              },
+              {
+                "frame": "sliceString @ http://localhost:1424/node_modules/.vite/deps/dist-1JlpyTd9.js?v=219f5f77:234",
+                "milliseconds": 4.067
+              },
+              {
+                "frame": "byteLength @ http://localhost:1424/src/editor/livePreview/blockMath.ts:13",
+                "milliseconds": 3.0309999999999997
+              },
+              {
+                "frame": "countWords @ http://localhost:1424/src/editor/createEditor.ts?t=1789917103389:17",
+                "milliseconds": 2.271
+              },
+              {
+                "frame": "collapse @ native:-1",
+                "milliseconds": 1.551
+              },
+              {
+                "frame": "reuseFragment @ http://localhost:1424/node_modules/.vite/deps/@lezer_markdown.js?v=1bae7b01:666",
+                "milliseconds": 1.531
+              },
+              {
+                "frame": "(anonymous) @ http://localhost:1424/src/App.svelte?t=1789917103389:202",
+                "milliseconds": 1.522
+              },
+              {
+                "frame": "(anonymous) @ http://localhost:1424/src/editor/spellcheck.ts:69",
+                "milliseconds": 1.499
+              },
+              {
+                "frame": "nextChild @ http://localhost:1424/node_modules/.vite/deps/dist-C676Sjjn.js?v=219f5f77:658",
+                "milliseconds": 1.106
+              },
+              {
+                "frame": "nextInner @ http://localhost:1424/node_modules/.vite/deps/dist-1JlpyTd9.js?v=219f5f77:417",
+                "milliseconds": 0.492
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

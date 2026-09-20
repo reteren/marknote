@@ -18,6 +18,7 @@ import { decorationsForInlineNode, safeLinkHref, type DecorationSpec } from "./i
 import { livePreviewConfigFacet, type LivePreviewConfig } from "./settings";
 import type { BlockBuilder, BuilderContext } from "./types";
 import type { ImageResolver } from "./widgets/Image";
+import { profileMeasure } from "../profile";
 
 export interface LivePreviewOptions {
   maxBytes?: number;
@@ -47,7 +48,11 @@ export function documentByteLength(doc: Text): number {
   return bytes;
 }
 
-function byteLength(state: EditorState) {
+function byteLength(state: EditorState, maxBytes = Number.POSITIVE_INFINITY) {
+  // UTF-8 never uses fewer bytes than JavaScript UTF-16 code units. Once the
+  // lower bound is already over the configured limit, avoid flattening a
+  // multi-megabyte Text just to discover that it is too large.
+  if (state.doc.length > maxBytes) return maxBytes + 1;
   return documentByteLength(state.doc);
 }
 
@@ -145,45 +150,51 @@ function buildDecorationSetsInternal(
   const config = options.config ? { ...stateConfig, ...options.config } : stateConfig;
 
   const maxBytes = options.maxBytes ?? config.disableAboveBytes;
-  if (!config.enabled || byteLength(state) > maxBytes) return { decorations: Decoration.none, atomicRanges: Decoration.none, disabled: true };
+  if (!config.enabled || byteLength(state, maxBytes) > maxBytes) return { decorations: Decoration.none, atomicRanges: Decoration.none, disabled: true };
 
   const specs: DecorationSpec[] = [];
   const builderAtomicRanges: Array<Range<Decoration>> = [];
   const seen = new Set<string>();
-  const tree = syntaxTree(state);
-  for (const visible of visibleRanges) {
-    const startLine = state.doc.lineAt(visible.from).number;
-    const endLine = state.doc.lineAt(visible.to).number;
-    for (let number = startLine; number <= endLine; number += 1) {
-      const spec = indentationGuideForLine(state.doc.line(number));
-      if (spec) specs.push(spec);
+  const tree = profileMeasure("preview.parse", () => syntaxTree(state));
+  profileMeasure("preview.decorate", () => {
+    for (const visible of visibleRanges) {
+      const startLine = state.doc.lineAt(visible.from).number;
+      const endLine = state.doc.lineAt(visible.to).number;
+      for (let number = startLine; number <= endLine; number += 1) {
+        const spec = indentationGuideForLine(state.doc.line(number));
+        if (spec) specs.push(spec);
+      }
+
+      tree.iterate({
+        from: visible.from,
+        to: visible.to,
+        enter: (ref) => {
+          const node = ref.node;
+          if (node.name === "Document" || node.name === "Paragraph") return;
+          const key = `${node.name}:${node.from}:${node.to}`;
+          if (seen.has(key)) return;
+          seen.add(key);
+
+          const active = isNodeActive(node, state.selection, state.doc, config.revealMarkup);
+          if (view && runBlockBuilders(view, node, active, specs, builderAtomicRanges)) return false;
+
+          const nodeSpecs = isBlockNode(node)
+            ? decorationsForBlockNode(node, active, state, config, visibleRanges)
+            : decorationsForInlineNode(node, active, state, options.resolveImage, config);
+          specs.push(...nodeSpecs);
+        },
+      });
     }
+  });
 
-    tree.iterate({
-      from: visible.from,
-      to: visible.to,
-      enter: (ref) => {
-        const node = ref.node;
-        if (node.name === "Document" || node.name === "Paragraph") return;
-        const key = `${node.name}:${node.from}:${node.to}`;
-        if (seen.has(key)) return;
-        seen.add(key);
-
-        const active = isNodeActive(node, state.selection, state.doc, config.revealMarkup);
-        if (view && runBlockBuilders(view, node, active, specs, builderAtomicRanges)) return false;
-
-        const nodeSpecs = isBlockNode(node)
-          ? decorationsForBlockNode(node, active, state, config, visibleRanges)
-          : decorationsForInlineNode(node, active, state, options.resolveImage, config);
-        specs.push(...nodeSpecs);
-      },
-    });
-  }
-
-  const all = uniqueSpecs(specs);
-  const decorationRanges = asRanges(all);
-  const atomicSpecs = asRanges(all.filter((spec) => spec.atomic));
-  const builderAtomic = asDecorationRanges(builderAtomicRanges);
+  const { decorationRanges, atomicSpecs, builderAtomic } = profileMeasure("preview.finalize", () => {
+    const all = uniqueSpecs(specs);
+    return {
+      decorationRanges: asRanges(all),
+      atomicSpecs: asRanges(all.filter((spec) => spec.atomic)),
+      builderAtomic: asDecorationRanges(builderAtomicRanges),
+    };
+  });
   return {
     decorations: decorationRanges,
     atomicRanges: builderAtomic.size ? Decoration.set([...decorationRangesToArray(builderAtomic), ...decorationRangesToArray(atomicSpecs)], true) : atomicSpecs,
@@ -238,7 +249,8 @@ export class LivePreviewValue {
   }
 
   private rebuild(view: EditorView) {
-    const result = buildDecorationSetsInternal(view.state, view.visibleRanges, this.options, view);
+    const result = profileMeasure("preview.rebuild", () =>
+      buildDecorationSetsInternal(view.state, view.visibleRanges, this.options, view));
     this.disabled = result.disabled;
     this.decorations = result.decorations;
     this.atomicRanges = result.atomicRanges;

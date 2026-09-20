@@ -1,0 +1,108 @@
+{
+  "generatedAt": "2026-09-20T15:26:33.728Z",
+  "cdpPort": 9560,
+  "vitePort": 1424,
+  "runs": 3,
+  "mode": "normal",
+  "results": [
+    {
+      "bytes": 5242880,
+      "label": "5120KB",
+      "profile": {
+        "cdpDispatchMs": 99.82330000000002,
+        "cdpToFrameMs": 114.43910000000005,
+        "postDispatchFrameMs": 14.615800000000036,
+        "phases": {
+          "lists.filter": 0,
+          "preview.rebuild": 13.900000000372529,
+          "spellcheck.decorate": 0.7999999988824129,
+          "spellcheck.parse": 0,
+          "transaction.apply": 87.70000000111759
+        },
+        "raw": [
+          {
+            "cdpDispatchMs": 108.05580000000009,
+            "cdpToFrameMs": 125.57449999999994,
+            "postDispatchFrameMs": 17.518699999999853,
+            "entries": [
+              {
+                "name": "lists.filter",
+                "duration": 0.40000000037252903
+              },
+              {
+                "name": "spellcheck.parse",
+                "duration": 0
+              },
+              {
+                "name": "spellcheck.decorate",
+                "duration": 0.900000000372529
+              },
+              {
+                "name": "preview.rebuild",
+                "duration": 13.800000000745058
+              },
+              {
+                "name": "transaction.apply",
+                "duration": 93.40000000037253
+              }
+            ]
+          },
+          {
+            "cdpDispatchMs": 99.82330000000002,
+            "cdpToFrameMs": 114.43910000000005,
+            "postDispatchFrameMs": 14.615800000000036,
+            "entries": [
+              {
+                "name": "lists.filter",
+                "duration": 0
+              },
+              {
+                "name": "spellcheck.parse",
+                "duration": 0
+              },
+              {
+                "name": "spellcheck.decorate",
+                "duration": 0.7999999988824129
+              },
+              {
+                "name": "preview.rebuild",
+                "duration": 14.700000001117587
+              },
+              {
+                "name": "transaction.apply",
+                "duration": 86.59999999962747
+              }
+            ]
+          },
+          {
+            "cdpDispatchMs": 97.46890000000076,
+            "cdpToFrameMs": 104.96410000000014,
+            "postDispatchFrameMs": 7.495199999999386,
+            "entries": [
+              {
+                "name": "lists.filter",
+                "duration": 0
+              },
+              {
+                "name": "spellcheck.parse",
+                "duration": 0
+              },
+              {
+                "name": "spellcheck.decorate",
+                "duration": 0.6000000014901161
+              },
+              {
+                "name": "preview.rebuild",
+                "duration": 13.900000000372529
+              },
+              {
+                "name": "transaction.apply",
+                "duration": 87.70000000111759
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,108 @@
+{
+  "generatedAt": "2026-09-20T15:27:17.242Z",
+  "cdpPort": 9560,
+  "vitePort": 1424,
+  "runs": 3,
+  "mode": "normal",
+  "results": [
+    {
+      "bytes": 5242880,
+      "label": "5120KB",
+      "profile": {
+        "cdpDispatchMs": 15.329400000000078,
+        "cdpToFrameMs": 30.803600000000188,
+        "postDispatchFrameMs": 15.479100000000017,
+        "phases": {
+          "lists.filter": 0,
+          "preview.rebuild": 0,
+          "spellcheck.decorate": 0.5,
+          "spellcheck.parse": 0,
+          "transaction.apply": 7.200000001117587
+        },
+        "raw": [
+          {
+            "cdpDispatchMs": 17.730699999999842,
+            "cdpToFrameMs": 25.650300000000016,
+            "postDispatchFrameMs": 7.919600000000173,
+            "entries": [
+              {
+                "name": "lists.filter",
+                "duration": 0.30000000074505806
+              },
+              {
+                "name": "spellcheck.parse",
+                "duration": 0
+              },
+              {
+                "name": "spellcheck.decorate",
+                "duration": 0.5
+              },
+              {
+                "name": "preview.rebuild",
+                "duration": 0
+              },
+              {
+                "name": "transaction.apply",
+                "duration": 8.099999999627471
+              }
+            ]
+          },
+          {
+            "cdpDispatchMs": 15.329400000000078,
+            "cdpToFrameMs": 30.808500000000095,
+            "postDispatchFrameMs": 15.479100000000017,
+            "entries": [
+              {
+                "name": "lists.filter",
+                "duration": 0
+              },
+              {
+                "name": "spellcheck.parse",
+                "duration": 0
+              },
+              {
+                "name": "spellcheck.decorate",
+                "duration": 0.7999999988824129
+              },
+              {
+                "name": "preview.rebuild",
+                "duration": 0
+              },
+              {
+                "name": "transaction.apply",
+                "duration": 6.300000000745058
+              }
+            ]
+          },
+          {
+            "cdpDispatchMs": 14.801300000000083,
+            "cdpToFrameMs": 30.803600000000188,
+            "postDispatchFrameMs": 16.002300000000105,
+            "entries": [
+              {
+                "name": "lists.filter",
+                "duration": 0
+              },
+              {
+                "name": "spellcheck.parse",
+                "duration": 0
+              },
+              {
+                "name": "spellcheck.decorate",
+                "duration": 0.5
+              },
+              {
+                "name": "preview.rebuild",
+                "duration": 0
+              },
+              {
+                "name": "transaction.apply",
+                "duration": 7.200000001117587
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

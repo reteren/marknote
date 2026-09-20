@@ -1,5 +1,5 @@
 import { markdown } from "@codemirror/lang-markdown";
-import { Compartment, EditorState, StateEffect, StateField, type Extension } from "@codemirror/state";
+import { Compartment, EditorState, StateEffect, StateField, Text, type ChangeDesc, type Extension } from "@codemirror/state";
 import {
   LanguageDescription,
   type LanguageSupport,
@@ -56,18 +56,65 @@ function countWords(text: string): number {
   return count;
 }
 
-function countWholeWords(text: string, from: number, to: number): number {
+const wordCounts = new WeakMap<Text, number>();
+
+function countWordsInDocument(doc: Text): number {
+  const cached = wordCounts.get(doc);
+  if (cached !== undefined) return cached;
+  const count = countWords(doc.toString());
+  wordCounts.set(doc, count);
+  return count;
+}
+
+function countWholeWords(doc: Text, from: number, to: number): number {
+  const text = doc.sliceString(from, to);
   let count = 0;
   for (const match of text.matchAll(/\S+/gu)) {
-    const start = match.index ?? 0;
+    const start = from + (match.index ?? 0);
     const end = start + match[0].length;
-    if (start >= from && end <= to) count += 1;
+    const startsAtBoundary = start === 0 || /\s/u.test(doc.sliceString(start - 1, start));
+    const endsAtBoundary = end === doc.length || /\s/u.test(doc.sliceString(end, end + 1));
+    if (startsAtBoundary && endsAtBoundary) count += 1;
   }
   return count;
 }
 
-export function getEditorStats(state: EditorState): EditorStats {
-  const text = state.doc.toString();
+type ChangedWordRange = { oldFrom: number; oldTo: number; newFrom: number; newTo: number };
+
+function countWordsAfterChanges(previous: EditorState, state: EditorState, changes: ChangeDesc): number {
+  const ranges: ChangedWordRange[] = [];
+  changes.iterChangedRanges((fromA, toA, fromB, toB) => {
+    ranges.push({
+      oldFrom: Math.max(0, fromA - 1),
+      oldTo: Math.min(previous.doc.length, toA + 1),
+      newFrom: Math.max(0, fromB - 1),
+      newTo: Math.min(state.doc.length, toB + 1),
+    });
+  });
+  if (!ranges.length) return countWordsInDocument(state.doc);
+
+  const merged: ChangedWordRange[] = [];
+  for (const range of ranges) {
+    const previousRange = merged.at(-1);
+    if (previousRange && (range.oldFrom <= previousRange.oldTo || range.newFrom <= previousRange.newTo)) {
+      previousRange.oldTo = Math.max(previousRange.oldTo, range.oldTo);
+      previousRange.newTo = Math.max(previousRange.newTo, range.newTo);
+      continue;
+    }
+    merged.push({ ...range });
+  }
+
+  let count = countWordsInDocument(previous.doc);
+  for (const range of merged) {
+    count -= countWords(previous.doc.sliceString(range.oldFrom, range.oldTo));
+    count += countWords(state.doc.sliceString(range.newFrom, range.newTo));
+  }
+  wordCounts.set(state.doc, count);
+  return count;
+}
+
+export function getEditorStats(state: EditorState, previous?: EditorState, changes?: ChangeDesc): EditorStats {
+  const words = previous && changes ? countWordsAfterChanges(previous, state, changes) : countWordsInDocument(state.doc);
   const cursor = state.selection.main.head;
   const cursorLine = state.doc.lineAt(cursor);
   const range = state.selection.main;
@@ -77,8 +124,8 @@ export function getEditorStats(state: EditorState): EditorStats {
       line: cursorLine.number,
       col: cursor - cursorLine.from + 1,
       lines: state.doc.lines,
-      words: countWords(text),
-      chars: text.length,
+      words,
+      chars: state.doc.length,
       selection: null,
     };
   }
@@ -90,12 +137,12 @@ export function getEditorStats(state: EditorState): EditorStats {
     line: cursorLine.number,
     col: cursor - cursorLine.from + 1,
     lines: state.doc.lines,
-    words: countWords(text),
-    chars: text.length,
+    words,
+    chars: state.doc.length,
     selection: {
       fromLine,
       toLine,
-      words: countWholeWords(text, range.from, range.to),
+      words: countWholeWords(state.doc, range.from, range.to),
       chars: range.to - range.from,
     },
   };
@@ -350,7 +397,7 @@ function buildEditorState(runtime: EditorRuntime, opts: EditorStateOptions): Edi
     zoomRuntimeExtension(runtime.zoom),
     EditorView.updateListener.of((update) => {
       if (update.docChanged) runtime.onChange(update.state.doc.toString());
-      if (update.docChanged || update.selectionSet) runtime.onStats(getEditorStats(update.state));
+      if (update.docChanged || update.selectionSet) runtime.onStats(getEditorStats(update.state, update.startState, update.changes));
     }),
   ];
   extensions.splice(
@@ -502,6 +549,13 @@ export function createEditor(opts: {
     state: runtime.createState(opts),
     parent: opts.parent,
   });
+  // Замеры из qa/ работают с настоящим редактором и должны как-то до него
+  // дотянуться. Ссылка выставляется только в режиме разработки (vite), в
+  // собранной программе этого кода нет вовсе: отладочная лазейка в выпуске
+  // никому не нужна.
+  if (import.meta.env?.DEV) {
+    (globalThis as typeof globalThis & { __marknoteEditorView__?: EditorView }).__marknoteEditorView__ = view;
+  }
   editorRuntimes.set(view, runtime);
   registerZoomRuntime(view, runtime.zoom);
   activateSyntaxMode(view, runtime, opts.format);

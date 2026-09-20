@@ -7,7 +7,7 @@
 import { defineLanguageFacet, Language } from "@codemirror/language";
 import { EditorState, EditorSelection } from "@codemirror/state";
 import { parser } from "@lezer/markdown";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { marknoteMarkdown } from "../src/editor/markdownExtensions";
 import { blockMathDecorations } from "../src/editor/livePreview/blockMath";
 import { buildDecorationSets, decorationRanges } from "../src/editor/livePreview/plugin";
@@ -67,5 +67,13 @@ describe("блок формулы", () => {
   it("молчит, когда предпросмотр или формулы выключены", () => {
     expect(fieldRanges(state(doc, cursorAfter, { renderFormulas: false }))).toEqual([]);
     expect(fieldRanges(state(doc, cursorAfter, { enabled: false }))).toEqual([]);
+  });
+
+  it("не flatten-ит большой документ перед отключением формул по лимиту", () => {
+    const editorState = state("x".repeat(1024), 0, { disableAboveBytes: 1023 });
+    const toString = vi.spyOn(editorState.doc, "toString");
+
+    expect(fieldRanges(editorState)).toEqual([]);
+    expect(toString).not.toHaveBeenCalled();
   });
 });
