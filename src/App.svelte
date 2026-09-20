@@ -46,7 +46,7 @@ import ContextMenu, { type ContextMenuAction } from "./ui/ContextMenu.svelte";
 import FormatPicker from "./ui/FormatPicker.svelte";
 import Notice from "./ui/Notice.svelte";
 import HelpDialog, { type HelpMode } from "./ui/HelpDialog.svelte";
-  import SettingsWindow from "./ui/SettingsWindow.svelte";
+  import type SettingsWindow from "./ui/SettingsWindow.svelte";
   import TabBar from "./ui/TabBar.svelte";
   import {
     workspace,
@@ -87,6 +87,7 @@ import { EditorView, type EditorView as EditorViewType } from "@codemirror/view"
   let closePromptTabs = $state<WorkspaceTab[]>([]);
   let helpMode = $state<HelpMode | null>(null);
   let settingsOpen = $state(false);
+  let SettingsWindowComponent = $state<typeof SettingsWindow | null>(null);
   let goToLineOpen = $state(false);
   let goToLineValue = $state("1");
   let goToLineInput: HTMLInputElement | undefined = $state();
@@ -101,6 +102,11 @@ import { EditorView, type EditorView as EditorViewType } from "@codemirror/view"
     selection: null,
   });
   let errorMessage = $state<string | null>(null);
+
+  async function openSettingsWindow() {
+    settingsOpen = true;
+    SettingsWindowComponent ??= (await import("./ui/SettingsWindow.svelte")).default;
+  }
 
   const rawDocumentTitle = $derived(getDocumentTitle(documentState));
   const documentFileName = $derived(rawDocumentTitle.replace(/\s+—\s+MarkNote$/u, ""));
@@ -207,7 +213,7 @@ import { EditorView, type EditorView as EditorViewType } from "@codemirror/view"
     saveAsMarkdown: saveDocumentAsMarkdown,
     closeWindow: () => void requestClose(),
     openSettings: () => {
-      settingsOpen = true;
+      void openSettingsWindow();
     },
     zoomIn: () => {
       if (editorView) zoomIn(editorView);
@@ -900,7 +906,7 @@ import { EditorView, type EditorView as EditorViewType } from "@codemirror/view"
     }
     if ((event.ctrlKey || event.metaKey) && event.code === "Comma") {
       event.preventDefault();
-      settingsOpen = true;
+      void openSettingsWindow();
     } else if ((event.ctrlKey || event.metaKey) && event.code === "KeyT") {
       event.preventDefault();
       handleOpenNewTab();
@@ -1212,8 +1218,8 @@ import { EditorView, type EditorView as EditorViewType } from "@codemirror/view"
     <HelpDialog mode={helpMode} onClose={() => (helpMode = null)} />
   {/if}
 
-  {#if settingsOpen}
-    <SettingsWindow
+  {#if settingsOpen && SettingsWindowComponent}
+    <SettingsWindowComponent
       {editorView}
       onClose={() => (settingsOpen = false)}
       onFocusEditor={() => editorView?.focus()}

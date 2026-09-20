@@ -4,6 +4,7 @@ type KatexApi = typeof import("katex").default;
 
 const renderedMath = new Map<string, string>();
 let katexLoader: Promise<KatexApi> | null = null;
+const MAX_RENDERED_MATH = 256;
 
 // Формулы в заметках обычно намного меньше этих значений. Они оставляют
 // запас для длинных выражений, но не дают документу развернуть WebView в
@@ -27,7 +28,13 @@ function loadKatex(): Promise<KatexApi> {
 function renderMath(source: string, displayMode: boolean, katex: KatexApi): string {
   const key = `${displayMode ? "display" : "inline"}:${source}`;
   const cached = renderedMath.get(key);
-  if (cached !== undefined) return cached;
+  if (cached !== undefined) {
+    // Keep frequently reused formulas warm while allowing old documents to
+    // release their HTML instead of growing this process-wide cache forever.
+    renderedMath.delete(key);
+    renderedMath.set(key, cached);
+    return cached;
+  }
 
   let html: string;
   try {
@@ -43,6 +50,11 @@ function renderMath(source: string, displayMode: boolean, katex: KatexApi): stri
     html = `<code class="cm-marknote-math-error">${escapeHtml(source)}</code>`;
   }
   renderedMath.set(key, html);
+  while (renderedMath.size > MAX_RENDERED_MATH) {
+    const oldest = renderedMath.keys().next().value;
+    if (oldest === undefined) break;
+    renderedMath.delete(oldest);
+  }
   return html;
 }
 

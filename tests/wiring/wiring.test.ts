@@ -207,6 +207,14 @@ describe("wiring contracts", () => {
         const tag = new RegExp(`<${localName}(?:\\s|/?>)`);
         edges.push({ child, localName, used: tag.test(importerSource) });
       }
+      // A lazily mounted dialog is a real component edge too. Keep the
+      // reachability contract aware of dynamic imports used for code-splitting.
+      const dynamicImportExpression = /import\(\s*["']([^"']+\.svelte)["']\s*\)/g;
+      for (const match of importerSource.matchAll(dynamicImportExpression)) {
+        const child = resolve(dirname(importer), match[1]);
+        if (!child.endsWith(".svelte") || !allComponents.includes(child)) continue;
+        edges.push({ child, localName: basename(child, ".svelte"), used: true });
+      }
       imports.set(importer, edges);
     }
 

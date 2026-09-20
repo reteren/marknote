@@ -177,6 +177,8 @@ describe("native close confirmation", () => {
     expect(settingsItem?.textContent).toContain(t("menu.settings"));
     await fireEvent.click(settingsItem!);
     await settle();
+    await vi.dynamicImportSettled();
+    await settle();
 
     let settingsDialog = document.querySelector<HTMLElement>('[role="dialog"][aria-label="Settings"]');
     expect(settingsDialog).not.toBeNull();
@@ -185,6 +187,8 @@ describe("native close confirmation", () => {
     expect(document.querySelector('[role="dialog"][aria-label="Settings"]')).toBeNull();
 
     await fireEvent.keyDown(window, { code: "Comma", key: ",", ctrlKey: true });
+    await settle();
+    await vi.dynamicImportSettled();
     await settle();
     settingsDialog = document.querySelector<HTMLElement>('[role="dialog"][aria-label="Settings"]');
     expect(settingsDialog).not.toBeNull();
