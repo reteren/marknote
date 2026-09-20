@@ -42,12 +42,12 @@ new webview called `open_file` and read/decoded the same file again. With a
 10 MiB fixture, the before trace measured validation `504.151 -> 542.608 ms`
 (38.5 ms) and the second `open_file` `719.657 -> 759.380 ms` (39.7 ms),
 including two reads and two encoding decodes. `PendingOpenData` now carries the
-validated decoded text and metadata through `AppState`; the after trace shows
-validation `507.760 -> 545.486 ms` (37.7 ms), then
-`open-file-prepared-data-reused` and `open_file` `733.613 -> 737.589 ms`
-(4.0 ms). The measured invoke-to-`open-file-done` interval fell from 255.2 ms
-to 229.8 ms in these runs; the frontend still spends about 1.6 s rendering
-the 10 MiB document.
+validated decoded text and metadata through `AppState`; the final after trace
+shows validation `536.873 -> 576.162 ms` (39.3 ms), then
+`open-file-prepared-data-reused` and `open_file` `776.859 -> 780.937 ms`
+(4.1 ms). The measured invoke-to-`open-file-done` interval fell from 255.2 ms
+to 244.8 ms in these runs; the frontend still spends about 1.6–1.7 s
+rendering the 10 MiB document.
 
 The validation is still performed, so binary/format errors still prevent a
 new window from being routed. A pending payload is keyed by destination window

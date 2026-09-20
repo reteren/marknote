@@ -14,7 +14,8 @@ param(
     [string]$FixturePath = "",
     [int]$Runs = 3,
     [int]$Port = 9610,
-    [string]$ReportPath = ""
+    [string]$ReportPath = "",
+    [switch]$NoFileOnly
 )
 
 $ErrorActionPreference = "Stop"
@@ -45,10 +46,12 @@ function New-TextFixture {
 $fixtures = [System.Collections.Generic.List[object]]::new()
 if ([string]::IsNullOrWhiteSpace($FixturePath)) {
     $fixtures.Add([pscustomobject]@{ Label = "no file"; Path = $null })
-    foreach ($size in @(10KB, 1MB, 10MB)) {
-        $fixture = Join-Path $fixtureRoot ("fixture-$size.md")
-        New-TextFixture -Path $fixture -Bytes $size
-        $fixtures.Add([pscustomobject]@{ Label = "$size bytes"; Path = $fixture })
+    if (-not $NoFileOnly) {
+        foreach ($size in @(10KB, 1MB, 10MB)) {
+            $fixture = Join-Path $fixtureRoot ("fixture-$size.md")
+            New-TextFixture -Path $fixture -Bytes $size
+            $fixtures.Add([pscustomobject]@{ Label = "$size bytes"; Path = $fixture })
+        }
     }
 } else {
     $fixtures.Add([pscustomobject]@{ Label = "argument"; Path = [IO.Path]::GetFullPath($FixturePath) })
@@ -91,7 +94,9 @@ try {
             }
             $windowMs = [math]::Round($timer.Elapsed.TotalMilliseconds, 1)
 
-            $probeOutput = @(& node $cdpProbe --port $runPort --timeout-ms 30000 2>&1)
+            $probeArguments = @("--port", $runPort, "--timeout-ms", 30000)
+            if ($null -ne $fixture.Path) { $probeArguments += @("--expected-text", "MarkNote startup fixture") }
+            $probeOutput = @(& node $cdpProbe @probeArguments 2>&1)
             $editorMs = if ($LASTEXITCODE -eq 0) { [math]::Round($timer.Elapsed.TotalMilliseconds, 1) } else { $null }
 
             Start-Sleep -Milliseconds 200
