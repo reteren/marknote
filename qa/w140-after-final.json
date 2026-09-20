@@ -1,0 +1,531 @@
+{
+  "generatedAt": "2026-09-20T02:42:45.505Z",
+  "cdpPort": 9557,
+  "vitePort": 1423,
+  "runs": 3,
+  "profile": "plain-list",
+  "disablePreview": false,
+  "disableSpellcheckSkip": false,
+  "results": [
+    {
+      "bytes": 10240,
+      "label": "10KB",
+      "documentLength": 10240,
+      "runs": [
+        {
+          "openCommandMs": 3.357,
+          "firstRenderMs": 113.029,
+          "readyPollingMs": 109,
+          "input": {
+            "samples": [
+              4.851,
+              3.074,
+              2.721,
+              3.131,
+              2.892
+            ],
+            "medianMs": 3.074,
+            "p95Ms": 4.851,
+            "maxMs": 4.851
+          },
+          "arrow": {
+            "samples": [
+              4.246,
+              2.08,
+              2.049,
+              2.259,
+              3.152
+            ],
+            "medianMs": 2.259,
+            "p95Ms": 4.246,
+            "maxMs": 4.246
+          },
+          "scroll": {
+            "samples": [
+              53.773,
+              52.367,
+              35.89,
+              36.113,
+              35.01
+            ],
+            "medianMs": 36.113,
+            "p95Ms": 53.773,
+            "maxMs": 53.773
+          }
+        },
+        {
+          "openCommandMs": 4.075,
+          "firstRenderMs": 106.826,
+          "readyPollingMs": 103,
+          "input": {
+            "samples": [
+              4.241,
+              2.975,
+              3.705,
+              2.583,
+              3.144
+            ],
+            "medianMs": 3.144,
+            "p95Ms": 4.241,
+            "maxMs": 4.241
+          },
+          "arrow": {
+            "samples": [
+              3.684,
+              2.926,
+              1.758,
+              2.275,
+              1.941
+            ],
+            "medianMs": 2.275,
+            "p95Ms": 3.684,
+            "maxMs": 3.684
+          },
+          "scroll": {
+            "samples": [
+              53.697,
+              50.771,
+              35.411,
+              36.151,
+              34.968
+            ],
+            "medianMs": 36.151,
+            "p95Ms": 53.697,
+            "maxMs": 53.697
+          }
+        },
+        {
+          "openCommandMs": 3.685,
+          "firstRenderMs": 99.096,
+          "readyPollingMs": 95,
+          "input": {
+            "samples": [
+              3.756,
+              5.957,
+              3.482,
+              2.999,
+              2.312
+            ],
+            "medianMs": 3.482,
+            "p95Ms": 5.957,
+            "maxMs": 5.957
+          },
+          "arrow": {
+            "samples": [
+              3.548,
+              1.989,
+              1.828,
+              1.763,
+              1.971
+            ],
+            "medianMs": 1.971,
+            "p95Ms": 3.548,
+            "maxMs": 3.548
+          },
+          "scroll": {
+            "samples": [
+              52.993,
+              53.318,
+              50.4,
+              35.148,
+              34.788
+            ],
+            "medianMs": 50.4,
+            "p95Ms": 53.318,
+            "maxMs": 53.318
+          }
+        }
+      ]
+    },
+    {
+      "bytes": 204800,
+      "label": "200KB",
+      "documentLength": 204800,
+      "runs": [
+        {
+          "openCommandMs": 3.746,
+          "firstRenderMs": 111.476,
+          "readyPollingMs": 108,
+          "input": {
+            "samples": [
+              9.958,
+              8.935,
+              6.212,
+              8.91,
+              8.946
+            ],
+            "medianMs": 8.935,
+            "p95Ms": 9.958,
+            "maxMs": 9.958
+          },
+          "arrow": {
+            "samples": [
+              6.443,
+              5.72,
+              6.562,
+              3.136,
+              3.226
+            ],
+            "medianMs": 5.72,
+            "p95Ms": 6.562,
+            "maxMs": 6.562
+          },
+          "scroll": {
+            "samples": [
+              66.582,
+              52.834,
+              36.994,
+              35.333,
+              34.957
+            ],
+            "medianMs": 36.994,
+            "p95Ms": 66.582,
+            "maxMs": 66.582
+          }
+        },
+        {
+          "openCommandMs": 3.348,
+          "firstRenderMs": 109.222,
+          "readyPollingMs": 105,
+          "input": {
+            "samples": [
+              7.648,
+              8.69,
+              6.211,
+              9.58,
+              8.225
+            ],
+            "medianMs": 8.225,
+            "p95Ms": 9.58,
+            "maxMs": 9.58
+          },
+          "arrow": {
+            "samples": [
+              5.452,
+              3.962,
+              4.35,
+              4.314,
+              4.559
+            ],
+            "medianMs": 4.35,
+            "p95Ms": 5.452,
+            "maxMs": 5.452
+          },
+          "scroll": {
+            "samples": [
+              66.92,
+              50.954,
+              34.769,
+              36.068,
+              34.145
+            ],
+            "medianMs": 36.068,
+            "p95Ms": 66.92,
+            "maxMs": 66.92
+          }
+        },
+        {
+          "openCommandMs": 4.384,
+          "firstRenderMs": 103.226,
+          "readyPollingMs": 99,
+          "input": {
+            "samples": [
+              8.227,
+              5.859,
+              7.189,
+              8.733,
+              7.662
+            ],
+            "medianMs": 7.662,
+            "p95Ms": 8.733,
+            "maxMs": 8.733
+          },
+          "arrow": {
+            "samples": [
+              4.927,
+              4.069,
+              4.345,
+              3.139,
+              4.731
+            ],
+            "medianMs": 4.345,
+            "p95Ms": 4.927,
+            "maxMs": 4.927
+          },
+          "scroll": {
+            "samples": [
+              66.395,
+              50.748,
+              35.2,
+              34.674,
+              34.76
+            ],
+            "medianMs": 35.2,
+            "p95Ms": 66.395,
+            "maxMs": 66.395
+          }
+        }
+      ]
+    },
+    {
+      "bytes": 1048576,
+      "label": "1024KB",
+      "documentLength": 1048576,
+      "runs": [
+        {
+          "openCommandMs": 3.721,
+          "firstRenderMs": 122.878,
+          "readyPollingMs": 119,
+          "input": {
+            "samples": [
+              34.452,
+              18.243,
+              23.231,
+              24.721,
+              24.762
+            ],
+            "medianMs": 24.721,
+            "p95Ms": 34.452,
+            "maxMs": 34.452
+          },
+          "arrow": {
+            "samples": [
+              12.511,
+              13.223,
+              17.702,
+              11.24,
+              18.173
+            ],
+            "medianMs": 13.223,
+            "p95Ms": 18.173,
+            "maxMs": 18.173
+          },
+          "scroll": {
+            "samples": [
+              27.346,
+              36.99,
+              36.344,
+              36.176,
+              37.182
+            ],
+            "medianMs": 36.344,
+            "p95Ms": 37.182,
+            "maxMs": 37.182
+          }
+        },
+        {
+          "openCommandMs": 4.384,
+          "firstRenderMs": 48.587,
+          "readyPollingMs": 45,
+          "input": {
+            "samples": [
+              0.267,
+              20.141,
+              19.124,
+              22.863,
+              18.797
+            ],
+            "medianMs": 19.124,
+            "p95Ms": 22.863,
+            "maxMs": 22.863
+          },
+          "arrow": {
+            "samples": [
+              0.903,
+              0.759,
+              0.565,
+              0.68,
+              0.622
+            ],
+            "medianMs": 0.68,
+            "p95Ms": 0.903,
+            "maxMs": 0.903
+          },
+          "scroll": {
+            "samples": [
+              96.528,
+              51.559,
+              51.583,
+              36.84,
+              35.641
+            ],
+            "medianMs": 51.559,
+            "p95Ms": 96.528,
+            "maxMs": 96.528
+          }
+        },
+        {
+          "openCommandMs": 3.862,
+          "firstRenderMs": 149.942,
+          "readyPollingMs": 146,
+          "input": {
+            "samples": [
+              34.355,
+              21.542,
+              20.322,
+              21.461,
+              23.091
+            ],
+            "medianMs": 21.542,
+            "p95Ms": 34.355,
+            "maxMs": 34.355
+          },
+          "arrow": {
+            "samples": [
+              13.73,
+              14.156,
+              12.623,
+              15.384,
+              16.048
+            ],
+            "medianMs": 14.156,
+            "p95Ms": 16.048,
+            "maxMs": 16.048
+          },
+          "scroll": {
+            "samples": [
+              34.547,
+              36.543,
+              36.87,
+              35.258,
+              36.876
+            ],
+            "medianMs": 36.543,
+            "p95Ms": 36.876,
+            "maxMs": 36.876
+          }
+        }
+      ]
+    },
+    {
+      "bytes": 5242880,
+      "label": "5120KB",
+      "documentLength": 5242880,
+      "runs": [
+        {
+          "openCommandMs": 3.31,
+          "firstRenderMs": 300.562,
+          "readyPollingMs": 297,
+          "input": {
+            "samples": [
+              161.568,
+              92.123,
+              75.552,
+              95.822,
+              81.941
+            ],
+            "medianMs": 92.123,
+            "p95Ms": 161.568,
+            "maxMs": 161.568
+          },
+          "arrow": {
+            "samples": [
+              56.077,
+              57.352,
+              64.34,
+              67.399,
+              74.14
+            ],
+            "medianMs": 64.34,
+            "p95Ms": 74.14,
+            "maxMs": 74.14
+          },
+          "scroll": {
+            "samples": [
+              35.338,
+              35.757,
+              35.063,
+              35.206,
+              36.3
+            ],
+            "medianMs": 35.338,
+            "p95Ms": 36.3,
+            "maxMs": 36.3
+          }
+        },
+        {
+          "openCommandMs": 4.244,
+          "firstRenderMs": 363.845,
+          "readyPollingMs": 360,
+          "input": {
+            "samples": [
+              157.378,
+              93.923,
+              78.098,
+              78.522,
+              89.098
+            ],
+            "medianMs": 89.098,
+            "p95Ms": 157.378,
+            "maxMs": 157.378
+          },
+          "arrow": {
+            "samples": [
+              65.882,
+              64.042,
+              70.064,
+              52.282,
+              62.051
+            ],
+            "medianMs": 64.042,
+            "p95Ms": 70.064,
+            "maxMs": 70.064
+          },
+          "scroll": {
+            "samples": [
+              40.347,
+              33.365,
+              35.93,
+              36.014,
+              36.566
+            ],
+            "medianMs": 36.014,
+            "p95Ms": 40.347,
+            "maxMs": 40.347
+          }
+        },
+        {
+          "openCommandMs": 4.318,
+          "firstRenderMs": 382.876,
+          "readyPollingMs": 379,
+          "input": {
+            "samples": [
+              155.793,
+              141.505,
+              73.889,
+              94.955,
+              81.788
+            ],
+            "medianMs": 94.955,
+            "p95Ms": 155.793,
+            "maxMs": 155.793
+          },
+          "arrow": {
+            "samples": [
+              63.114,
+              59.596,
+              60.313,
+              65.102,
+              59.073
+            ],
+            "medianMs": 60.313,
+            "p95Ms": 65.102,
+            "maxMs": 65.102
+          },
+          "scroll": {
+            "samples": [
+              51.833,
+              32.161,
+              35.1,
+              36.916,
+              33.693
+            ],
+            "medianMs": 35.1,
+            "p95Ms": 51.833,
+            "maxMs": 51.833
+          }
+        }
+      ]
+    }
+  ]
+}

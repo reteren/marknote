@@ -222,5 +222,16 @@ describe("Obsidian-style ordered lists", () => {
     expect(guides[1].from).toBe(22); // start of "        456456"
     expect(guides[1].decoration.spec.class).toContain("cm-marknote-nested-list-indent-8");
   });
-});
 
+  it("does not build list guides outside the visible ranges", () => {
+    const doc = `1. outer\n${"    1. inner\n".repeat(20)}`;
+    const visibleTo = doc.indexOf("\n", doc.indexOf("\n") + 1);
+    const state = EditorState.create({ doc, extensions: [markdown()] });
+    const result = buildDecorationSets(state, [{ from: 0, to: visibleTo }]);
+    const guides = decorationRanges(result.decorations).filter((range) =>
+      range.decoration.spec.class?.includes("cm-marknote-nested-list-line"),
+    );
+    expect(guides).toHaveLength(1);
+    expect(guides[0].from).toBeLessThan(visibleTo);
+  });
+});

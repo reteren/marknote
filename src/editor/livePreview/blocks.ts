@@ -84,13 +84,30 @@ export function indentationGuideForLine(target: { from: number; text: string }):
   return line(target.from, `cm-marknote-nested-list-line cm-marknote-nested-list-indent-${indent}`);
 }
 
-function nestedListGuide(node: SyntaxNode, state: EditorState): DecorationSpec[] {
-  const first = state.doc.lineAt(node.from).number;
-  const last = state.doc.lineAt(node.to).number;
+type VisibleRange = { from: number; to: number };
+
+function nestedListGuide(
+  node: SyntaxNode,
+  state: EditorState,
+  visibleRanges?: readonly VisibleRange[],
+): DecorationSpec[] {
+  if (visibleRanges && visibleRanges.length === 0) return [];
+  const ranges = visibleRanges ?? [{ from: node.from, to: node.to }];
   const specs: DecorationSpec[] = [];
-  for (let number = first; number <= last; number += 1) {
-    const spec = indentationGuideForLine(state.doc.line(number));
-    if (spec) specs.push(spec);
+  const seen = new Set<number>();
+  for (const visible of ranges) {
+    const from = Math.max(node.from, visible.from);
+    const to = Math.min(node.to, visible.to);
+    if (from > to) continue;
+    const first = state.doc.lineAt(from).number;
+    const last = state.doc.lineAt(to).number;
+    for (let number = first; number <= last; number += 1) {
+      const spec = indentationGuideForLine(state.doc.line(number));
+      if (spec && !seen.has(spec.from)) {
+        seen.add(spec.from);
+        specs.push(spec);
+      }
+    }
   }
   return specs;
 }
@@ -101,6 +118,7 @@ export function decorationsForBlockNode(
   active: boolean,
   state: EditorState,
   config?: LivePreviewConfig,
+  visibleRanges?: readonly VisibleRange[],
 ): DecorationSpec[] {
   if (/^ATXHeading[1-6]$/.test(node.name)) {
     const level = Number(node.name.slice(-1));
@@ -118,7 +136,7 @@ export function decorationsForBlockNode(
   }
 
   if (node.name === "OrderedList" || node.name === "BulletList") {
-    return nestedListGuide(node, state);
+    return nestedListGuide(node, state, visibleRanges);
   }
 
   if (node.name === "ListMark") {

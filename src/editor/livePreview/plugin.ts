@@ -1,4 +1,4 @@
-import { type EditorState, type Range } from "@codemirror/state";
+import { Text, type EditorState, type Range } from "@codemirror/state";
 import { syntaxTree } from "@codemirror/language";
 import {
   Decoration,
@@ -31,9 +31,24 @@ export interface PreviewBuildResult {
   disabled: boolean;
 }
 
+const documentByteLengths = new WeakMap<Text, number>();
+const utf8Encoder = typeof TextEncoder === "undefined" ? null : new TextEncoder();
+
+/**
+ * Returns the UTF-8 size for a document, reusing the result for selection and
+ * viewport updates that keep the same immutable CodeMirror Text instance.
+ */
+export function documentByteLength(doc: Text): number {
+  const cached = documentByteLengths.get(doc);
+  if (cached !== undefined) return cached;
+  const text = doc.toString();
+  const bytes = utf8Encoder ? utf8Encoder.encode(text).byteLength : text.length;
+  documentByteLengths.set(doc, bytes);
+  return bytes;
+}
+
 function byteLength(state: EditorState) {
-  const text = state.doc.toString();
-  return typeof TextEncoder === "undefined" ? text.length : new TextEncoder().encode(text).byteLength;
+  return documentByteLength(state.doc);
 }
 
 function isBlockNode(node: SyntaxNode) {
@@ -158,7 +173,7 @@ function buildDecorationSetsInternal(
         if (view && runBlockBuilders(view, node, active, specs, builderAtomicRanges)) return false;
 
         const nodeSpecs = isBlockNode(node)
-          ? decorationsForBlockNode(node, active, state, config)
+          ? decorationsForBlockNode(node, active, state, config, visibleRanges)
           : decorationsForInlineNode(node, active, state, options.resolveImage, config);
         specs.push(...nodeSpecs);
       },
