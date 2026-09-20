@@ -63,5 +63,6 @@ jobs:
           # Build the name from the version rather than a wildcard: the bundle
           # directory survives builds (it is in Cargo's cache), and a wildcard
           # would also pick up installers from previous versions.
+          # No description: the release page carries the installer and nothing
+          # else. Release notes are deliberately not generated either.
           files: src-tauri/target/release/bundle/nsis/MarkNote_${{ env.VERSION }}_x64-setup.exe
-          body_path: scripts/RELEASE_NOTES.md
