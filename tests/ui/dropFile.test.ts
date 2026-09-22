@@ -10,6 +10,9 @@ const tauri = vi.hoisted(() => ({
   listen: vi.fn(),
   focusChanged: vi.fn(),
   handlers: new Map<string, Set<(event: { payload?: unknown }) => void>>(),
+  webviewDropListener: null as null | ((event: { payload: { type: string; paths?: string[]; position?: { x: number; y: number } } }) => void),
+  unlistenWebview: vi.fn(),
+  enableWebviewDrop: false,
 }));
 
 vi.mock("@tauri-apps/api/core", () => ({ invoke: tauri.invoke }));
@@ -28,6 +31,16 @@ vi.mock("@tauri-apps/api/webviewWindow", () => ({
     listen: tauri.listen,
     onFocusChanged: tauri.focusChanged,
     close: vi.fn().mockResolvedValue(undefined),
+  }),
+}));
+vi.mock("@tauri-apps/api/webview", () => ({
+  getCurrentWebview: () => ({
+    onDragDropEvent: tauri.enableWebviewDrop
+      ? async (handler: any) => {
+          tauri.webviewDropListener = handler;
+          return tauri.unlistenWebview;
+        }
+      : undefined,
   }),
 }));
 
@@ -74,6 +87,7 @@ async function renderApp(): Promise<void> {
     if (command === "open_file") return openedFile(String(args?.path), "content");
     if (command === "take_pending_file" || command === "take_pending_format") return null;
     if (command === "get_recent_files") return [];
+    if (command === "save_attachment_from_path") return { src: "marknote-cache/photo.png", path: "photo.png", cached: true };
     return undefined;
   });
 
@@ -88,6 +102,8 @@ afterEach(() => {
   tauri.handlers.clear();
   tauri.invoke.mockReset();
   tauri.listen.mockReset();
+  tauri.enableWebviewDrop = false;
+  tauri.webviewDropListener = null;
   resetWorkspace();
   resetDocument(markdownFormat, "");
 });
@@ -129,5 +145,54 @@ describe("file drop onto the window", () => {
 
     expect(workspace.tabs).toHaveLength(tabsAfterFirst);
     expect(tauri.invoke).not.toHaveBeenCalledWith("open_file", { path: "C:/docs/note.md" });
+  });
+
+  it("dropping an image invokes save_attachment_from_path exactly once", async () => {
+    resetWorkspace();
+    await renderApp();
+
+    await drop(["C:/photos/sunset.png"]);
+
+    expect(tauri.invoke).toHaveBeenCalledWith("save_attachment_from_path", {
+      docPath: null,
+      sourcePath: "C:/photos/sunset.png",
+    });
+    const saveCalls = tauri.invoke.mock.calls.filter(([cmd]) => cmd === "save_attachment_from_path");
+    expect(saveCalls).toHaveLength(1);
+  });
+
+  it("rapid duplicate drop events for images are debounced and do not insert twice", async () => {
+    resetWorkspace();
+    await renderApp();
+
+    await drop(["C:/photos/sunset.png"]);
+    // Drop again within 750ms
+    await drop(["C:/photos/sunset.png"]);
+
+    const saveCalls = tauri.invoke.mock.calls.filter(([cmd]) => cmd === "save_attachment_from_path");
+    expect(saveCalls).toHaveLength(1);
+  });
+
+  it("prefers webview onDragDropEvent and does not register tauri://drag-drop", async () => {
+    resetWorkspace();
+    tauri.enableWebviewDrop = true;
+    await renderApp();
+
+    // Verify tauri://drag-drop was NOT registered because webview.onDragDropEvent handled it
+    expect(tauri.handlers.has("tauri://drag-drop")).toBe(false);
+    expect(tauri.webviewDropListener).not.toBeNull();
+
+    // Fire webview drop
+    tauri.webviewDropListener!({
+      payload: {
+        type: "drop",
+        paths: ["C:/photos/sunset.png"],
+        position: { x: 50, y: 50 },
+      },
+    });
+    for (let i = 0; i < 12; i += 1) await settle();
+
+    const saveCalls = tauri.invoke.mock.calls.filter(([cmd]) => cmd === "save_attachment_from_path");
+    expect(saveCalls).toHaveLength(1);
   });
 });

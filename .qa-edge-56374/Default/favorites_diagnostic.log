@@ -1,0 +1,28 @@
+2026-09-22 20:39:35.032: [INFO] CurrentProfilePath: C:\marknote\.qa-edge-56374\Default
+2026-09-22 20:39:35.032: [INFO] Profiles total count: 1
+2026-09-22 20:39:35.032: [INFO] Profile: name=Профиль 1 path=C:\marknote\.qa-edge-56374\Default lastActive=null
+2026-09-22 20:39:35.032: [INFO] LastUsedProfileDir: C:\marknote\.qa-edge-56374\Default
+2026-09-22 20:39:35.032: [INFO] VisibilityChanged: 0
+2026-09-22 20:39:35.044: [INFO] RecordSyncInitDuration has_sync_been_enabled: 0 state: 0
+2026-09-22 20:39:35.045: [INFO] RecordSyncInitDuration has_sync_been_enabled: 0 state: 0
+2026-09-22 20:39:35.046: [INFO] RecordSyncInitDuration has_sync_been_enabled: 0 state: 0
+2026-09-22 20:39:35.047: [INFO] RecordSyncInitDuration has_sync_been_enabled: 0 state: 0
+2026-09-22 20:39:35.048: [INFO] RecordSyncInitDuration has_sync_been_enabled: 0 state: 0
+2026-09-22 20:39:35.048: [INFO] RecordSyncInitDuration has_sync_been_enabled: 0 state: 0
+2026-09-22 20:39:35.049: [INFO] RecordSyncInitDuration has_sync_been_enabled: 0 state: 0
+2026-09-22 20:39:35.050: [INFO] RecordSyncInitDuration has_sync_been_enabled: 0 state: 0
+2026-09-22 20:39:35.051: [INFO] RecordSyncInitDuration has_sync_been_enabled: 0 state: 0
+2026-09-22 20:39:35.051: [INFO] RecordSyncInitDuration has_sync_been_enabled: 0 state: 0
+2026-09-22 20:39:35.058: [INFO] OnDoneLoading sync enabled: 0
+2026-09-22 20:39:35.058: [INFO] BookmarkModelLoaded, ids_reassigned: 0
+2026-09-22 20:39:35.058: [INFO] BookmarksLoadDropped droppedNodes=0
+2026-09-22 20:39:35.058: [INFO] BookmarksSnapshot Startup total=0 bar=0 other=0 mobile=0 showBar=0 showBarNTP=1
+2026-09-22 20:39:35.060: [INFO] RecordSyncInitDuration has_sync_been_enabled: 0 state: 0
+2026-09-22 20:39:35.236: [INFO] RecordSyncInitDuration has_sync_been_enabled: 0 state: 0
+2026-09-22 20:39:35.238: [INFO] RecordSyncInitDuration has_sync_been_enabled: 0 state: 0
+2026-09-22 20:39:35.239: [INFO] Primary account changed.
+2026-09-22 20:39:35.239: [INFO] OnPrimaryAccountChanged PrimaryAccountChangeEvent::Type::kSet
+2026-09-22 20:39:35.245: [INFO] RecordSyncInitDuration has_sync_been_enabled: 0 state: 0
+2026-09-22 20:39:35.246: [INFO] RecordSyncInitDuration has_sync_been_enabled: 0 state: 0
+2026-09-22 20:39:37.613: [INFO] BookmarkNodeAdded, ABU: 0
+2026-09-22 20:50:32.795: [INFO] BookmarksSnapshot Shutdown total=1 bar=1 other=0 mobile=0 showBar=0 showBarNTP=1

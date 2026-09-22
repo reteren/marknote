@@ -13,6 +13,7 @@ import {
   LivePreviewValue,
   livePreviewBlockBuilders,
 } from "../src/editor/livePreview/plugin";
+import { ImageWidget } from "../src/editor/livePreview/widgets/Image";
 
 const language = new Language(defineLanguageFacet(), parser.configure(marknoteMarkdown));
 
@@ -108,5 +109,26 @@ describe("livePreview full builder integration", () => {
       atomic: () => undefined,
     };
     expect(livePreviewBlockBuilders.every((builder) => !builder(context))).toBe(true);
+  });
+
+  it("passes an image alt dimension to its widget without changing the source text", () => {
+    const doc = "![cat|400](cat.png)\ntext";
+    const state = EditorState.create({
+      doc,
+      selection: { anchor: doc.length },
+      extensions: [language.extension, livePreview()],
+    });
+    const view = {
+      state,
+      visibleRanges: [{ from: 0, to: state.doc.length }],
+      dispatch: () => undefined,
+    } as unknown as EditorView;
+    const { value } = { value: new LivePreviewValue(view) };
+    const image = decorationRanges(value.decorations)
+      .map(({ decoration }) => decoration.spec.widget)
+      .find((widget): widget is ImageWidget => widget instanceof ImageWidget);
+
+    expect(image?.alt).toBe("cat");
+    expect(image?.size).toEqual({ width: 400 });
   });
 });

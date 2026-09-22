@@ -113,6 +113,50 @@ describe("native close confirmation", () => {
     expect(tauri.invoke).not.toHaveBeenCalledWith("respond_to_close", expect.anything());
   });
 
+  it("routes Ctrl+S from outside the editor to Save As for an untitled document", async () => {
+    tauri.invoke.mockImplementation(async (command: string) => {
+      if (command === "list_creatable_formats") return [markdownFormat];
+      if (command === "new_document") return { text: "", format: markdownFormat };
+      if (command === "take_pending_file") return null;
+      if (command === "save_as") return { path: "C:/notes/global-save.md", savedAt: "2026-09-22T00:00:00.000Z", format: markdownFormat };
+      return undefined;
+    });
+    render(App);
+    await settle();
+    await createEditedUntitled();
+
+    const outsideEditor = document.querySelector<HTMLElement>(".status-bar");
+    expect(outsideEditor).not.toBeNull();
+    await fireEvent.keyDown(outsideEditor!, { code: "KeyS", key: "s", ctrlKey: true });
+    await settle();
+
+    expect(tauri.invoke.mock.calls.filter(([command]) => command === "save_as")).toHaveLength(1);
+    expect(tauri.invoke).toHaveBeenCalledWith("save_as", expect.objectContaining({ text: "qa-unsaved" }));
+    expect(documentState.path).toBe("C:/notes/global-save.md");
+    expect(documentState.dirty).toBe(false);
+  });
+
+  it("does not double-save when Ctrl+S originates in the editor", async () => {
+    tauri.invoke.mockImplementation(async (command: string) => {
+      if (command === "list_creatable_formats") return [markdownFormat];
+      if (command === "new_document") return { text: "", format: markdownFormat };
+      if (command === "take_pending_file") return null;
+      if (command === "save_as") return { path: "C:/notes/editor-save.md", savedAt: "2026-09-22T00:00:00.000Z", format: markdownFormat };
+      return undefined;
+    });
+    render(App);
+    await settle();
+    await createEditedUntitled();
+
+    const editorContent = document.querySelector<HTMLElement>(".cm-content");
+    expect(editorContent).not.toBeNull();
+    await fireEvent.keyDown(editorContent!, { code: "KeyS", key: "s", ctrlKey: true });
+    await settle();
+
+    expect(tauri.invoke.mock.calls.filter(([command]) => command === "save_as")).toHaveLength(1);
+    expect(documentState.path).toBe("C:/notes/editor-save.md");
+  });
+
   it("keeps the editor inert until the native close listener is installed", async () => {
     let finishRegistration: (() => void) | undefined;
     tauri.listen.mockImplementation((name: string, handler: (event: { payload?: unknown }) => void) => {
@@ -239,7 +283,65 @@ describe("native close confirmation", () => {
       path: "C:/notes/draft.md",
       text: "edited on disk-backed doc",
     }));
+    expect(tauri.invoke.mock.calls.filter(([command]) => command === "save_file")).toHaveLength(1);
     expect(tauri.invoke).toHaveBeenCalledWith("respond_to_close", { allow: true });
+  });
+
+  it("flushes every dirty named tab before allowing the native window close", async () => {
+    workspace.tabs.splice(0, workspace.tabs.length,
+      {
+        id: "tab-named-1",
+        document: createDocumentState({ path: "C:/notes/one.md", text: "one", dirty: true }),
+      },
+      {
+        id: "tab-named-2",
+        document: createDocumentState({ path: "C:/notes/two.md", text: "two", dirty: true }),
+      },
+    );
+    workspace.activeId = "tab-named-1";
+    tauri.invoke.mockImplementation(async (command: string) => {
+      if (command === "list_creatable_formats") return [markdownFormat];
+      if (command === "take_pending_file") return null;
+      if (command === "save_file") return { path: "unused", savedAt: "2026-09-22T00:00:00.000Z", format: markdownFormat };
+      return undefined;
+    });
+    render(App);
+    await settle();
+
+    for (const handler of tauri.handlers.get("save-before-close") ?? []) handler({ payload: {} });
+    await settle();
+
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    expect(tauri.invoke.mock.calls.filter(([command]) => command === "save_file").map(([, args]) => args.path))
+      .toEqual(["C:/notes/one.md", "C:/notes/two.md"]);
+    expect(tauri.invoke).toHaveBeenCalledWith("respond_to_close", { allow: true });
+  });
+
+  it("keeps the close handshake open when a silent save fails", async () => {
+    workspace.tabs.splice(0, workspace.tabs.length, {
+      id: "tab-failing-save",
+      document: createDocumentState({ path: "C:/notes/full.md", text: "must keep", dirty: true }),
+    });
+    workspace.activeId = "tab-failing-save";
+    tauri.invoke.mockImplementation(async (command: string) => {
+      if (command === "list_creatable_formats") return [markdownFormat];
+      if (command === "take_pending_file") return null;
+      if (command === "save_file") throw new Error("disk full");
+      return undefined;
+    });
+    render(App);
+    await settle();
+
+    for (const handler of tauri.handlers.get("save-before-close") ?? []) handler({ payload: {} });
+    await settle();
+
+    expect(document.querySelector('[role="dialog"]')).not.toBeNull();
+    expect(tauri.invoke).not.toHaveBeenCalledWith("respond_to_close", { allow: true });
+    const cancel = Array.from(document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button'))
+      .find((button) => button.textContent?.trim() === t("dialog.close.cancel"));
+    await fireEvent.click(cancel!);
+    await settle();
+    expect(tauri.invoke).toHaveBeenCalledWith("respond_to_close", { allow: false });
   });
 
   it.each([

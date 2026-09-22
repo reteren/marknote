@@ -7,9 +7,11 @@ import { toggleCodeBlock, toggleWrapper } from "../editor/keymap";
 import { safeLinkHref } from "../editor/livePreview/inline";
 import {
   documentState,
+  extractImageSrcs,
   markSaved,
   replaceDocument,
   resetDocument,
+  rewriteAttachmentSrcs,
   setDocumentText,
   type DocumentState,
   type NewDocument,
@@ -59,6 +61,8 @@ export type ActionsDependencies = {
   closeWindow?: () => void | Promise<void>;
   openSettings?: () => void | Promise<void>;
   goToLine?: () => void | Promise<void>;
+  /** Opens the image picker used by the Insert submenu. */
+  insertImage?: () => void | Promise<void>;
   zoomIn?: () => void | Promise<void>;
   zoomOut?: () => void | Promise<void>;
   resetZoom?: () => void | Promise<void>;
@@ -136,6 +140,8 @@ const menuActionIds = new Set([
   "edit.deleteLine",
   "edit.moveLineUp",
   "edit.moveLineDown",
+  "edit.insert",
+  "insert.image",
   "format.bold",
   "format.italic",
   "format.strikethrough",
@@ -235,6 +241,18 @@ function replaceEditorText(view: EditorView | null | undefined, text: string): v
   view.dispatch({
     changes: { from: 0, to: view.state.doc.length, insert: text },
     selection: { anchor: 0 },
+  });
+}
+
+function replaceEditorTextPreservingSelection(view: EditorView | null | undefined, text: string): void {
+  if (!view) return;
+  const currentText = view.state.doc.toString();
+  if (currentText === text) return;
+  const currentSelection = view.state.selection;
+  const changes = view.state.changes({ from: 0, to: view.state.doc.length, insert: text });
+  view.dispatch({
+    changes,
+    selection: currentSelection.map(changes),
   });
 }
 
@@ -694,6 +712,44 @@ export function createActions(dependencies: ActionsDependencies = {}): AppAction
     }
   };
 
+  const promoteAttachments = async (docPath: string, view?: EditorView | null): Promise<void> => {
+    const currentText = state.text;
+    const srcs = extractImageSrcs(currentText);
+    if (srcs.length === 0) return;
+    const hasCacheSrcs = srcs.some((src) => src.startsWith("marknote-cache/") || src.startsWith("marknote-cache\\"));
+    if (!hasCacheSrcs) return;
+
+    try {
+      const rewrites = await invoke<Array<{ from: string; to: string }>>("promote_attachments", {
+        docPath,
+        srcs,
+      });
+
+      if (!rewrites || rewrites.length === 0) return;
+
+      const latestText = state.text;
+      const rewrittenText = rewriteAttachmentSrcs(latestText, rewrites);
+      if (rewrittenText === latestText) return;
+
+      const saveResult = await invoke<SaveResult>("save_file", {
+        path: docPath,
+        text: rewrittenText,
+        encoding: state.encoding,
+        bom: state.bom,
+        lineEnding: state.lineEnding,
+      });
+
+      const targetView = view ?? getView();
+      if (targetView) {
+        replaceEditorTextPreservingSelection(targetView, rewrittenText);
+      }
+      setDocumentText(rewrittenText);
+      markSaved(saveResult, rewrittenText);
+    } catch (error) {
+      notify(error instanceof Error ? error.message : String(error));
+    }
+  };
+
   const saveAs = async (_view?: EditorView | null): Promise<ActionResult> => {
     if (!canSaveAs() || !hasTextOrPath()) return unavailable("There is nothing to save");
     if (shouldWarnLossySave(state.format) && !(await prepareLossySave())) return false;
@@ -703,6 +759,7 @@ export function createActions(dependencies: ActionsDependencies = {}): AppAction
       const result = await saveAsFile(state, suggestedName);
       if (!result) return false;
       markSaved(result, beforeText);
+      await promoteAttachments(result.path, _view ?? getView());
       return true;
     } catch (error) {
       notify(error instanceof Error ? error.message : String(error));
@@ -727,6 +784,7 @@ export function createActions(dependencies: ActionsDependencies = {}): AppAction
           });
       if (!result) return false;
       markSaved(result, beforeText);
+      await promoteAttachments(result.path, view ?? getView());
       return true;
     } catch (error) {
       notify(error instanceof Error ? error.message : String(error));
@@ -951,6 +1009,8 @@ export function createActions(dependencies: ActionsDependencies = {}): AppAction
     ["edit.deleteLine", () => command(getView(), deleteLine)],
     ["edit.moveLineUp", () => command(getView(), moveLineUp)],
     ["edit.moveLineDown", () => command(getView(), moveLineDown)],
+    ["edit.insert", () => invokeUi(dependencies.insertImage, notify)],
+    ["insert.image", () => invokeUi(dependencies.insertImage, notify)],
     ["format.bold", () => bold()],
     ["format.italic", () => italic()],
     ["format.strikethrough", () => strikethrough()],
@@ -1024,6 +1084,7 @@ export function createActions(dependencies: ActionsDependencies = {}): AppAction
     if (id === "open-image" || id === "copy-image") return Boolean(payload);
     if (id === "file.close") return Boolean(dependencies.closeWindow);
     if (id === "file.settings") return Boolean(dependencies.openSettings);
+    if (id === "edit.insert" || id === "insert.image") return canEdit() && Boolean(dependencies.insertImage);
     if (isMarkdownCommand(id) && !supportsMarkdownCommands(state.format)) return false;
     if (id === "format.jsonValidate") return state.format.id === "json";
     if (id === "format.jsonFormat") return state.format.id === "json" && canEdit();

@@ -3,7 +3,7 @@
   import { onMount, tick } from "svelte";
   import type { EditorView } from "@codemirror/view";
   import { getZoom, installZoom, resetZoom, setZoomPercent, zoomIn, zoomOut } from "../editor/zoom";
-  import { formatLabel, translate as t } from "../i18n";
+  import { formatLabel, interfaceLanguage, translate as t } from "../i18n";
   import {
     defaultSettings,
     flushSettings,
@@ -15,10 +15,11 @@
   } from "../state/settings.svelte";
   import type { FormatCapabilities } from "../state/formats.svelte";
   import { recentFilesState } from "../state/recentFiles.svelte";
+  import { formatBytes } from "../editor/imageResolver";
   import SettingRow from "./settings/SettingRow.svelte";
   import packageInfo from "../../package.json";
 
-  type SectionId = "language" | "editor" | "preview" | "spelling" | "files" | "windows" | "other";
+  type SectionId = "language" | "editor" | "preview" | "spelling" | "files" | "windows" | "attachments" | "other";
   type Option = { value: string; labelKey: string };
   type Descriptor = {
     path: string;
@@ -85,7 +86,12 @@
     { path: "autoCorrect.capitalizeAfterPeriod", type: "toggle", titleKey: "settings.spelling.capitalizeAfterPeriod" },
     { path: "autoCorrect.threeDotsToEllipsis", type: "toggle", titleKey: "settings.spelling.threeDotsToEllipsis" },
     { path: "files.autosave", type: "toggle", titleKey: "settings.files.autosave" },
-    { path: "files.autosaveDelayMs", type: "number", titleKey: "settings.files.autosaveDelay", min: 0.25, max: 60, step: 0.25, unit: "settings.unit.seconds" },
+    { path: "files.autosaveDelayMs", type: "select", titleKey: "settings.files.autosaveDelay", descriptionKey: "settings.files.autosaveDelayDescription", options: [
+      { value: "2000", labelKey: "settings.files.autosaveDelay.2s" },
+      { value: "10000", labelKey: "settings.files.autosaveDelay.10s" },
+      { value: "30000", labelKey: "settings.files.autosaveDelay.30s" },
+      { value: "60000", labelKey: "settings.files.autosaveDelay.1m" },
+    ] },
     { path: "files.saveOnWindowBlur", type: "toggle", titleKey: "settings.files.saveOnWindowBlur" },
     { path: "files.newDocumentFormat", type: "select", titleKey: "settings.files.newDocumentFormat", descriptionKey: "settings.files.newDocumentFormatDescription", options: [] },
     { path: "files.newDocumentEncoding", type: "fixed", titleKey: "settings.files.newDocumentEncoding", display: "settings.files.utf8NoBom" },
@@ -111,6 +117,7 @@
     { id: "spelling", labelKey: "settings.section.spelling", rowPaths: descriptors.filter((item) => item.path.startsWith("spellcheck.") || item.path.startsWith("autoCorrect.")).map((item) => item.path) },
     { id: "files", labelKey: "settings.section.files", rowPaths: descriptors.filter((item) => item.path.startsWith("files.")).map((item) => item.path) },
     { id: "windows", labelKey: "settings.section.windows", rowPaths: descriptors.filter((item) => item.path.startsWith("windows.")).map((item) => item.path) },
+    { id: "attachments", labelKey: "settings.attachments.title", rowPaths: [] },
     { id: "other", labelKey: "settings.section.other", rowPaths: [] },
   ];
 
@@ -132,8 +139,60 @@
   let copiedVersion = $state(false);
   let settingsFileError = $state(false);
   let recentFilesCleared = $state(false);
+  let attachmentCacheCleared = $state(false);
+  let attachmentCacheError = $state(false);
+  type AttachmentStats = { files: number; bytes: number; path?: string };
+  let attachmentStats = $state<AttachmentStats | null>(null);
   let zoomView = $derived(editorView);
   let matchingSections = $state<Section[]>(sections);
+
+  async function loadAttachmentStats(): Promise<void> {
+    try {
+      const stats = await invoke<AttachmentStats>("attachment_cache_stats");
+      attachmentStats = stats && typeof stats === "object" ? stats : { files: 0, bytes: 0 };
+    } catch {
+      attachmentStats = { files: 0, bytes: 0 };
+    }
+  }
+
+  async function handleClearAttachmentCache(): Promise<void> {
+    try {
+      await invoke("clear_attachment_cache");
+      attachmentStats = { files: 0, bytes: 0, path: attachmentStats?.path };
+      attachmentCacheCleared = true;
+      setTimeout(() => {
+        attachmentCacheCleared = false;
+      }, 2500);
+    } catch {
+      // Ignored
+    }
+  }
+
+  async function handleRevealAttachmentCache(): Promise<void> {
+    attachmentCacheError = false;
+    try {
+      await invoke("reveal_attachment_cache");
+    } catch {
+      attachmentCacheError = true;
+    }
+  }
+
+  const cacheSummaryText = $derived.by(() => {
+    if (!attachmentStats || !attachmentStats.files || attachmentStats.files === 0) {
+      return t("settings.attachments.cacheEmpty");
+    }
+    const sizeStr = formatBytes(attachmentStats.bytes, interfaceLanguage.locale);
+    return t("settings.attachments.cacheSize", {
+      files: attachmentStats.files,
+      size: sizeStr,
+    });
+  });
+
+  $effect(() => {
+    if (activeSection === "attachments") {
+      void loadAttachmentStats();
+    }
+  });
 
   async function handleClearRecentFiles(): Promise<void> {
     await recentFilesState.clear();
@@ -177,8 +236,9 @@
       const numeric = Number(rawValue);
       if (!Number.isFinite(numeric)) return;
       const bounded = Math.min(descriptor.max ?? Number.MAX_SAFE_INTEGER, Math.max(descriptor.min ?? 0, numeric));
-      value = descriptor.path === "files.autosaveDelayMs" ? Math.round(bounded * 1000) : bounded;
+      value = bounded;
     }
+    if (descriptor.path === "files.autosaveDelayMs") value = Number(rawValue);
     if (descriptor.path === "livePreview.disableAboveBytes") value = Number(value) * 1024 * 1024;
     if (descriptor.path === "editor.zoomPercent") {
       value = Math.min(200, Math.max(50, Math.round(Number(value) / 10) * 10));
@@ -192,7 +252,6 @@
 
   function displayedValue(descriptor: Descriptor): string | number | boolean {
     const value = settingValue(descriptor.path);
-    if (descriptor.path === "files.autosaveDelayMs") return Number(value) / 1000;
     if (descriptor.path === "livePreview.disableAboveBytes") return Number(value) / (1024 * 1024);
     if (descriptor.path === "editor.zoomPercent") return settingsState.settings.editor.zoomPercent;
     return value as string | number | boolean;
@@ -203,15 +262,33 @@
     setZoomPercent(editorView, target);
   }
 
+  function isRowDisabled(descriptor: Descriptor): boolean {
+    if (descriptor.path === "files.autosaveDelayMs") {
+      return !settingsState.settings.files.autosave;
+    }
+    return false;
+  }
+
+  function formatCustomDelay(ms: number): string {
+    const seconds = ms / 1000;
+    const formattedSeconds = Number.isInteger(seconds) ? String(seconds) : seconds.toFixed(2).replace(/\.?0+$/u, "");
+    return t("settings.files.autosaveDelay.custom", { seconds: formattedSeconds });
+  }
+
   function matches(path: string, query = searchQuery): boolean {
     const descriptor = descriptors.find((item) => item.path === path);
     if (!descriptor) return false;
-    const text = `${t(descriptor.titleKey)} ${descriptor.descriptionKey ? t(descriptor.descriptionKey) : ""}`.toLocaleLowerCase();
+    const optionsText = descriptor.options?.map((opt) => t(opt.labelKey)).join(" ") ?? "";
+    const text = `${t(descriptor.titleKey)} ${descriptor.descriptionKey ? t(descriptor.descriptionKey) : ""} ${optionsText}`.toLocaleLowerCase();
     return !query.trim() || text.includes(query.trim().toLocaleLowerCase());
   }
 
   function sectionHasMatch(id: SectionId, query = searchQuery): boolean {
     if (!query.trim()) return true;
+    if (id === "attachments") {
+      const text = `${t("settings.attachments.title")} ${t("settings.attachments.cache")} ${t("settings.attachments.cacheDescription")}`.toLocaleLowerCase();
+      return text.includes(query.trim().toLocaleLowerCase());
+    }
     const section = sections.find((item) => item.id === id);
     if (!section) return false;
     return section.rowPaths.some((path) => matches(path, query));
@@ -377,7 +454,35 @@
       </div>
 
       <div class="settings-content" id={`settings-panel-${activeSection}`} role="tabpanel" aria-label={t(sections.find((item) => item.id === activeSection)?.labelKey ?? "settings.title")}>
-        {#if activeSection === "other"}
+        {#if activeSection === "attachments"}
+          <SettingRow
+            id="settings-attachments-cache"
+            title={t("settings.attachments.cache")}
+            description={t("settings.attachments.cacheDescription")}
+          >
+            <div class="attachment-cache-control">
+              <span class="attachment-cache-size" data-testid="cache-size">
+                {cacheSummaryText}
+              </span>
+              <div class="attachment-cache-actions">
+                <button
+                  type="button"
+                  class="attachment-button"
+                  onclick={handleRevealAttachmentCache}
+                >
+                  {t("settings.attachments.reveal")}
+                </button>
+                <button
+                  type="button"
+                  class="attachment-button"
+                  onclick={handleClearAttachmentCache}
+                >
+                  {attachmentCacheCleared ? t("settings.attachments.cleared") : t("settings.attachments.clear")}
+                </button>
+              </div>
+            </div>
+          </SettingRow>
+        {:else if activeSection === "other"}
           <div class="other-actions">
             <div class="action-copy">
               <h2>{t("settings.other.settingsFile")}</h2>
@@ -422,6 +527,7 @@
               title={t(descriptor.titleKey)}
               description={descriptor.descriptionKey ? t(descriptor.descriptionKey) : undefined}
               changed={isModified(descriptor.path)}
+              disabled={isRowDisabled(descriptor)}
               modifiedLabel={t("settings.modified")}
               resetLabel={t("settings.resetValue")}
               onReset={() => resetPath(descriptor.path)}
@@ -471,6 +577,26 @@
                       {recentFilesCleared ? t("settings.windows.recentFilesCleared") : t("settings.windows.clearRecentFiles")}
                     </button>
                   </div>
+                {:else if descriptor.path === "files.autosaveDelayMs"}
+                  {@const currentVal = String(settingValue(descriptor.path))}
+                  {@const isCustom = !descriptor.options?.some((opt) => opt.value === currentVal)}
+                  <select
+                    value={currentVal}
+                    disabled={isRowDisabled(descriptor)}
+                    aria-label={t(descriptor.titleKey)}
+                    onchange={(event) => updateDescriptor(descriptor, event.currentTarget.value)}
+                  >
+                    {#if isCustom}
+                      <option value={currentVal}>
+                        {formatCustomDelay(Number(currentVal))}
+                      </option>
+                    {/if}
+                    {#each descriptor.options ?? [] as option (option.value)}
+                      <option value={option.value}>
+                        {t(option.labelKey)}
+                      </option>
+                    {/each}
+                  </select>
                 {:else}
                   <select
                     value={String(settingValue(descriptor.path))}
@@ -617,6 +743,10 @@
   .startup-action-control { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
   .startup-action-control select { flex: 1 1 140px; min-width: 120px; }
   .clear-recent-button { flex: 0 0 auto; font-size: 12px; white-space: nowrap; }
+  .attachment-cache-control { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+  .attachment-cache-size { color: var(--text-muted); font-size: 13px; white-space: nowrap; }
+  .attachment-cache-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+  .attachment-button { flex: 0 0 auto; font-size: 12px; white-space: nowrap; }
 
   .settings-footer {
     display: flex;

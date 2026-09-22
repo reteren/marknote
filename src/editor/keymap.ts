@@ -40,6 +40,7 @@ export interface MarknoteKeymapHandlers {
   zoomIn?: Command;
   zoomOut?: Command;
   resetZoom?: Command;
+  insertImage?: Command;
 }
 
 export interface MarknoteKeymapOptions {
@@ -725,6 +726,7 @@ function externalBindings(handlers: MarknoteKeymapHandlers): KeyBinding[] {
     ["Mod-=", handlers.zoomIn],
     ["Mod--", handlers.zoomOut],
     ["Mod-0", handlers.resetZoom],
+    ["Mod-Shift-i", handlers.insertImage],
   ];
   return pairs.flatMap(([key, run]) => (run ? [commandBinding(key, run)] : []));
 }

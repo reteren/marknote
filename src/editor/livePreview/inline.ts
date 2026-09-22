@@ -4,6 +4,8 @@ import type { SyntaxNode } from "@lezer/common";
 import type { LivePreviewConfig } from "./settings";
 import { ImageWidget, type ImageResolver } from "./widgets/Image";
 import { MathWidget } from "./widgets/Math";
+import { imageSelectionField } from "../imageResize";
+import { parseImageAlt } from "../imageSize";
 
 const SAFE_LINK_PROTOCOLS = new Set(["http:", "https:", "mailto:"]);
 
@@ -73,14 +75,23 @@ function sourceBetween(node: SyntaxNode, markerName: string, state: EditorState)
   return state.doc.sliceString(range.from, range.to);
 }
 
-function linkTextRange(node: SyntaxNode, marks: SyntaxNode[], url: SyntaxNode | null) {
+function linkTextRange(node: SyntaxNode, marks: SyntaxNode[], url: SyntaxNode | null, state: EditorState) {
   if (!marks.length) return { from: node.from, to: node.to };
   const from = marks[0].to;
   if (!url) return { from, to: marks[marks.length - 1].from };
   // After link text come `]`, `(`, the URL, and `)`. We need the `]`, not the
   // last LinkMark before the closing parenthesis.
-  const closingBracket = marks.filter((marker) => marker.to <= url.from && marker.from >= from).at(-1);
-  return { from, to: closingBracket?.from ?? from };
+  const beforeUrl = marks.filter((marker) => marker.to <= url.from && marker.from >= from);
+  const opening = beforeUrl.at(-1);
+  if (!opening) return { from, to: from };
+  const openingText = state.doc.sliceString(opening.from, opening.to);
+  if (openingText === "(") {
+    const closing = beforeUrl.at(-2);
+    if (closing && state.doc.sliceString(closing.from, closing.to).endsWith("]")) {
+      return { from, to: closing.from };
+    }
+  }
+  return { from, to: opening.from };
 }
 
 /** Builds inline decorations. The plugin makes all active-state decisions. */
@@ -135,7 +146,7 @@ export function decorationsForInlineNode(
     case "Link": {
       const marks = children(node, "LinkMark");
       const url = node.getChild("URL");
-      const range = linkTextRange(node, marks, url);
+      const range = linkTextRange(node, marks, url, state);
       const specs = [mark(range.from, range.to, "cm-marknote-link")];
       if (!active) {
         specs.push(...marks.map((child) => hide(child.from, child.to)));
@@ -149,14 +160,18 @@ export function decorationsForInlineNode(
       }
       const marks = children(node, "LinkMark");
       const url = node.getChild("URL");
-      const altRange = linkTextRange(node, marks, url);
-      const alt = state.doc.sliceString(altRange.from, altRange.to).replace(/^\[/, "").replace(/\]$/, "");
+      const altRange = linkTextRange(node, marks, url, state);
+      const rawAlt = state.doc.sliceString(altRange.from, altRange.to).replace(/^\[/, "").replace(/\]$/, "");
+      const { alt, size } = parseImageAlt(rawAlt);
       const src = url ? state.doc.sliceString(url.from, url.to).replace(/^<|>$/g, "") : "";
       if (!active) {
+        const selected = state.field(imageSelectionField, false);
         return [{
           from: node.from,
           to: node.to,
-          decoration: Decoration.replace({ widget: new ImageWidget(src, alt, resolveImage) }),
+          decoration: Decoration.replace({
+            widget: new ImageWidget(src, alt, resolveImage, size, selected?.from === node.from && selected.to === node.to, node.from, node.to),
+          }),
           atomic: true,
         }];
       }

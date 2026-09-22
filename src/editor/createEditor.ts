@@ -18,6 +18,7 @@ import { marknoteTheme } from "./theme";
 import { createImageResolver } from "./imageResolver";
 import { supportsMarkdownCommands, type FormatCapabilities } from "../state/formats.svelte";
 import type { Settings } from "../state/settings.svelte";
+import { createImagePasteHandler } from "./attachments";
 import {
   editorSettingsExtensions,
   editorFormatSyntaxStateField,
@@ -279,6 +280,7 @@ type EditorRuntime = {
   handlers?: MarknoteKeymapHandlers;
   onChange: (doc: string) => void;
   onStats: (stats: EditorStats) => void;
+  onNotice?: (message: string, severity?: "info" | "warning" | "error") => void;
   scrollPositions: WeakMap<EditorState, EditorScrollPosition>;
 };
 
@@ -384,6 +386,7 @@ function buildEditorState(runtime: EditorRuntime, opts: EditorStateOptions): Edi
     keymap.of(tableKeymap),
     createMarknoteKeymap({ handlers: runtime.handlers }),
     marknoteSearch(),
+    createImagePasteHandler((v) => v.state.field(runtime.documentPathField, false) ?? null, runtime.onNotice),
     // Everything controlled by settings lives in one compartment: changing a
     // setting reconfigures it instead of recreating the editor.
     settingsCompartment.of(editorSettingsExtensions(opts.settings ?? null, Boolean(opts.format.syntaxMode))),
@@ -505,6 +508,7 @@ export function createEditor(opts: {
   /** User settings. They may be absent because the editor starts before Rust
    *  can provide settings.json. */
   settings?: Settings | null;
+  onNotice?: (message: string, severity?: "info" | "warning" | "error") => void;
 }): EditorView {
   const imageResolver = createImageResolver(opts.path ?? null);
   const formatCompartment = new Compartment();
@@ -542,6 +546,7 @@ export function createEditor(opts: {
     handlers: opts.handlers,
     onChange: opts.onChange,
     onStats: opts.onStats,
+    onNotice: opts.onNotice,
     scrollPositions: new WeakMap<EditorState, EditorScrollPosition>(),
   };
   runtime.createState = (stateOpts) => buildEditorState(runtime, stateOpts);

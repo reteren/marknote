@@ -23,7 +23,7 @@ use crate::{
     windows::{self, AppState, FileSnapshot, PendingOpenData},
 };
 
-const MAX_IMAGE_BYTES: u64 = 16 * 1024 * 1024;
+pub(crate) const MAX_IMAGE_BYTES: u64 = 16 * 1024 * 1024;
 
 #[derive(Debug, Error)]
 pub enum CommandError {
@@ -53,6 +53,67 @@ pub enum CommandError {
     WindowRouting(String),
     #[error("{0}")]
     Message(UserMessage),
+}
+
+#[tauri::command]
+#[allow(non_snake_case)]
+pub fn save_attachment(
+    app: AppHandle,
+    docPath: Option<String>,
+    fileName: Option<String>,
+    data: Vec<u8>,
+) -> Result<crate::attachments::AttachmentRef, CommandError> {
+    crate::attachments::save_attachment(app, docPath, fileName, data)
+}
+
+#[tauri::command]
+#[allow(non_snake_case)]
+pub fn save_attachment_from_path(
+    app: AppHandle,
+    docPath: Option<String>,
+    sourcePath: String,
+) -> Result<crate::attachments::AttachmentRef, CommandError> {
+    crate::attachments::save_attachment_from_path(app, docPath, sourcePath)
+}
+
+#[tauri::command]
+#[allow(non_snake_case)]
+pub fn resolve_image(
+    app: AppHandle,
+    registry: State<'_, crate::attachments::AttachmentRegistry>,
+    docPath: Option<String>,
+    src: String,
+) -> Result<String, CommandError> {
+    crate::attachments::resolve_image(app, registry, docPath, src)
+}
+
+#[tauri::command]
+#[allow(non_snake_case)]
+pub fn promote_attachments(
+    app: AppHandle,
+    docPath: String,
+    srcs: Vec<String>,
+) -> Result<Vec<crate::attachments::AttachmentRewrite>, CommandError> {
+    crate::attachments::promote_attachments(app, docPath, srcs)
+}
+
+#[tauri::command]
+pub fn attachment_cache_stats(
+    app: AppHandle,
+) -> Result<crate::attachments::CacheStats, CommandError> {
+    crate::attachments::attachment_cache_stats(app)
+}
+
+#[tauri::command]
+pub fn clear_attachment_cache(
+    app: AppHandle,
+) -> Result<crate::attachments::CacheClearStats, CommandError> {
+    crate::attachments::clear_attachment_cache(app)
+}
+
+#[tauri::command]
+pub fn reveal_attachment_cache(app: AppHandle) -> Result<(), CommandError> {
+    crate::attachments::reveal_attachment_cache(app)
 }
 
 impl CommandError {
@@ -389,61 +450,13 @@ pub fn format_json(text: String) -> Result<String, CommandError> {
 
 #[allow(non_snake_case)]
 #[tauri::command]
-pub fn read_image(docPath: Option<String>, src: String) -> Result<String, CommandError> {
-    if src.starts_with("data:") || src.starts_with("http://") || src.starts_with("https://") {
-        return Ok(src);
-    }
-
-    if src.is_empty() {
-        return Err(CommandError::Message(UserMessage::InvalidPath));
-    }
-    if src.bytes().any(|byte| byte == 0) || has_uri_scheme(&src) {
-        return Err(CommandError::InvalidPath(
-            UserMessage::ImagePathMustBeRelative.to_string(),
-        ));
-    }
-
-    let source_path = PathBuf::from(&src);
-    if source_path.is_absolute() || is_windows_device_path(&source_path) {
-        return Err(CommandError::InvalidPath(
-            UserMessage::ImagePathAbsoluteOrDevice.to_string(),
-        ));
-    }
-
-    let document_path = docPath.ok_or(CommandError::Message(UserMessage::DocumentPathRequired))?;
-    let document_path =
-        windows::canonical_path(Path::new(&document_path)).map_err(CommandError::InvalidPath)?;
-    if is_windows_device_path(&document_path) {
-        return Err(CommandError::InvalidPath(
-            UserMessage::DeviceDocumentPath.to_string(),
-        ));
-    }
-    let document_directory = document_path
-        .parent()
-        .ok_or(CommandError::Message(UserMessage::DocumentFolderRequired))?;
-    let path = windows::canonical_path(&document_directory.join(source_path))
-        .map_err(CommandError::InvalidPath)?;
-    if !path_is_within(document_directory, &path) || is_windows_device_path(&path) {
-        return Err(CommandError::InvalidPath(
-            UserMessage::ImagePathOutsideDocument.to_string(),
-        ));
-    }
-
-    let metadata = fs::metadata(&path)?;
-    if !metadata.is_file() {
-        return Err(CommandError::InvalidPath(
-            UserMessage::ImageNotRegularFile.to_string(),
-        ));
-    }
-    if metadata.len() > MAX_IMAGE_BYTES {
-        return Err(CommandError::ImageTooLarge(
-            path.to_string_lossy().into_owned(),
-        ));
-    }
-
-    let bytes = fs::read(&path)?;
-    let mime = image_mime(&path);
-    Ok(format!("data:{mime};base64,{}", base64_encode(&bytes)))
+pub fn read_image(
+    app: AppHandle,
+    registry: State<'_, crate::attachments::AttachmentRegistry>,
+    docPath: Option<String>,
+    src: String,
+) -> Result<String, CommandError> {
+    crate::attachments::resolve_image_with_registry(&app, &registry, docPath, src)
 }
 
 #[tauri::command]
@@ -629,7 +642,7 @@ fn with_forced_extension(name: &str, format: &FormatCapabilities) -> String {
     path.to_string_lossy().into_owned()
 }
 
-fn image_mime(path: &Path) -> &'static str {
+pub(crate) fn image_mime(path: &Path) -> &'static str {
     match path
         .extension()
         .and_then(|ext| ext.to_str())
@@ -651,7 +664,7 @@ fn image_mime(path: &Path) -> &'static str {
     }
 }
 
-fn has_uri_scheme(value: &str) -> bool {
+pub(crate) fn has_uri_scheme(value: &str) -> bool {
     let Some((scheme, _)) = value.split_once(':') else {
         return false;
     };
@@ -665,7 +678,7 @@ fn has_uri_scheme(value: &str) -> bool {
         })
 }
 
-fn is_windows_device_path(path: &Path) -> bool {
+pub(crate) fn is_windows_device_path(path: &Path) -> bool {
     let value = path.to_string_lossy();
     let normalized = value.replace('/', "\\").to_ascii_lowercase();
     if normalized.starts_with(r"\\.\") || normalized.starts_with(r"\\?\globalroot\") {
@@ -688,39 +701,12 @@ fn is_windows_device_path(path: &Path) -> bool {
             && device_name.as_bytes()[3].is_ascii_digit())
 }
 
-fn path_is_within(root: &Path, candidate: &Path) -> bool {
+pub(crate) fn path_is_within(root: &Path, candidate: &Path) -> bool {
     let root = root.to_string_lossy().replace('/', "\\");
     let candidate = candidate.to_string_lossy().replace('/', "\\");
     let root = root.trim_end_matches('\\').to_ascii_lowercase();
     let candidate = candidate.to_ascii_lowercase();
     candidate == root || candidate.starts_with(&(root + "\\"))
-}
-
-fn base64_encode(bytes: &[u8]) -> String {
-    const TABLE: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    let mut output = String::with_capacity(bytes.len().div_ceil(3) * 4);
-
-    for chunk in bytes.chunks(3) {
-        let first = chunk[0] as u32;
-        let second = chunk.get(1).copied().unwrap_or_default() as u32;
-        let third = chunk.get(2).copied().unwrap_or_default() as u32;
-        let value = (first << 16) | (second << 8) | third;
-
-        output.push(TABLE[((value >> 18) & 0x3f) as usize] as char);
-        output.push(TABLE[((value >> 12) & 0x3f) as usize] as char);
-        output.push(if chunk.len() > 1 {
-            TABLE[((value >> 6) & 0x3f) as usize] as char
-        } else {
-            '='
-        });
-        output.push(if chunk.len() > 2 {
-            TABLE[(value & 0x3f) as usize] as char
-        } else {
-            '='
-        });
-    }
-
-    output
 }
 
 fn now_iso8601() -> String {
@@ -900,19 +886,23 @@ mod tests {
         fs::write(&image, [0x89, b'P', b'N', b'G']).expect("image");
         fs::write(&secret, b"secret").expect("outside image");
 
-        let image_url = read_image(
-            Some(document.to_string_lossy().into_owned()),
-            "logo.png".to_owned(),
+        let cache = directory.path().join("cache");
+        let image_path = crate::attachments::validate_image_path(
+            Some(document.to_str().unwrap()),
+            "logo.png",
+            &cache,
         )
         .expect("image inside document directory");
-        assert!(image_url.starts_with("data:image/png;base64,"));
+        assert_eq!(image_path, windows::canonical_path(&image).unwrap());
 
-        let escaped = read_image(
-            Some(document.to_string_lossy().into_owned()),
+        let escaped = crate::attachments::validate_image_path(
+            Some(document.to_str().unwrap()),
             format!(
                 "../{}/secret.png",
                 outside.path().file_name().unwrap().to_string_lossy()
-            ),
+            )
+            .as_str(),
+            &cache,
         );
         assert!(matches!(escaped, Err(CommandError::InvalidPath(_))));
     }
@@ -927,9 +917,10 @@ mod tests {
         file.set_len(MAX_IMAGE_BYTES + 1).expect("sparse image");
 
         assert!(matches!(
-            read_image(
-                Some(document.to_string_lossy().into_owned()),
-                "huge.png".to_owned(),
+            crate::attachments::validate_image_path(
+                Some(document.to_str().unwrap()),
+                "huge.png",
+                &directory.path().join("cache"),
             ),
             Err(CommandError::ImageTooLarge(_))
         ));

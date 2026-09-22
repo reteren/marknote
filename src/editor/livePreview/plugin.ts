@@ -19,6 +19,7 @@ import { livePreviewConfigFacet, type LivePreviewConfig } from "./settings";
 import type { BlockBuilder, BuilderContext } from "./types";
 import type { ImageResolver } from "./widgets/Image";
 import { profileMeasure } from "../profile";
+import { clearImageSelection, imageSelectionField } from "../imageResize";
 
 export interface LivePreviewOptions {
   maxBytes?: number;
@@ -243,7 +244,8 @@ export class LivePreviewValue {
 
   update(update: ViewUpdate) {
     const configChanged = update.state.facet(livePreviewConfigFacet) !== update.startState.facet(livePreviewConfigFacet);
-    if (update.docChanged || update.selectionSet || update.viewportChanged || configChanged) {
+    const imageSelectionChanged = update.state.field(imageSelectionField, false) !== update.startState.field(imageSelectionField, false);
+    if (update.docChanged || update.selectionSet || update.viewportChanged || configChanged || imageSelectionChanged) {
       this.rebuild(update.view);
     }
   }
@@ -284,7 +286,17 @@ export const livePreviewPlugin = ViewPlugin.define<LivePreviewValue, LivePreview
     decorations: (value) => value.decorations,
     eventHandlers: {
       mousedown(event, view) {
+        const target = event.target;
+        if (!(target instanceof Element) || !target.closest(".cm-marknote-image")) {
+          clearImageSelection(view);
+        }
         return openLinkOnCtrlClick(event, view);
+      },
+      keydown(event, view) {
+        if (event.key !== "Escape" || !view.state.field(imageSelectionField, false)) return false;
+        event.preventDefault();
+        clearImageSelection(view);
+        return true;
       },
     },
     provide: (plugin) => EditorView.atomicRanges.of((view) => view.plugin(plugin)?.atomicRanges ?? Decoration.none),

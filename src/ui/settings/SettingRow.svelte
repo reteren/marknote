@@ -6,6 +6,7 @@
     title: string;
     description?: string;
     changed?: boolean;
+    disabled?: boolean;
     modifiedLabel?: string;
     resetLabel?: string;
     onReset?: () => void;
@@ -17,6 +18,7 @@
     title,
     description,
     changed = false,
+    disabled = false,
     modifiedLabel = "",
     resetLabel = "",
     onReset,
@@ -24,11 +26,11 @@
   }: Props = $props();
 </script>
 
-<div class="setting-row" data-setting-row={id}>
+<div class="setting-row" class:row-disabled={disabled} data-setting-row={id}>
   <div class="setting-copy">
     <div class="setting-heading">
       <h3 id={`${id}-title`}>{title}</h3>
-      {#if changed}<span class="modified-indicator">{modifiedLabel}</span>{/if}
+      {#if changed && !disabled}<span class="modified-indicator">{modifiedLabel}</span>{/if}
     </div>
     {#if description}<p id={`${id}-description`}>{description}</p>{/if}
   </div>
@@ -37,7 +39,7 @@
     {@render children()}
   </div>
 
-  {#if changed && onReset}
+  {#if changed && onReset && !disabled}
     <button type="button" class="setting-reset" aria-label={resetLabel} title={resetLabel} onclick={onReset}>
       {resetLabel}
     </button>
@@ -52,6 +54,14 @@
     gap: 12px 18px;
     padding: 15px 0;
     border-bottom: 1px solid var(--bg-modifier-border);
+  }
+
+  .setting-row.row-disabled {
+    opacity: 0.55;
+  }
+
+  .setting-row.row-disabled .setting-control {
+    pointer-events: none;
   }
 
   .setting-copy {

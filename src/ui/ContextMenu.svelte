@@ -16,7 +16,7 @@
     | "format.clearHeading" | "format.list" | "format.orderedList" | "format.taskList"
     | "format.table" | "format.callout" | "format.codeBlock" | "format.mathBlock" | "format.horizontalRule"
     | "format.jsonValidate" | "format.jsonFormat"
-    | "open-link" | "copy-link" | "edit-link" | "open-image" | "copy-image"
+    | "open-link" | "copy-link" | "edit-link" | "open-image" | "copy-image" | "insert-image"
     | "insert-table" | "insert-callout" | "insert-code-block" | "insert-math-block" | "insert-hr";
 
   export type MenuItem = {
@@ -132,13 +132,19 @@
     const selectionExists = targetType === "selection" || hasSelection;
     return [
       ...formatSubmenus,
-      ...(formatSubmenus.length > 0 ? [{ separator: true }] : []),
+      ...(formatSubmenus.length > 0 ? [{ separator: true } as Separator] : []),
       { id: "cut", label: t("menu.cut"), shortcut: "Ctrl+X", disabled: !selectionExists || !editable },
       { id: "copy", label: t("menu.copy"), shortcut: "Ctrl+C", disabled: !selectionExists },
       { id: "paste", label: t("menu.paste"), shortcut: "Ctrl+V", disabled: !canPaste || !editable },
       { id: "edit.pastePlainText", label: t("menu.pastePlainText"), shortcut: "Ctrl+Shift+V", disabled: !canPaste || !editable },
       { id: "delete", label: t("contextMenu.delete"), disabled: !selectionExists || !editable },
       { id: "select-all", label: t("menu.selectAll"), shortcut: "Ctrl+A" },
+      ...(targetType === "empty"
+        ? [
+            { separator: true } as const,
+            { id: "insert-image" as ContextMenuAction, label: t("contextMenu.addImage"), disabled: !editable },
+          ]
+        : []),
     ];
   });
 

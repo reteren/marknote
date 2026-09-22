@@ -160,13 +160,6 @@
   }
 
   function handleKeyDown(event: KeyboardEvent): void {
-    if (event.key === "Alt") {
-      event.preventDefault();
-      if (openSectionId) closeMenu(false);
-      else openSection(model[0]?.id ?? "");
-      return;
-    }
-
     if (!openSectionId) return;
     const items = activeSubmenuId ? activeSubmenuItems() : activeSectionItems();
     if (items.length === 0 && event.key !== "Escape") return;

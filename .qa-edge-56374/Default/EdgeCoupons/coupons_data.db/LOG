@@ -1,0 +1,5 @@
+2026/09/22-20:39:37.545 91e0 Creating DB C:\marknote\.qa-edge-56374\Default\EdgeCoupons/coupons_data.db since it was missing.
+2026/09/22-20:39:37.560 91e0 Reusing MANIFEST C:\marknote\.qa-edge-56374\Default\EdgeCoupons/coupons_data.db/MANIFEST-000001
+2026/09/22-20:39:37.996 a8a4 Level-0 table #5: started
+2026/09/22-20:39:37.999 a8a4 Level-0 table #5: 683273 bytes OK
+2026/09/22-20:39:37.999 a8a4 Delete type=0 #3

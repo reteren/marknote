@@ -3,9 +3,17 @@
   import { EditorSelection } from "@codemirror/state";
   import type { Command } from "@codemirror/view";
   import { invoke } from "@tauri-apps/api/core";
-import type { UnlistenFn } from "@tauri-apps/api/event";
+  import type { UnlistenFn } from "@tauri-apps/api/event";
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
+  import { getCurrentWebview } from "@tauri-apps/api/webview";
+  import { open as openFileDialog } from "@tauri-apps/plugin-dialog";
+  import {
+    ACCEPTED_IMAGE_EXTENSIONS,
+    insertImage,
+    isImageExtension,
+    mapAttachmentError,
+  } from "./editor/attachments";
 import { onMount, tick } from "svelte";
   import { installZoom, resetZoom, zoomIn, zoomOut } from "./editor/zoom";
   import { safeLinkHref } from "./editor/livePreview/inline";
@@ -44,7 +52,7 @@ import { onMount, tick } from "svelte";
 import FindPanel from "./ui/FindPanel.svelte";
 import ContextMenu, { type ContextMenuAction } from "./ui/ContextMenu.svelte";
 import FormatPicker from "./ui/FormatPicker.svelte";
-import Notice from "./ui/Notice.svelte";
+import Notice, { type NoticeSeverity } from "./ui/Notice.svelte";
 import HelpDialog, { type HelpMode } from "./ui/HelpDialog.svelte";
   import type SettingsWindow from "./ui/SettingsWindow.svelte";
   import TabBar from "./ui/TabBar.svelte";
@@ -56,6 +64,7 @@ import HelpDialog, { type HelpMode } from "./ui/HelpDialog.svelte";
     activeTab,
     tabLabel,
     type TabId,
+    type WorkspaceTab,
   } from "./state/workspace.svelte";
   import type { EditorState } from "@codemirror/state";
   import TitleBar from "./ui/TitleBar.svelte";
@@ -73,7 +82,7 @@ import { EditorView, type EditorView as EditorViewType } from "@codemirror/view"
   let pendingCloseTabId = $state<TabId | null>(null);
   let autosaveController: ReturnType<typeof createAutosave> | null = null;
   let openingPathKey: string | null = null;
-  let unlistenNativeDrop: UnlistenFn | undefined;
+  let unlistenDrop: UnlistenFn | undefined;
   let lastDropKey: string | null = null;
   let lastDropAt = 0;
   let startScreenDismissed = $state(false);
@@ -102,6 +111,8 @@ import { EditorView, type EditorView as EditorViewType } from "@codemirror/view"
     selection: null,
   });
   let errorMessage = $state<string | null>(null);
+  let attachmentNotice = $state<{ message: string; severity?: NoticeSeverity } | null>(null);
+  let isDraggingOver = $state(false);
 
   async function openSettingsWindow() {
     settingsOpen = true;
@@ -210,6 +221,9 @@ import { EditorView, type EditorView as EditorViewType } from "@codemirror/view"
     getFormats: () => formatsState.items,
     getSettings: () => settingsState.settings,
     notify: reportError,
+    insertImage: () => {
+      void promptInsertImage();
+    },
     confirmLossySave: requestLossySave,
     saveAsMarkdown: saveDocumentAsMarkdown,
     closeWindow: () => void requestClose(),
@@ -240,7 +254,16 @@ import { EditorView, type EditorView as EditorViewType } from "@codemirror/view"
       path: documentState.path,
       format: documentState.format,
       settings: settingsState.ready ? settingsState.settings : null,
-      handlers: actions.handlers,
+      handlers: {
+        ...actions.handlers,
+        insertImage: () => {
+          void promptInsertImage();
+          return true;
+        },
+      },
+      onNotice: (msg, sev) => {
+        attachmentNotice = { message: msg, severity: sev };
+      },
       onChange: (text) => {
         setDocumentText(text);
         autosaveController?.schedule();
@@ -425,7 +448,7 @@ import { EditorView, type EditorView as EditorViewType } from "@codemirror/view"
     if (editorView && documentState.path) {
       setEditorDocumentPath(editorView, documentState.path);
       if (previousFormat !== documentState.format.id) {
-        void setEditorFormat(editorView, documentState.format).then(() => editorView?.focus());
+        void Promise.resolve(setEditorFormat(editorView, documentState.format)).then(() => editorView?.focus());
       }
     } else if (previousFormat !== documentState.format.id) {
       rebuildEditor(true);
@@ -441,7 +464,7 @@ import { EditorView, type EditorView as EditorViewType } from "@codemirror/view"
     if (saved && editorView && previousPath === null && documentState.path) {
       setEditorDocumentPath(editorView, documentState.path);
       if (previousFormat !== documentState.format.id) {
-        void setEditorFormat(editorView, documentState.format).then(() => editorView?.focus());
+        void Promise.resolve(setEditorFormat(editorView, documentState.format)).then(() => editorView?.focus());
       }
     }
     return saved;
@@ -515,17 +538,9 @@ import { EditorView, type EditorView as EditorViewType } from "@codemirror/view"
       return;
     }
     if (autosaveController) {
-      for (const tab of workspace.tabs) {
-        if (
-          tab.document.path !== null &&
-          tab.document.dirty &&
-          tab.document.format.autosave &&
-          !tab.document.readonly &&
-          settingsState.settings?.files?.autosave !== false
-        ) {
-          await autosaveController.flush(true, tab.id);
-        }
-      }
+      // Closing is a durability boundary, not an autosave tick: flush every
+      // named dirty tab regardless of the user's interval/format settings.
+      await autosaveController.flushAll(true);
     }
     const dirtyTabs = getTabsRequiringPrompt();
     if (dirtyTabs.length === 0) {
@@ -550,17 +565,7 @@ import { EditorView, type EditorView as EditorViewType } from "@codemirror/view"
 
   async function requestClose(): Promise<void> {
     if (autosaveController) {
-      for (const tab of workspace.tabs) {
-        if (
-          tab.document.path !== null &&
-          tab.document.dirty &&
-          tab.document.format.autosave &&
-          !tab.document.readonly &&
-          settingsState.settings?.files?.autosave !== false
-        ) {
-          await autosaveController.flush(true, tab.id);
-        }
-      }
+      await autosaveController.flushAll(true);
     }
     const dirtyTabs = getTabsRequiringPrompt();
     if (dirtyTabs.length === 0) {
@@ -755,6 +760,33 @@ import { EditorView, type EditorView as EditorViewType } from "@codemirror/view"
     }
   }
 
+  async function promptInsertImage(): Promise<void> {
+    if (!editorView || isReadOnly) return;
+    try {
+      const selected = await openFileDialog({
+        title: t("image.pickerTitle"),
+        multiple: true,
+        filters: [
+          {
+            name: t("image.filterLabel"),
+            extensions: [...ACCEPTED_IMAGE_EXTENSIONS],
+          },
+        ],
+      });
+      if (!selected) return;
+      const paths = Array.isArray(selected) ? selected : [selected];
+      if (paths.length === 0) return;
+      await insertImage(editorView, paths, {
+        docPath: documentState.path,
+        onNotice: (msg, sev) => {
+          attachmentNotice = { message: msg, severity: sev };
+        },
+      });
+    } catch (error) {
+      attachmentNotice = { message: mapAttachmentError(error), severity: "error" };
+    }
+  }
+
   function applyList(): void {
     if (!editorView || isReadOnly) return;
     const view = editorView;
@@ -823,6 +855,7 @@ import { EditorView, type EditorView as EditorViewType } from "@codemirror/view"
       case "insert-code-block": void actions.run("format.codeBlock"); break;
       case "insert-math-block": void actions.run("format.mathBlock"); break;
       case "insert-hr": void actions.run("format.horizontalRule"); break;
+      case "insert-image": void promptInsertImage(); break;
     }
   }
 
@@ -858,6 +891,9 @@ import { EditorView, type EditorView as EditorViewType } from "@codemirror/view"
       case "edit.find": if (editorView) dispatchSearchOpen(editorView, false); break;
       case "edit.replace": if (editorView) dispatchSearchOpen(editorView, true); break;
       case "edit.pastePlainText": clipboard("paste"); break;
+      case "insert.image":
+      case "edit.insert":
+      case "edit.insertImage": void promptInsertImage(); break;
       case "format.bold":
       case "format.italic":
       case "format.strikethrough":
@@ -897,6 +933,13 @@ import { EditorView, type EditorView as EditorViewType } from "@codemirror/view"
   function handleDragOver(event: DragEvent): void {
     event.preventDefault();
     if (event.dataTransfer) event.dataTransfer.dropEffect = "copy";
+    isDraggingOver = true;
+  }
+
+  function handleDragLeave(event: DragEvent): void {
+    if (!event.relatedTarget || !(event.currentTarget as HTMLElement)?.contains(event.relatedTarget as Node)) {
+      isDraggingOver = false;
+    }
   }
 
   function handleWindowKeydown(event: KeyboardEvent): void {
@@ -907,13 +950,22 @@ import { EditorView, type EditorView as EditorViewType } from "@codemirror/view"
       }
       return;
     }
-    if ((event.ctrlKey || event.metaKey) && event.code === "Comma") {
+    const modifier = event.ctrlKey || event.metaKey;
+    const target = event.target;
+    const editorHasEvent = typeof Node !== "undefined" && target instanceof Node && Boolean(editorView?.contentDOM.contains(target));
+    if (modifier && event.code === "KeyS" && !editorHasEvent) {
+      event.preventDefault();
+      void (event.shiftKey ? saveDocumentAs() : saveNow());
+    } else if (modifier && event.shiftKey && event.code === "KeyI") {
+      event.preventDefault();
+      void promptInsertImage();
+    } else if (modifier && event.code === "Comma") {
       event.preventDefault();
       void openSettingsWindow();
-    } else if ((event.ctrlKey || event.metaKey) && event.code === "KeyT") {
+    } else if (modifier && event.code === "KeyT") {
       event.preventDefault();
       handleOpenNewTab();
-    } else if ((event.ctrlKey || event.metaKey) && event.code === "KeyW") {
+    } else if (modifier && event.code === "KeyW") {
       event.preventDefault();
       if (workspace.tabs.length > 1) {
         void handleCloseTab(workspace.activeId);
@@ -934,22 +986,47 @@ import { EditorView, type EditorView as EditorViewType } from "@codemirror/view"
     }
   }
 
-  function handleDroppedPaths(paths: string[]): void {
+  function handleDroppedPaths(paths: string[], position?: { x: number; y: number }): void {
     const normalized = paths.map(fileUriToPath).filter(Boolean);
     if (normalized.length === 0) return;
+
     const batchKey = normalized.map(pathKey).join("|");
     const now = Date.now();
     if (batchKey === lastDropKey && now - lastDropAt < 750) return;
     lastDropKey = batchKey;
     lastDropAt = now;
 
-    // A dropped file opens as a tab in this window: the user already opened the
-    // window, and creating another one beside it is not what they expect. Files
-    // open in sequence, with each tab taking over the editor state.
-    void normalized.reduce(
-      (chain, path) => chain.then(() => openFileInTab(path)),
-      Promise.resolve(),
-    );
+    const imagePaths = normalized.filter(isImageExtension);
+    const docPaths = normalized.filter((p) => !isImageExtension(p));
+
+    if (imagePaths.length > 0 && editorView && !isReadOnly) {
+      let targetPos: number | undefined;
+      if (position && typeof window !== "undefined") {
+        const clientX = position.x / (window.devicePixelRatio || 1);
+        const clientY = position.y / (window.devicePixelRatio || 1);
+        const coords = editorView.posAtCoords({ x: clientX, y: clientY });
+        if (coords !== null) {
+          targetPos = coords;
+        }
+      }
+      void insertImage(editorView, imagePaths, {
+        docPath: documentState.path,
+        targetPos,
+        onNotice: (msg, sev) => {
+          attachmentNotice = { message: msg, severity: sev };
+        },
+      });
+    }
+
+    if (docPaths.length > 0) {
+      // A dropped file opens as a tab in this window: the user already opened the
+      // window, and creating another one beside it is not what they expect. Files
+      // open in sequence, with each tab taking over the editor state.
+      void docPaths.reduce(
+        (chain, path) => chain.then(() => openFileInTab(path)),
+        Promise.resolve(),
+      );
+    }
   }
 
   /** Opens a file as a tab; if it is already open, simply reveals it. */
@@ -972,22 +1049,50 @@ import { EditorView, type EditorView as EditorViewType } from "@codemirror/view"
 
   function handleDrop(event: DragEvent): void {
     event.preventDefault();
+    isDraggingOver = false;
     if (
       event.currentTarget instanceof HTMLElement &&
       event.currentTarget.classList.contains("editor-stage") &&
       (event.target as Element | null)?.closest(".start-screen")
     ) return;
 
+    const files = Array.from(event.dataTransfer?.files ?? []);
+    const imageFiles = files.filter((file) => isImageExtension(file.name) || file.type.startsWith("image/"));
+    if (imageFiles.length > 0 && editorView && !isReadOnly) {
+      const coords = editorView.posAtCoords({ x: event.clientX, y: event.clientY });
+      const targetPos = coords ?? undefined;
+      void (async () => {
+        const sources = [];
+        for (const file of imageFiles) {
+          const buffer = await file.arrayBuffer();
+          sources.push({
+            type: "data" as const,
+            data: new Uint8Array(buffer),
+            fileName: file.name,
+          });
+        }
+        await insertImage(editorView, sources, {
+          docPath: documentState.path,
+          targetPos,
+          onNotice: (msg, sev) => {
+            attachmentNotice = { message: msg, severity: sev };
+          },
+        });
+      })();
+    }
+
     const paths: string[] = [];
-    for (const file of Array.from(event.dataTransfer?.files ?? [])) {
+    for (const file of files) {
       const path = (file as File & { path?: string }).path;
-      if (path) paths.push(path);
+      if (path && !isImageExtension(path)) paths.push(path);
     }
     const uriList = event.dataTransfer?.getData("text/uri-list") ?? "";
     if (paths.length === 0 && uriList) {
-      paths.push(...uriList.split(/\r?\n/u).filter((line) => line && !line.startsWith("#")).map(fileUriToPath));
+      paths.push(...uriList.split(/\r?\n/u).filter((line) => line && !line.startsWith("#")).map(fileUriToPath).filter((p) => !isImageExtension(p)));
     }
-    handleDroppedPaths(paths);
+    if (paths.length > 0) {
+      handleDroppedPaths(paths);
+    }
   }
 
   $effect(() => {
@@ -1049,13 +1154,33 @@ import { EditorView, type EditorView as EditorViewType } from "@codemirror/view"
         unlistenOpen = await currentWindow.listen<OpenFileRequest>("open-file-request", ({ payload }) => {
           if (payload?.path) void openFile(payload.path);
         });
-        unlistenNativeDrop = await currentWindow.listen<{ paths?: string[] }>("tauri://drag-drop", ({ payload }) => {
-          handleDroppedPaths(payload?.paths ?? []);
-        });
+        try {
+          const webview = getCurrentWebview();
+          if (typeof webview?.onDragDropEvent === "function") {
+            unlistenDrop = await webview.onDragDropEvent((event) => {
+              const payload = event.payload;
+              if (payload.type === "enter" || payload.type === "over") {
+                isDraggingOver = true;
+              } else if (payload.type === "leave") {
+                isDraggingOver = false;
+              } else if (payload.type === "drop") {
+                isDraggingOver = false;
+                handleDroppedPaths(payload.paths, payload.position);
+              }
+            });
+          }
+        } catch {
+          // Running outside Tauri webview
+        }
+        if (!unlistenDrop) {
+          unlistenDrop = await currentWindow.listen<{ paths?: string[] }>("tauri://drag-drop", ({ payload }) => {
+            handleDroppedPaths(payload?.paths ?? []);
+          });
+        }
         if (disposed) {
           unlistenOpen();
           unlistenNativeClose?.();
-          unlistenNativeDrop?.();
+          unlistenDrop?.();
           return;
         }
         const pendingPath = await invoke<string | null>("take_pending_file");
@@ -1087,7 +1212,7 @@ import { EditorView, type EditorView as EditorViewType } from "@codemirror/view"
       disposed = true;
       unlistenOpen?.();
       unlistenNativeClose?.();
-      unlistenNativeDrop?.();
+      unlistenDrop?.();
       autosaveController?.dispose();
       editorView?.destroy();
       editorView = null;
@@ -1142,7 +1267,15 @@ import { EditorView, type EditorView as EditorViewType } from "@codemirror/view"
   />
 
   <div class="notice-row">
-    {#if documentState.externalChange === "changed"}
+    {#if attachmentNotice}
+      <Notice
+        severity={attachmentNotice.severity ?? "error"}
+        message={attachmentNotice.message}
+        onClose={() => {
+          attachmentNotice = null;
+        }}
+      />
+    {:else if documentState.externalChange === "changed"}
       <Notice
         preset="file-changed"
         onAction={(action) => action === "reload" ? void reloadExternalFile() : keepMine()}
@@ -1154,7 +1287,13 @@ import { EditorView, type EditorView as EditorViewType } from "@codemirror/view"
     {/if}
   </div>
 
-  <main class="editor-stage" ondragover={handleDragOver} ondrop={handleDrop}>
+  <main
+    class="editor-stage"
+    class:drag-over={isDraggingOver}
+    ondragover={handleDragOver}
+    ondragleave={handleDragLeave}
+    ondrop={handleDrop}
+  >
     <div class="editor-host" bind:this={editorHost}></div>
     <FindPanel view={editorView} />
     {#if showStartScreen}
@@ -1320,6 +1459,11 @@ import { EditorView, type EditorView as EditorViewType } from "@codemirror/view"
   .editor-stage:focus,
   .editor-stage:focus-visible {
     outline: none;
+  }
+
+  .editor-stage.drag-over {
+    outline: 2px dashed var(--accent, #3b82f6);
+    outline-offset: -2px;
   }
 
   .notice-row {

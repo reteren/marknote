@@ -46,7 +46,7 @@ lineEnding) returns SaveResult and rejects non-editable formats. save_as(text,
 formatId, suggestedName) returns an optional SaveResult. pick_file returns an
 optional path. new_document returns NewDocument. list_creatable_formats and
 format_for_extension expose the format registry. read_image(docPath, src)
-returns a data URL. open_in_new_window, reveal_in_explorer, and
+returns a validated local-image URL. open_in_new_window, reveal_in_explorer, and
 respond_to_close return unit. take_pending_file returns an optional queued
 path. get_settings, save_settings, reset_settings, get_resolved_language, and
 reveal_settings_file implement the settings contract.
@@ -78,8 +78,20 @@ provides FormatCapabilities.
 createEditor accepts a parent element, document text, format, optional document
 path, onChange, and onStats, returning an EditorView. setEditorDocumentPath
 updates the live path without rebuilding extensions. createImageResolver returns
-data/http URLs as-is, resolves relative paths through read_image, caches by
+data/http URLs as-is, resolves relative paths through resolve_image, caches by
 document path plus source, and clears the cache on document change.
+
+### Attachment IPC additions
+
+| Command | Result |
+| --- | --- |
+| `save_attachment` | `(docPath, fileName, data)` → `{ src, path, cached }` |
+| `save_attachment_from_path` | `(docPath, sourcePath)` → `{ src, path, cached }` |
+| `resolve_image` | `(docPath, src)` → `string` |
+| `promote_attachments` | `(docPath, srcs)` → `[{ from, to }]` |
+| `attachment_cache_stats` | `()` → `{ files, bytes, path }` |
+| `clear_attachment_cache` | `()` → `{ files, bytes }` |
+| `reveal_attachment_cache` | `()` → `()` |
 
 ## 6. Shared rules
 

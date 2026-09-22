@@ -45,6 +45,8 @@ pub(crate) enum UserMessage {
     ImagePathOutsideDocument,
     #[error("The image link does not point to a regular file.")]
     ImageNotRegularFile,
+    #[error("This image file type is not supported.")]
+    ImageUnsupported,
     #[cfg(not(windows))]
     #[error("Reveal in File Explorer is only available on Windows.")]
     ExplorerWindowsOnly,

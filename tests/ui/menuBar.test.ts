@@ -1,9 +1,12 @@
 import { cleanup, fireEvent, render } from "@testing-library/svelte";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { tick } from "svelte";
+import { EditorState } from "@codemirror/state";
+import { EditorView } from "@codemirror/view";
 import MenuBar from "../../src/ui/MenuBar.svelte";
 import { format, settle } from "./helpers";
 import { formatLabel, setInterfaceLanguage, translate as t } from "../../src/i18n";
+import { createMarknoteKeymap } from "../../src/editor/keymap";
 
 afterEach(async () => {
   cleanup();
@@ -21,7 +24,18 @@ function mockPopupBounds(width: number, height: number): void {
 }
 
 describe("MenuBar keyboard and pointer behavior", () => {
-  it("opens with Alt, enters File/New, and dispatches a dynamic format id", async () => {
+  it("does not open a menu section on bare Alt keydown", async () => {
+    render(MenuBar);
+
+    const event = new KeyboardEvent("keydown", { key: "Alt", bubbles: true, cancelable: true });
+    window.dispatchEvent(event);
+    await settle();
+
+    expect(event.defaultPrevented).toBe(false);
+    expect(document.querySelector('[role="menu"]')).toBeNull();
+  });
+
+  it("opens section when activated by keyboard, enters File/New, and dispatches a dynamic format id", async () => {
     const onAction = vi.fn();
     render(MenuBar, {
       props: {
@@ -30,7 +44,9 @@ describe("MenuBar keyboard and pointer behavior", () => {
       },
     });
 
-    window.dispatchEvent(new KeyboardEvent("keydown", { key: "Alt", bubbles: true }));
+    const fileButton = document.querySelector<HTMLButtonElement>('[role="menubar"] button')!;
+    expect(fileButton).not.toBeNull();
+    await fireEvent.click(fileButton, { detail: 0 });
     await settle();
     expect(document.querySelector(`[role="menu"][aria-label="${t("menu.file")}"]`)).not.toBeNull();
     expect(document.querySelector(".submenu-panel")).toBeNull();
@@ -48,6 +64,87 @@ describe("MenuBar keyboard and pointer behavior", () => {
     await settle();
     expect(onAction).toHaveBeenCalledWith("file.new.markdown");
     expect(document.querySelector(`[role="menu"][aria-label="${t("menu.file")}"]`)).toBeNull();
+  });
+
+  it("allows Alt+ArrowUp and Alt+ArrowDown to reach the editor move-line command without opening the menu", async () => {
+    render(MenuBar);
+
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+
+    const view = new EditorView({
+      state: EditorState.create({
+        doc: "line one\nline two",
+        selection: { anchor: 12 }, // on "line two"
+        extensions: [createMarknoteKeymap()],
+      }),
+      parent: host,
+    });
+
+    // 1. Bare Alt press does not open the menu or steal focus
+    const altEvent = new KeyboardEvent("keydown", { key: "Alt", code: "AltLeft", bubbles: true, cancelable: true });
+    view.contentDOM.dispatchEvent(altEvent);
+    await settle();
+
+    expect(altEvent.defaultPrevented).toBe(false);
+    expect(document.querySelector('[role="menu"]')).toBeNull();
+
+    // 2. Alt+ArrowUp moves the line up in the editor rather than navigating the menu
+    const moveUpEvent = new KeyboardEvent("keydown", {
+      key: "ArrowUp",
+      code: "ArrowUp",
+      altKey: true,
+      bubbles: true,
+      cancelable: true,
+    });
+    view.contentDOM.dispatchEvent(moveUpEvent);
+    await settle();
+
+    expect(view.state.doc.toString()).toBe("line two\nline one");
+    expect(document.querySelector('[role="menu"]')).toBeNull();
+
+    // 3. Alt+ArrowDown moves the line back down in the editor
+    const moveDownEvent = new KeyboardEvent("keydown", {
+      key: "ArrowDown",
+      code: "ArrowDown",
+      altKey: true,
+      bubbles: true,
+      cancelable: true,
+    });
+    view.contentDOM.dispatchEvent(moveDownEvent);
+    await settle();
+
+    expect(view.state.doc.toString()).toBe("line one\nline two");
+    expect(document.querySelector('[role="menu"]')).toBeNull();
+
+    view.destroy();
+    host.remove();
+  });
+
+  it("verifies keyboard users can reach the menu bar by Tab and navigate once open", async () => {
+    render(MenuBar);
+    const sectionButtons = Array.from(document.querySelectorAll<HTMLButtonElement>('[role="menubar"] button'));
+
+    // All section buttons must be reachable via keyboard Tab (tabIndex !== -1)
+    for (const button of sectionButtons) {
+      expect(button.tabIndex).toBeGreaterThanOrEqual(0);
+    }
+
+    // Opening via Enter key / keyboard click
+    const fileButton = sectionButtons[0];
+    await fireEvent.click(fileButton, { detail: 0 });
+    await settle();
+    expect(document.querySelector(`[role="menu"][aria-label="${t("menu.file")}"]`)).not.toBeNull();
+
+    // Arrow keys navigate within and across sections
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
+    await settle();
+    expect(document.querySelector(".submenu-panel")).not.toBeNull();
+
+    // Escape closes the menu and returns focus
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    await settle();
+    expect(document.querySelector('[role="menu"]')).toBeNull();
   });
 
   it("hides formats again when the pointer leaves the New item", async () => {

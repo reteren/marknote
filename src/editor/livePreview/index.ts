@@ -7,6 +7,7 @@ import { tableTheme } from "./tables";
 import { calloutTheme } from "./callouts";
 import { footnoteTheme, footnoteTooltip } from "./footnotes";
 import { orderedListNormalization } from "../keymap";
+import { imageSelectionField } from "../imageResize";
 
 export function livePreview(opts?: {
   /** Hard document-size limit overriding livePreview.disableAboveBytes.
@@ -18,6 +19,7 @@ export function livePreview(opts?: {
 }): Extension {
   return [
     orderedListNormalization,
+    imageSelectionField,
     livePreviewPlugin.of(opts ?? {}),
     blockMathField,
     livePreviewTheme,

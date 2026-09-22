@@ -1,4 +1,5 @@
 mod atomic_write;
+mod attachments;
 mod binary;
 mod commands;
 mod config_dir;
@@ -21,15 +22,24 @@ use tauri::{
 pub fn run() {
     startup_trace::begin();
     startup_trace::mark("run-start");
+    let attachment_registry = attachments::AttachmentRegistry::default();
+    let protocol_registry = attachment_registry.clone();
     tauri::Builder::default()
+        .register_asynchronous_uri_scheme_protocol(
+            attachments::ATTACHMENT_SCHEME,
+            move |_context, request, responder| {
+                attachments::serve_protocol(protocol_registry.clone(), request, responder);
+            },
+        )
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
             windows::handle_single_instance(app, argv);
         }))
         .plugin(settings_aware_window_state_plugin())
-        .setup(|app| {
+        .setup(move |app| {
             startup_trace::mark("setup-start");
+            app.manage(attachment_registry.clone());
             let config_dir = config_dir::for_app(app.handle())?;
             startup_trace::mark("config-dir-ready");
             let recent_files_path = config_dir.join("recent-files.json");
@@ -60,6 +70,13 @@ pub fn run() {
             commands::validate_json,
             commands::format_json,
             commands::read_image,
+            commands::save_attachment,
+            commands::save_attachment_from_path,
+            commands::resolve_image,
+            commands::promote_attachments,
+            commands::attachment_cache_stats,
+            commands::clear_attachment_cache,
+            commands::reveal_attachment_cache,
             commands::open_in_new_window,
             commands::open_new_window,
             commands::reveal_in_explorer,

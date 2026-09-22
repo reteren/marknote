@@ -52,6 +52,14 @@ const labels: Record<string, string> = {
   "settings.other.version": "Version",
   "settings.other.versionDescription": "Application version.",
   "settings.other.copyVersion": "Copy version",
+  "settings.files.autosave": "Autosave",
+  "settings.files.autosaveDelay": "Autosave delay",
+  "settings.files.autosaveDelay.1m": "1 minute",
+  "settings.files.autosaveDelay.2s": "2 seconds",
+  "settings.files.autosaveDelay.10s": "10 seconds",
+  "settings.files.autosaveDelay.30s": "30 seconds",
+  "settings.files.autosaveDelay.custom": "Custom ({seconds} s)",
+  "settings.files.autosaveDelayDescription": "Time to wait after the last edit before automatically saving.",
   "settings.saved": "Saved",
   "settings.pendingSave": "Saving changes…",
   "settings.saving": "Saving…",
@@ -59,7 +67,15 @@ const labels: Record<string, string> = {
 
 vi.mock("@tauri-apps/api/core", () => ({ invoke: mocks.invoke }));
 vi.mock("../../src/i18n", () => ({
-  translate: (key: string) => labels[key] ?? key,
+  translate: (key: string, params?: Record<string, unknown>) => {
+    let text = labels[key] ?? key;
+    if (params) {
+      for (const [k, v] of Object.entries(params)) {
+        text = text.replace(`{${k}}`, String(v));
+      }
+    }
+    return text;
+  },
   formatLabel: (_id: string, label: string) => label,
   normalizeLocale: (value: string) => value,
   setInterfaceLanguage: async (value: string) => value,
@@ -146,7 +162,7 @@ describe("SettingsWindow", () => {
     expect(screen.getAllByRole("spinbutton")).toHaveLength(1);
 
     await selectSection("Files");
-    expect(screen.getAllByRole("spinbutton")).toHaveLength(1);
+    expect(screen.queryAllByRole("spinbutton")).toHaveLength(0);
   });
 
   it("closes on Escape and returns focus to the editor", async () => {
@@ -185,5 +201,78 @@ describe("SettingsWindow", () => {
     await fireEvent.click(screen.getByRole("button", { name: "Restore default" }));
     expect(settingsState.settings.editor.lineNumbers).toBe(false);
     expect(screen.queryByText("Modified")).not.toBeInTheDocument();
+  });
+
+  it("renders autosave delay presets and updates value when changed", async () => {
+    mount();
+    await selectSection("Files");
+
+    const select = screen.getByRole("combobox", { name: "Autosave delay" }) as HTMLSelectElement;
+    expect(select).toBeInTheDocument();
+    expect(select.value).toBe("2000");
+
+    const options = Array.from(select.options).map((opt) => ({ value: opt.value, text: opt.text }));
+    expect(options).toEqual([
+      { value: "2000", text: "2 seconds" },
+      { value: "10000", text: "10 seconds" },
+      { value: "30000", text: "30 seconds" },
+      { value: "60000", text: "1 minute" },
+    ]);
+
+    await fireEvent.change(select, { target: { value: "10000" } });
+    expect(settingsState.settings.files.autosaveDelayMs).toBe(10000);
+    expect(typeof settingsState.settings.files.autosaveDelayMs).toBe("number");
+  });
+
+  it("disables autosave delay when autosave is toggled off", async () => {
+    mount();
+    await selectSection("Files");
+
+    const autosaveCheckbox = screen.getByRole("checkbox", { name: "Autosave" });
+    const delaySelect = screen.getByRole("combobox", { name: "Autosave delay" });
+
+    expect(delaySelect).not.toBeDisabled();
+
+    await fireEvent.click(autosaveCheckbox);
+    expect(settingsState.settings.files.autosave).toBe(false);
+    expect(delaySelect).toBeDisabled();
+
+    const row = delaySelect.closest(".setting-row");
+    expect(row).toHaveClass("row-disabled");
+
+    await fireEvent.click(autosaveCheckbox);
+    expect(settingsState.settings.files.autosave).toBe(true);
+    expect(delaySelect).not.toBeDisabled();
+    expect(row).not.toHaveClass("row-disabled");
+  });
+
+  it("handles arbitrary legacy autosave delay without crashing", async () => {
+    settingsState.settings.files.autosaveDelayMs = 7500;
+    mount();
+    await selectSection("Files");
+
+    const select = screen.getByRole("combobox", { name: "Autosave delay" }) as HTMLSelectElement;
+    expect(select).toBeInTheDocument();
+    expect(select.value).toBe("7500");
+
+    const customOption = select.querySelector('option[value="7500"]');
+    expect(customOption).toBeInTheDocument();
+    expect(customOption?.textContent).toBe("Custom (7.5 s)");
+
+    await fireEvent.change(select, { target: { value: "30000" } });
+    expect(settingsState.settings.files.autosaveDelayMs).toBe(30000);
+  });
+
+  it("finds autosave delay through settings search", async () => {
+    mount();
+    const search = screen.getByRole("searchbox", { name: "Search settings" });
+
+    await fireEvent.input(search, { target: { value: "1 minute" } });
+    expect(screen.getByRole("tab", { name: "Files" })).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "Autosave delay" })).toBeInTheDocument();
+
+    await fireEvent.input(search, { target: { value: "automatically saving" } });
+    expect(screen.getByRole("tab", { name: "Files" })).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "Autosave delay" })).toBeInTheDocument();
   });
 });
