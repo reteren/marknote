@@ -241,6 +241,9 @@ describe("SettingsWindow", () => {
     expect(english).toBeChecked();
     await fireEvent.click(english);
     expect(settingsState.settings.spellcheck.dictionaries).toEqual([]);
+    const languageRow = document.querySelector('[data-setting-row="settings-spellcheck.dictionaries"]')!;
+    expect(languageRow.querySelector(".modified-indicator")).toBeNull();
+    expect(languageRow.querySelector(".setting-reset")).toBeNull();
 
     expect(screen.queryByRole("combobox", { name: "Suggestions" })).not.toBeInTheDocument();
     const inline = screen.getByRole("checkbox", { name: "Show suggestions above misspelled words" });

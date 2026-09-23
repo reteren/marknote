@@ -555,7 +555,7 @@
               id={`settings-${descriptor.path}`}
               title={t(descriptor.titleKey)}
               description={descriptor.descriptionKey ? t(descriptor.descriptionKey) : undefined}
-              changed={isModified(descriptor.path)}
+              changed={descriptor.type !== "checklist" && isModified(descriptor.path)}
               disabled={isRowDisabled(descriptor)}
               modifiedLabel={t("settings.modified")}
               resetLabel={t("settings.resetValue")}
