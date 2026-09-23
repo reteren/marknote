@@ -9,6 +9,7 @@
     getRegExpError,
     getSearchStats,
     isValidRegExp,
+    revealMatchNearCaret,
     searchCommands,
     SEARCH_CLOSE_EVENT,
     SEARCH_OPEN_EVENT,
@@ -71,6 +72,7 @@
 
     if (isOpen && query.valid && search) {
       openSearchPanel(view);
+      revealMatchNearCaret(view, query);
     }
 
     stats = getSearchStats(view.state, query);

@@ -1,7 +1,14 @@
 <script lang="ts">
   import { onMount, tick } from "svelte";
+  import type { EditorView } from "@codemirror/view";
   import { interfaceLanguage, translate as t } from "../i18n";
   import { formatsState, supportsMarkdownCommands } from "../state/formats.svelte";
+  import {
+    buildSpellcheckMenuEntries,
+    getSpellcheckContextAt,
+    type SpellcheckContext,
+  } from "../editor/spellcheck";
+  import { suggestSpelling } from "../editor/spellEngine";
   import { createContextFormatGroups, type MenuItem as ModelMenuItem } from "./menuModel";
 
   export type ContextMenuTarget = "selection" | "empty" | "link" | "image";
@@ -16,6 +23,7 @@
     | "format.clearHeading" | "format.list" | "format.orderedList" | "format.taskList"
     | "format.table" | "format.callout" | "format.codeBlock" | "format.mathBlock" | "format.horizontalRule"
     | "format.jsonValidate" | "format.jsonFormat"
+    | "spellcheck.replace" | "spellcheck.addToDictionary" | "spellcheck.noSuggestions"
     | "open-link" | "copy-link" | "edit-link" | "open-image" | "copy-image" | "insert-image"
     | "insert-table" | "insert-callout" | "insert-code-block" | "insert-math-block" | "insert-hr";
 
@@ -25,6 +33,7 @@
     shortcut?: string;
     disabled?: boolean;
     payload?: string;
+    spellSuggestion?: boolean;
   };
 
   type Separator = { separator: true };
@@ -45,6 +54,7 @@
     editable?: boolean;
     formatId?: string;
     targetElement?: HTMLElement | null;
+    editorView?: EditorView | null;
     autoAttach?: boolean;
     onSelect?: (action: ContextMenuAction, payload?: string) => void;
     onClose?: () => void;
@@ -64,6 +74,7 @@
     editable = true,
     formatId = undefined,
     targetElement = null,
+    editorView = null,
     autoAttach = true,
     onSelect,
     onClose,
@@ -81,6 +92,9 @@
   let submenuX = $state(0);
   let submenuY = $state(0);
   let returnFocusElement: HTMLElement | null = null;
+  let spellcheckContext = $state<SpellcheckContext | null>(null);
+  let spellSuggestions = $state<string[]>([]);
+  let spellcheckRequest = 0;
   const rtl = $derived(interfaceLanguage.locale === "ar");
 
   const markdownCommands = $derived.by(() => {
@@ -130,7 +144,23 @@
     }
 
     const selectionExists = targetType === "selection" || hasSelection;
+    const spellcheckEntries: MenuOption[] = spellcheckContext
+      ? [
+          ...buildSpellcheckMenuEntries(spellcheckContext, spellSuggestions, {
+            noSuggestions: t("spellcheck.noSuggestions"),
+            addToDictionary: t("spellcheck.addToDictionary"),
+          }).map((item) => ({
+            id: item.id,
+            label: item.label,
+            payload: item.payload,
+            disabled: item.disabled,
+            spellSuggestion: item.spellSuggestion,
+          })),
+          { separator: true },
+        ]
+      : [];
     return [
+      ...spellcheckEntries,
       ...formatSubmenus,
       ...(formatSubmenus.length > 0 ? [{ separator: true } as Separator] : []),
       { id: "cut", label: t("menu.cut"), shortcut: "Ctrl+X", disabled: !selectionExists || !editable },
@@ -251,6 +281,8 @@
     activeSubmenuLabel = null;
     focusedRootIndex = -1;
     focusedSubmenuIndex = -1;
+    spellcheckContext = null;
+    spellSuggestions = [];
     onClose?.();
     if (restoreFocus) {
       const focusTarget = returnFocusElement ?? targetElement;
@@ -414,7 +446,33 @@
       } else {
         targetType = "empty";
       }
-      open = true;
+
+      spellcheckRequest += 1;
+      const request = spellcheckRequest;
+      spellcheckContext = null;
+      spellSuggestions = [];
+      const editorTarget = target?.closest(".cm-editor");
+      let position: number | null = null;
+      if (editorTarget && editorView) {
+        try {
+          position = editorView.posAtCoords({ x: event.clientX, y: event.clientY });
+        } catch {
+          position = null;
+        }
+      }
+      const context = position === null || position === undefined
+        ? null
+        : getSpellcheckContextAt(editorView!, position);
+      spellcheckContext = context;
+      if (!context) {
+        open = true;
+        return;
+      }
+      void suggestSpelling(context.word, context.languages).then((suggestions) => {
+        if (request !== spellcheckRequest) return;
+        spellSuggestions = suggestions;
+        open = true;
+      });
     };
 
     const handlePointerDown = (event: PointerEvent): void => {
@@ -475,6 +533,7 @@
             type="button"
             role="menuitem"
             class="menu-item"
+            class:spell-suggestion={entry.spellSuggestion}
             class:focused={itemIndex === focusedRootIndex}
             disabled={entry.disabled}
             data-menu-level="root"
@@ -579,6 +638,7 @@
   }
   .menu-item:active:not(:disabled) { background: var(--bg-modifier-active); }
   .menu-item:disabled { color: var(--text-faint); cursor: default; }
+  .menu-item.spell-suggestion .label { font-weight: 600; }
   .label { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .shortcut { margin-inline-start: 14px; color: var(--text-faint); font-size: 11px; white-space: nowrap; }
   .submenu-arrow { margin-inline-start: 18px; color: var(--text-muted); font-size: 18px; line-height: 0.7; }

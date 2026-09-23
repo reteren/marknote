@@ -7,7 +7,9 @@ mod encoding;
 mod formats;
 mod messages;
 mod recent_files;
+mod recovery;
 mod settings;
+pub mod spellcheck;
 mod startup_trace;
 mod watcher;
 mod windows;
@@ -42,6 +44,10 @@ pub fn run() {
             app.manage(attachment_registry.clone());
             let config_dir = config_dir::for_app(app.handle())?;
             startup_trace::mark("config-dir-ready");
+            let dictionary_dir = app.path().resource_dir()?.join("dictionaries");
+            let recovery_dir = config_dir.join("recovery");
+            let recovery = recovery::RecoveryStore::load(&recovery_dir)?;
+            startup_trace::mark("recovery-loaded");
             let recent_files_path = config_dir.join("recent-files.json");
             let recent_files = recent_files::RecentFilesState::load(&recent_files_path)
                 .unwrap_or_else(|error| {
@@ -50,6 +56,11 @@ pub fn run() {
                 });
             startup_trace::mark("recent-files-loaded");
             app.manage(recent_files);
+            app.manage(recovery);
+            app.manage(spellcheck::SpellcheckService::new(
+                dictionary_dir,
+                config_dir.clone(),
+            ));
             app.manage(windows::AppState::new(app.handle().clone()));
             startup_trace::mark("app-state-ready");
             let result = windows::initialize(app);
@@ -58,7 +69,12 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             commands::open_file,
+            commands::take_recovery_entries,
+            commands::write_recovery_snapshot,
+            commands::delete_recovery_snapshot,
+            commands::delete_recovery_entry,
             commands::take_pending_file,
+            commands::acknowledge_pending_file,
             commands::take_pending_format,
             commands::respond_to_close,
             commands::save_file,
@@ -77,6 +93,10 @@ pub fn run() {
             commands::attachment_cache_stats,
             commands::clear_attachment_cache,
             commands::reveal_attachment_cache,
+            commands::spellcheck_languages,
+            commands::spellcheck_check,
+            commands::spellcheck_suggest,
+            commands::spellcheck_add_word,
             commands::open_in_new_window,
             commands::open_new_window,
             commands::reveal_in_explorer,

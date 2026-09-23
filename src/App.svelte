@@ -30,6 +30,7 @@ import { onMount, tick } from "svelte";
   import { settingsState } from "./state/settings.svelte";
   import { dispatchSearchOpen } from "./editor/search";
   import { createAutosave, saveAs as saveAsFile } from "./state/autosave";
+  import { restoreRecoveryEntries } from "./state/recovery";
   import {
     clearExternalChange,
     documentState,
@@ -51,6 +52,7 @@ import { onMount, tick } from "svelte";
   import StatusBar from "./ui/StatusBar.svelte";
 import FindPanel from "./ui/FindPanel.svelte";
 import ContextMenu, { type ContextMenuAction } from "./ui/ContextMenu.svelte";
+import { handleSpellcheckMenuAction } from "./editor/spellcheck";
 import FormatPicker from "./ui/FormatPicker.svelte";
 import Notice, { type NoticeSeverity } from "./ui/Notice.svelte";
 import HelpDialog, { type HelpMode } from "./ui/HelpDialog.svelte";
@@ -71,7 +73,8 @@ import HelpDialog, { type HelpMode } from "./ui/HelpDialog.svelte";
   import { formatLabel, translate as t } from "./i18n";
 import { EditorView, type EditorView as EditorViewType } from "@codemirror/view";
 
-  type OpenFileRequest = { path: string };
+  type OpenFileRequest = { path: string; openInTab?: boolean };
+  type PendingFileRequest = { path: string; openInTab: boolean };
   type CloseChoice = "save" | "discard" | "cancel";
   type CloseRequestSource = "menu" | "native" | "tab" | null;
   type SelectionSnapshot = Array<{ anchor: number; head: number }>;
@@ -82,6 +85,9 @@ import { EditorView, type EditorView as EditorViewType } from "@codemirror/view"
   let pendingCloseTabId = $state<TabId | null>(null);
   let autosaveController: ReturnType<typeof createAutosave> | null = null;
   let openingPathKey: string | null = null;
+  let fileOpenQueue: Promise<void> = Promise.resolve();
+  let recoveryRestoreReady = false;
+  const deferredOpenRequests: Array<{ path: string; openInTab: boolean }> = [];
   let unlistenDrop: UnlistenFn | undefined;
   let lastDropKey: string | null = null;
   let lastDropAt = 0;
@@ -112,6 +118,7 @@ import { EditorView, type EditorView as EditorViewType } from "@codemirror/view"
   });
   let errorMessage = $state<string | null>(null);
   let attachmentNotice = $state<{ message: string; severity?: NoticeSeverity } | null>(null);
+  let recoveryNoticeCount = $state(0);
   let isDraggingOver = $state(false);
 
   async function openSettingsWindow() {
@@ -391,6 +398,24 @@ import { EditorView, type EditorView as EditorViewType } from "@codemirror/view"
     } finally {
       if (openingPathKey === requestedPathKey) openingPathKey = null;
     }
+  }
+
+  function queueOpenFileRequest(path: string, openInTab: boolean): void {
+    if (!recoveryRestoreReady) {
+      deferredOpenRequests.push({ path, openInTab });
+      return;
+    }
+    fileOpenQueue = fileOpenQueue
+      .then(async () => {
+        try {
+          await invoke("acknowledge_pending_file", { path });
+        } catch {
+          // The startup fallback may already have been consumed by IPC.
+        }
+        if (openInTab) await openFileInTab(path);
+        else await openFile(path);
+      })
+      .catch(reportError);
   }
 
   async function pickFile(): Promise<void> {
@@ -701,6 +726,10 @@ import { EditorView, type EditorView as EditorViewType } from "@codemirror/view"
       }
     }
 
+    for (const tab of tabsToProcess) {
+      await autosaveController?.discardRecovery(tab.id);
+    }
+
     closePromptOpen = false;
     closeRequestSource = null;
     pendingCloseTabId = null;
@@ -823,6 +852,10 @@ import { EditorView, type EditorView as EditorViewType } from "@codemirror/view"
   }
 
   function handleContextMenuAction(action: ContextMenuAction, payload?: string): void {
+    if (action === "spellcheck.replace" || action === "spellcheck.addToDictionary") {
+      if (editorView) handleSpellcheckMenuAction(editorView, action, payload);
+      return;
+    }
     if (action.startsWith("format.") || action === "edit.pastePlainText") {
       handleMenuAction(action);
       return;
@@ -1152,7 +1185,7 @@ import { EditorView, type EditorView as EditorViewType } from "@codemirror/view"
         unlistenNativeClose = await currentWindow.listen("save-before-close", handleNativeCloseRequest);
         nativeCloseReady = true;
         unlistenOpen = await currentWindow.listen<OpenFileRequest>("open-file-request", ({ payload }) => {
-          if (payload?.path) void openFile(payload.path);
+          if (payload?.path) queueOpenFileRequest(payload.path, payload.openInTab === true);
         });
         try {
           const webview = getCurrentWebview();
@@ -1183,8 +1216,33 @@ import { EditorView, type EditorView as EditorViewType } from "@codemirror/view"
           unlistenDrop?.();
           return;
         }
-        const pendingPath = await invoke<string | null>("take_pending_file");
-        if (pendingPath) void openFile(pendingPath);
+        const recoveredIds = await restoreRecoveryEntries(
+          (tabId) => autosaveController?.captureRecoveryNow(tabId) ?? Promise.resolve(false),
+        );
+        if (recoveredIds.length > 0) {
+          recoveryNoticeCount = recoveredIds.length;
+          startScreenDismissed = true;
+          const view = editorView;
+          if (view) {
+            for (const tab of workspace.tabs) {
+              const state = createEditorState(view, {
+                doc: tab.document.text,
+                format: tab.document.format,
+                path: tab.document.path,
+              });
+              tabEditorStates.set(tab.id, state);
+              if (tab.id === workspace.activeId) setEditorState(view, state);
+            }
+          }
+        }
+        recoveryRestoreReady = true;
+        for (const request of deferredOpenRequests.splice(0)) {
+          queueOpenFileRequest(request.path, request.openInTab);
+        }
+        const pendingFiles = await invoke<PendingFileRequest[] | null>("take_pending_file");
+        for (const pending of pendingFiles ?? []) {
+          if (pending?.path) queueOpenFileRequest(pending.path, pending.openInTab);
+        }
         const pendingFormat = await invoke<string | null>("take_pending_format");
         if (pendingFormat) {
           try {
@@ -1282,6 +1340,12 @@ import { EditorView, type EditorView as EditorViewType } from "@codemirror/view"
       />
     {:else if documentState.externalChange === "deleted"}
       <Notice preset="file-deleted" onAction={(action) => action === "save" ? void saveNow() : undefined} />
+    {:else if recoveryNoticeCount > 0}
+      <Notice
+        severity="info"
+        message={t("notice.recoveredUnsavedDocuments", { count: recoveryNoticeCount })}
+        onClose={() => (recoveryNoticeCount = 0)}
+      />
     {:else if lossyNoticeOpen}
       <Notice preset="lossy-warning" onAction={handleLossyAction} onClose={closeLossyNotice} />
     {/if}
@@ -1352,6 +1416,7 @@ import { EditorView, type EditorView as EditorViewType } from "@codemirror/view"
   <ContextMenu
     editable={!isReadOnly}
     formatId={documentState.format.id}
+    {editorView}
     onSelect={handleContextMenuAction}
     onFocusEditor={() => editorView?.focus()}
   />

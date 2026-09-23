@@ -41,6 +41,13 @@ purpose is opening files quickly, that is decisive.
 Live preview is text layout: mixed fonts, embedded images, formulas, and tables.
 The browser already has a working layout engine; writing one would take months.
 
+### Windows file icons
+The NSIS installer bundles `icons/document.ico` as `document.ico` and sets each
+Tauri file association ProgId's `DefaultIcon` to that file. Generated installer
+hooks remove those overrides on uninstall and call `UPDATEFILEASSOC` so Explorer
+refreshes its association cache. The app, window, installer, and uninstaller
+continue to use `icons/icon.ico`.
+
 ### CodeMirror 6 instead of Monaco or a custom solution
 CodeMirror builds its display through decorations. `Decoration.replace` removes a
 text range from the display without touching the document, while
@@ -191,6 +198,9 @@ type DocumentState = {
 
 `path === null` is the only condition that disables autosave regardless of format.
 The same field controls the appearance of the `Save` and `Save as…` buttons.
+An independent recovery journal atomically snapshots every dirty tab, including
+untitled and autosave-disabled tabs, after 300 ms idle with a one-second max wait;
+startup restores entries only when their saved file fingerprint still matches.
 
 ---
 

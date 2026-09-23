@@ -3,6 +3,7 @@
   import { onMount, tick } from "svelte";
   import type { EditorView } from "@codemirror/view";
   import { getZoom, installZoom, resetZoom, setZoomPercent, zoomIn, zoomOut } from "../editor/zoom";
+  import { loadSpellcheckLanguages, type SpellLanguage } from "../editor/spellEngine";
   import { formatLabel, interfaceLanguage, translate as t } from "../i18n";
   import {
     defaultSettings,
@@ -23,7 +24,7 @@
   type Option = { value: string; labelKey: string };
   type Descriptor = {
     path: string;
-    type: "toggle" | "number" | "select" | "fixed";
+    type: "toggle" | "number" | "select" | "checklist" | "fixed";
     titleKey: string;
     descriptionKey?: string;
     min?: number;
@@ -47,6 +48,17 @@
     { value: "zh", labelKey: "settings.language.name.zh" },
     { value: "ja", labelKey: "settings.language.name.ja" },
     { value: "ar", labelKey: "settings.language.name.ar" },
+  ];
+
+  const fallbackSpellLanguages: SpellLanguage[] = [
+    { tag: "en", name: "English" },
+    { tag: "ru", name: "Russian" },
+    { tag: "de", name: "German" },
+    { tag: "es", name: "Spanish" },
+    { tag: "fr", name: "French" },
+    { tag: "it", name: "Italian" },
+    { tag: "pt", name: "Portuguese" },
+    { tag: "ar", name: "Arabic" },
   ];
 
   const descriptors: Descriptor[] = [
@@ -80,6 +92,8 @@
     { path: "livePreview.maxImageWidth", type: "fixed", titleKey: "settings.preview.maxImageWidth", display: "settings.preview.maxImageWidthColumn" },
     { path: "livePreview.disableAboveBytes", type: "number", titleKey: "settings.preview.disableAbove", descriptionKey: "settings.preview.disableAboveDescription", min: 1, max: 100, step: 1, unit: "settings.unit.megabytes" },
     { path: "spellcheck.enabled", type: "toggle", titleKey: "settings.spelling.enabled", descriptionKey: "settings.spelling.enabledDescription" },
+    { path: "spellcheck.dictionaries", type: "checklist", titleKey: "settings.spelling.languages", descriptionKey: "settings.spelling.languagesDescription" },
+    { path: "spellcheck.inlineSuggestions", type: "toggle", titleKey: "settings.spelling.inlineSuggestions" },
     { path: "spellcheck.skipCodeFormulaLinks", type: "toggle", titleKey: "settings.spelling.skipCodeFormulaLinks", descriptionKey: "settings.spelling.skipCodeFormulaLinksDescription" },
     { path: "autoCorrect.smartQuotes", type: "toggle", titleKey: "settings.spelling.smartQuotes" },
     { path: "autoCorrect.doubleHyphenToEmDash", type: "toggle", titleKey: "settings.spelling.doubleHyphenToEmDash" },
@@ -108,6 +122,7 @@
       { value: "recentFiles", labelKey: "settings.windows.startup.recentFiles" },
     ] },
     { path: "windows.raiseExistingWindow", type: "toggle", titleKey: "settings.windows.raiseExistingWindow" },
+    { path: "windows.openFilesInTabs", type: "toggle", titleKey: "settings.windows.openFilesInTabs", descriptionKey: "settings.windows.openFilesInTabsDescription" },
   ];
 
   const sections: Section[] = [
@@ -134,6 +149,7 @@
   let activeSection = $state<SectionId>("language");
   let searchQuery = $state("");
   let creatableFormats = $state<FormatCapabilities[]>([]);
+  let spellLanguages = $state<SpellLanguage[]>(fallbackSpellLanguages);
   let resetConfirmationOpen = $state(false);
   let resetError = $state(false);
   let copiedVersion = $state(false);
@@ -279,8 +295,18 @@
     const descriptor = descriptors.find((item) => item.path === path);
     if (!descriptor) return false;
     const optionsText = descriptor.options?.map((opt) => t(opt.labelKey)).join(" ") ?? "";
-    const text = `${t(descriptor.titleKey)} ${descriptor.descriptionKey ? t(descriptor.descriptionKey) : ""} ${optionsText}`.toLocaleLowerCase();
+    const languageText = descriptor.type === "checklist"
+      ? spellLanguages.map((language) => `${spellLanguageLabel(language)} ${language.name} ${language.tag}`).join(" ")
+      : "";
+    const text = [t(descriptor.titleKey), descriptor.descriptionKey ? t(descriptor.descriptionKey) : "", optionsText, languageText]
+      .join(" ").toLocaleLowerCase();
     return !query.trim() || text.includes(query.trim().toLocaleLowerCase());
+  }
+
+  function spellLanguageLabel(language: SpellLanguage): string {
+    const key = `settings.language.name.${language.tag}`;
+    const translated = t(key);
+    return translated === key ? language.name : translated;
   }
 
   function sectionHasMatch(id: SectionId, query = searchQuery): boolean {
@@ -404,6 +430,9 @@
 
   onMount(() => {
     void loadSettings();
+    void loadSpellcheckLanguages().then((languages) => {
+      spellLanguages = languages.length > 0 ? languages : fallbackSpellLanguages;
+    });
     void invoke<FormatCapabilities[]>("list_creatable_formats")
       .then((formats) => { creatableFormats = Array.isArray(formats) ? formats.filter((item) => item.creatable) : []; })
       .catch(() => { creatableFormats = []; });
@@ -554,6 +583,28 @@
                   />
                   {#if descriptor.unit}<span>{t(descriptor.unit)}</span>{/if}
                 </label>
+              {:else if descriptor.type === "checklist"}
+                <div class="spell-language-list" role="group" aria-label={t(descriptor.titleKey)}>
+                  {#each spellLanguages as language (language.tag)}
+                    <label class="spell-language-option">
+                      <input
+                        type="checkbox"
+                        checked={settingsState.settings.spellcheck.dictionaries.includes(language.tag)}
+                        onchange={(event) => {
+                          const selected = settingsState.settings.spellcheck.dictionaries;
+                          const next = event.currentTarget.checked
+                            ? [...new Set([...selected, language.tag])]
+                            : selected.filter((tag) => tag !== language.tag);
+                          updatePath("spellcheck.dictionaries", next);
+                        }}
+                      />
+                      <span>{spellLanguageLabel(language)}</span>
+                    </label>
+                  {/each}
+                  {#if spellLanguages.length === 0}
+                    <span class="spell-language-empty">{t("settings.spelling.noLanguages")}</span>
+                  {/if}
+                </div>
               {:else if descriptor.type === "select"}
                 {#if descriptor.path === "windows.startupAction"}
                   <div class="startup-action-control">
@@ -736,6 +787,10 @@
 
   .settings-content { position: relative; min-width: 0; overflow: auto; padding: 8px 24px 24px; }
   .toggle-input { cursor: pointer; }
+  .spell-language-list { display: flex; flex-direction: column; gap: 5px; max-height: 190px; overflow-y: auto; padding: 4px 2px; }
+  .spell-language-option { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 7px; color: var(--text-normal); font-size: 12px; }
+  .spell-language-option input { margin: 0; }
+  .spell-language-empty { color: var(--text-muted); font-size: 11px; }
   .numeric-control { display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
   .numeric-control input { width: 90px; }
   .numeric-control span, .fixed-value { color: var(--text-muted); white-space: nowrap; }

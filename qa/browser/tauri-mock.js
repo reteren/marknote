@@ -2,9 +2,9 @@
   const md = { id: "markdown", label: "Markdown", defaultExtension: "md", extensions: ["md"], editable: true, creatable: true, livePreview: true, autosave: true, lossy: false, syntaxMode: null, template: "" };
   const js = { id: "javascript", label: "JavaScript", defaultExtension: "js", extensions: ["js"], editable: true, creatable: true, livePreview: false, autosave: true, lossy: false, syntaxMode: "javascript", template: "" };
   const json = { id: "json", label: "JSON", defaultExtension: "json", extensions: ["json"], editable: true, creatable: true, livePreview: false, autosave: true, lossy: false, syntaxMode: "json", template: "{}\n" };
-  const settings = { language: "en", spellcheck: { enabled: true, skipCodeFormulaLinks: true }, autoCorrect: { smartQuotes: false, doubleHyphenToEmDash: false, capitalizeAfterPeriod: false, threeDotsToEllipsis: false }, editor: { fontFamily: "system-sans", fontSize: 16, zoomPercent: 100, columnWidth: "normal", tabWidth: 4, insertSpaces: true, softWrap: true, showInvisibles: false, lineNumbers: false }, livePreview: { enabled: true, revealMarkup: "cursor", renderFormulas: true, renderImages: true, maxImageWidth: "column", disableAboveBytes: 5242880 }, files: { autosave: true, autosaveDelayMs: 2000, saveOnWindowBlur: true, newDocumentFormat: "markdown", newDocumentEncoding: "utf8", newDocumentLineEnding: "system", trimTrailingSpaces: false, finalNewline: false }, windows: { rememberSizeAndPosition: true, startupAction: "startScreen", raiseExistingWindow: true } };
+  const settings = { language: "en", spellcheck: { enabled: true, skipCodeFormulaLinks: true, dictionaries: ["en"], inlineSuggestions: false }, autoCorrect: { smartQuotes: false, doubleHyphenToEmDash: false, capitalizeAfterPeriod: false, threeDotsToEllipsis: false }, editor: { fontFamily: "system-sans", fontSize: 16, zoomPercent: 100, columnWidth: "normal", tabWidth: 4, insertSpaces: true, softWrap: true, showInvisibles: false, lineNumbers: false }, livePreview: { enabled: true, revealMarkup: "cursor", renderFormulas: true, renderImages: true, maxImageWidth: "column", disableAboveBytes: 5242880 }, files: { autosave: true, autosaveDelayMs: 2000, saveOnWindowBlur: true, newDocumentFormat: "markdown", newDocumentEncoding: "utf8", newDocumentLineEnding: "system", trimTrailingSpaces: false, finalNewline: false }, windows: { rememberSizeAndPosition: true, startupAction: "startScreen", raiseExistingWindow: true } };
   let cb = 0;
-  window.__MN_LOG = []; window.__ERR = []; window.addEventListener("error", (e) => window.__ERR.push(String(e.error && e.error.stack || e.message))); const ce = console.error; console.error = (...a) => { window.__ERR.push(a.map((x) => x && x.stack ? x.stack : String(x)).join(" ")); ce(...a); };
+  window.__MN_LOG = []; window.__SPELL_LOG = []; window.__ERR = []; window.addEventListener("error", (e) => window.__ERR.push(String(e.error && e.error.stack || e.message))); const ce = console.error; console.error = (...a) => { window.__ERR.push(a.map((x) => x && x.stack ? x.stack : String(x)).join(" ")); ce(...a); };
   window.__TAURI_INTERNALS__ = {
     metadata: { currentWindow: { label: "main" }, currentWebview: { windowLabel: "main", label: "main" } },
     transformCallback: (fn) => { const id = ++cb; window["_" + id] = fn; return id; },
@@ -20,6 +20,14 @@
           return { text: "", format: md };
         case "get_settings": return structuredClone(settings);
         case "save_settings": return args?.settings ?? structuredClone(settings);
+        case "spellcheck_languages": return [{ tag: "en", name: "English" }, { tag: "ru", name: "Russian" }, { tag: "de", name: "German" }, { tag: "es", name: "Spanish" }, { tag: "fr", name: "French" }, { tag: "it", name: "Italian" }, { tag: "pt", name: "Portuguese" }, { tag: "ar", name: "Arabic" }];
+        case "spellcheck_check": {
+          const text = args?.text ?? "";
+          window.__SPELL_LOG.push({ text, languages: args?.languages });
+          return [...text.matchAll(/\baple\b/giu)].map((match) => ({ from: match.index, to: match.index + match[0].length }));
+        }
+        case "spellcheck_suggest": return ["apple", "ample", "maple"].slice(0, args?.limit ?? 3);
+        case "spellcheck_add_word": return null;
         case "take_pending_file": case "take_pending_format": return null;
         case "get_recent_files": return [];
         case "get_resolved_language": return "en";

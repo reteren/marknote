@@ -6,8 +6,9 @@ import { EditorView } from "@codemirror/view";
 import { createEditor } from "../src/editor/createEditor";
 import { applyEditorSettings } from "../src/editor/settings";
 import { spellcheckSettingsExtensions } from "../src/editor/settings/spellcheck";
+import { replaceSpellcheckWord } from "../src/editor/spellcheck";
 import { markdownFormat } from "../src/state/formats.svelte";
-import { defaultSettings, type Settings } from "../src/state/settings.svelte";
+import { defaultSettings, normalizeSpellcheckDictionaries, settingsState, updateSettings, type Settings } from "../src/state/settings.svelte";
 
 const views: EditorView[] = [];
 
@@ -65,7 +66,7 @@ describe("spellcheck and autoCorrect settings", () => {
     expect(spellcheckSettingsExtensions(null)).toEqual([]);
   });
 
-  it("applies spellcheck.enabled to contentDOM attribute and updates via applyEditorSettings", () => {
+  it("keeps native WebView spellcheck disabled and updates the plugin when settings change", () => {
     const view = createTestEditor({
       ...defaultSettings,
       spellcheck: { ...defaultSettings.spellcheck, enabled: false },
@@ -76,16 +77,16 @@ describe("spellcheck and autoCorrect settings", () => {
       ...defaultSettings,
       spellcheck: { ...defaultSettings.spellcheck, enabled: true },
     });
-    expect(view.contentDOM.getAttribute("spellcheck")).toBe("true");
+    expect(view.contentDOM.getAttribute("spellcheck")).toBe("false");
   });
 
-  it("applies spellcheck.skipCodeFormulaLinks to mark code, formulas, and links with spellcheck=false", () => {
+  it("does not add native spellcheck attributes to code, formulas, or link text", () => {
     const doc = "Here is `inline code` and [link](https://example.com) and $$x=1$$";
     const view = createTestEditor(
       { ...defaultSettings, spellcheck: { enabled: true, skipCodeFormulaLinks: true } },
       doc,
     );
-    expect(view.contentDOM.querySelectorAll('[spellcheck="false"]').length).toBeGreaterThan(0);
+    expect(view.contentDOM.querySelectorAll('[spellcheck="false"]').length).toBe(0);
 
     // A user may want to check code too: disabling the setting removes the marks.
     applyEditorSettings(view, {
@@ -99,6 +100,35 @@ describe("spellcheck and autoCorrect settings", () => {
       spellcheck: { enabled: false, skipCodeFormulaLinks: true },
     });
     expect(view.contentDOM.querySelectorAll('[spellcheck="false"]').length).toBe(0);
+  });
+
+  it("normalizes legacy spellcheck language tags and keeps empty selections", () => {
+    const baseline = structuredClone(defaultSettings);
+    expect(defaultSettings.spellcheck.dictionaries).toEqual(["en"]);
+    updateSettings({ spellcheck: { enabled: false } }, { persist: false });
+    expect(settingsState.settings.spellcheck.dictionaries).toEqual(["en"]);
+    expect(settingsState.settings.spellcheck.inlineSuggestions).toBe(false);
+
+    updateSettings({ spellcheck: { dictionaries: ["ru-RU", "en-US", "ru", "xx-ZZ"] } }, { persist: false });
+    expect(settingsState.settings.spellcheck.dictionaries).toEqual(["ru", "en"]);
+    expect(normalizeSpellcheckDictionaries(["DE-de", "pt-BR", "unknown", 42])).toEqual(["de", "pt"]);
+    updateSettings({ spellcheck: { dictionaries: [] } }, { persist: false });
+    expect(settingsState.settings.spellcheck.dictionaries).toEqual([]);
+    settingsState.settings = baseline;
+  });
+
+  it("replaces a checked word in one isolated undo step", () => {
+    const view = createTestEditor(defaultSettings, "This aple here");
+    expect(replaceSpellcheckWord(view, {
+      from: 5,
+      to: 9,
+      word: "aple",
+      suggestion: "apple",
+      languages: ["en"],
+    })).toBe(true);
+    expect(view.state.doc.toString()).toBe("This apple here");
+    undo(view);
+    expect(view.state.doc.toString()).toBe("This aple here");
   });
 
   it("applies autoCorrect.smartQuotes to convert quotes to typographic smart quotes with one-step undo", () => {

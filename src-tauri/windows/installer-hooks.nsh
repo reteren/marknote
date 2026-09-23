@@ -1,5 +1,5 @@
 ; GENERATED FILE — do not edit by hand.
-; Source of truth: bundle.fileAssociations in src-tauri/tauri.conf.json.
+; Source of truth: bundle.fileAssociations and bundle.resources in src-tauri/tauri.conf.json.
 ; Regenerate with: npm run generate:installer-hooks
 
 !macro NSIS_HOOK_POSTINSTALL
@@ -53,6 +53,17 @@
   WriteRegStr HKCU "Software\Classes\Applications\${MAINBINARYNAME}.exe\SupportedTypes" ".ts" ""
   WriteRegStr HKCU "Software\Classes\Applications\${MAINBINARYNAME}.exe\SupportedTypes" ".rs" ""
   WriteRegStr HKCU "Software\Classes\Applications\${MAINBINARYNAME}.exe\SupportedTypes" ".py" ""
+  WriteRegStr HKCU "Software\Classes\Markdown Document\DefaultIcon" "" "$INSTDIR\document.ico,0"
+  WriteRegStr HKCU "Software\Classes\Plain Text Document\DefaultIcon" "" "$INSTDIR\document.ico,0"
+  WriteRegStr HKCU "Software\Classes\JSON Document\DefaultIcon" "" "$INSTDIR\document.ico,0"
+  WriteRegStr HKCU "Software\Classes\YAML Document\DefaultIcon" "" "$INSTDIR\document.ico,0"
+  WriteRegStr HKCU "Software\Classes\TOML Document\DefaultIcon" "" "$INSTDIR\document.ico,0"
+  WriteRegStr HKCU "Software\Classes\XML Document\DefaultIcon" "" "$INSTDIR\document.ico,0"
+  WriteRegStr HKCU "Software\Classes\CSS Stylesheet\DefaultIcon" "" "$INSTDIR\document.ico,0"
+  WriteRegStr HKCU "Software\Classes\JavaScript Source\DefaultIcon" "" "$INSTDIR\document.ico,0"
+  WriteRegStr HKCU "Software\Classes\TypeScript Source\DefaultIcon" "" "$INSTDIR\document.ico,0"
+  WriteRegStr HKCU "Software\Classes\Rust Source\DefaultIcon" "" "$INSTDIR\document.ico,0"
+  WriteRegStr HKCU "Software\Classes\Python Source\DefaultIcon" "" "$INSTDIR\document.ico,0"
   WriteRegStr HKCU "Software\RegisteredApplications" "MarkNote" "Software\MarkNote\Capabilities"
   !insertmacro UPDATEFILEASSOC
 !macroend
@@ -62,6 +73,17 @@
   DeleteRegKey HKCU "Software\MarkNote\Capabilities"
   DeleteRegKey /ifempty HKCU "Software\MarkNote"
   DeleteRegKey HKCU "Software\Classes\Applications\${MAINBINARYNAME}.exe"
+  DeleteRegKey HKCU "Software\Classes\Markdown Document\DefaultIcon"
+  DeleteRegKey HKCU "Software\Classes\Plain Text Document\DefaultIcon"
+  DeleteRegKey HKCU "Software\Classes\JSON Document\DefaultIcon"
+  DeleteRegKey HKCU "Software\Classes\YAML Document\DefaultIcon"
+  DeleteRegKey HKCU "Software\Classes\TOML Document\DefaultIcon"
+  DeleteRegKey HKCU "Software\Classes\XML Document\DefaultIcon"
+  DeleteRegKey HKCU "Software\Classes\CSS Stylesheet\DefaultIcon"
+  DeleteRegKey HKCU "Software\Classes\JavaScript Source\DefaultIcon"
+  DeleteRegKey HKCU "Software\Classes\TypeScript Source\DefaultIcon"
+  DeleteRegKey HKCU "Software\Classes\Rust Source\DefaultIcon"
+  DeleteRegKey HKCU "Software\Classes\Python Source\DefaultIcon"
   !insertmacro UPDATEFILEASSOC
 !macroend
 

@@ -7,6 +7,7 @@ import { translate as t } from "../../src/i18n";
 
 afterEach(() => cleanup());
 
+const revealMock = vi.hoisted(() => vi.fn());
 const searchMock = vi.hoisted(() => ({
   findNext: vi.fn(),
   findPrevious: vi.fn(),
@@ -35,6 +36,7 @@ vi.mock("../../src/editor/search", () => ({
       : state.selection.main.from === 11 && state.selection.main.to === 16 ? 2 : 0;
     return { total, current };
   },
+  revealMatchNearCaret: revealMock,
   searchCommands: searchMock,
   SEARCH_CLOSE_EVENT: "marknote:search-close",
   SEARCH_OPEN_EVENT: "marknote:search-open",
@@ -90,6 +92,7 @@ describe("FindPanel interaction contract", () => {
     await fireEvent.input(input, { target: { value: "alpha" } });
     await new Promise((resolve) => setTimeout(resolve, 70));
     expect(document.body.textContent).toContain(t("search.matchCount", { count: 2 }));
+    expect(revealMock).toHaveBeenCalledWith(view, expect.objectContaining({ search: "alpha" }));
 
     const toggles = document.querySelectorAll<HTMLButtonElement>(".toggle-btn");
     await fireEvent.click(toggles[0]!);

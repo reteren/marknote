@@ -1,7 +1,6 @@
 // settings.spellcheck and settings.autoCorrect sections.
 //
-// Spellchecking uses WebView2: dictionaries come from the system, and a
-// language without an installed Windows package cannot be checked.
+// Spellchecking uses the selected bundled dictionaries through spellEngine.
 //
 // File owner: W87. Extensions are assembled in ../settings.ts; do not edit there.
 
@@ -19,6 +18,8 @@ export function spellcheckSettingsExtensions(settings: Settings | null): Extensi
     ...spellcheckExtension({
       enabled: settings.spellcheck.enabled,
       skipCodeFormulaLinks: settings.spellcheck.skipCodeFormulaLinks,
+      dictionaries: settings.spellcheck.dictionaries ?? ["en"],
+      inlineSuggestions: settings.spellcheck.inlineSuggestions ?? false,
     }),
     ...autoCorrectExtension(settings.autoCorrect),
   ];

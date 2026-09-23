@@ -1,5 +1,5 @@
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{HashMap, HashSet, VecDeque},
     env,
     path::{Path, PathBuf},
     sync::{
@@ -9,6 +9,7 @@ use std::{
     time::SystemTime,
 };
 
+use serde::Serialize;
 use tauri::{
     webview::{PageLoadEvent, WebviewWindowBuilder},
     Emitter, EventTarget, Manager, WebviewWindow, WindowEvent,
@@ -32,15 +33,24 @@ pub struct AppState {
     /// closure from overwriting another tab's record.
     pub(crate) open_files: Mutex<HashMap<PathBuf, HashSet<String>>>,
     pub(crate) empty_windows: Mutex<HashSet<String>>,
-    pending_files: Mutex<HashMap<String, PathBuf>>,
+    pending_files: Mutex<HashMap<String, VecDeque<PendingFileRequest>>>,
     pending_open_data: Mutex<HashMap<String, PendingOpenData>>,
     pending_formats: Mutex<HashMap<String, String>>,
     file_snapshots: Mutex<HashMap<PathBuf, FileSnapshot>>,
     pending_closes: Mutex<HashMap<String, u64>>,
     approved_closes: Mutex<HashSet<String>>,
+    document_windows: Mutex<HashSet<String>>,
+    focused_windows: Mutex<Vec<String>>,
     pub(crate) next_window_id: AtomicUsize,
     next_close_id: AtomicU64,
     pub(crate) watcher: FileWatcher,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct PendingFileRequest {
+    pub(crate) path: String,
+    pub(crate) open_in_tab: bool,
 }
 
 /// Bytes and decoded text prepared while routing a file to a fresh window.
@@ -81,6 +91,8 @@ impl AppState {
             file_snapshots: Mutex::new(HashMap::new()),
             pending_closes: Mutex::new(HashMap::new()),
             approved_closes: Mutex::new(HashSet::new()),
+            document_windows: Mutex::new(HashSet::new()),
+            focused_windows: Mutex::new(Vec::new()),
             next_window_id: AtomicUsize::new(1),
             next_close_id: AtomicU64::new(1),
             watcher: FileWatcher::new(app),
@@ -98,6 +110,40 @@ impl AppState {
         let label = empty.iter().next()?.clone();
         empty.remove(&label);
         Some(label)
+    }
+
+    fn has_empty_window(&self) -> bool {
+        self.empty_windows
+            .lock()
+            .map(|empty| !empty.is_empty())
+            .unwrap_or(false)
+    }
+
+    fn register_document_window(&self, label: &str) {
+        if let Ok(mut windows) = self.document_windows.lock() {
+            windows.insert(label.to_owned());
+        }
+    }
+
+    fn record_window_focus(&self, label: &str) {
+        if let Ok(mut focused) = self.focused_windows.lock() {
+            focused.retain(|known| known != label);
+            focused.insert(0, label.to_owned());
+        }
+    }
+
+    fn last_focused_document_window(&self, app: &tauri::AppHandle) -> Option<String> {
+        let focused = self.focused_windows.lock().ok()?.clone();
+        focused
+            .into_iter()
+            .find(|label| app.get_webview_window(label).is_some())
+    }
+
+    fn any_live_document_window(&self, app: &tauri::AppHandle) -> Option<String> {
+        let windows = self.document_windows.lock().ok()?.clone();
+        windows
+            .into_iter()
+            .find(|label| app.get_webview_window(label).is_some())
     }
 
     fn reserve_file(&self, key: PathBuf, label: &str) {
@@ -119,16 +165,47 @@ impl AppState {
 
     /// Stores a file until the webview has installed its event listener and
     /// asks for the initial route through IPC.
-    pub(crate) fn set_pending_file(&self, label: &str, path: PathBuf) {
+    pub(crate) fn set_pending_file(&self, label: &str, path: PathBuf, open_in_tab: bool) {
         if let Ok(mut pending) = self.pending_files.lock() {
-            pending.insert(label.to_owned(), path);
+            pending
+                .entry(label.to_owned())
+                .or_default()
+                .push_back(PendingFileRequest {
+                    path: path.to_string_lossy().into_owned(),
+                    open_in_tab,
+                });
         }
     }
 
-    /// Takes the pending file exactly once.  This makes the startup handoff
-    /// safe even when the event and the IPC fallback race each other.
-    pub(crate) fn take_pending_file(&self, label: &str) -> Option<PathBuf> {
-        self.pending_files.lock().ok()?.remove(label)
+    /// Takes every startup request exactly once, preserving launch argument order.
+    pub(crate) fn take_pending_files(&self, label: &str) -> Vec<PendingFileRequest> {
+        self.pending_files
+            .lock()
+            .ok()
+            .and_then(|mut pending| pending.remove(label))
+            .unwrap_or_default()
+            .into_iter()
+            .collect()
+    }
+
+    /// Removes the pending fallback after its corresponding window event arrives.
+    pub(crate) fn acknowledge_pending_file(&self, label: &str, path: &Path) {
+        let Ok(mut pending) = self.pending_files.lock() else {
+            return;
+        };
+        let Some(requests) = pending.get_mut(label) else {
+            return;
+        };
+        let key = registry_key(path);
+        if let Some(index) = requests
+            .iter()
+            .position(|request| registry_key(Path::new(&request.path)) == key)
+        {
+            requests.remove(index);
+        }
+        if requests.is_empty() {
+            pending.remove(label);
+        }
     }
 
     pub(crate) fn forget_pending_file(&self, label: &str) {
@@ -261,6 +338,12 @@ impl AppState {
         if let Ok(mut empty) = self.empty_windows.lock() {
             empty.remove(label);
         }
+        if let Ok(mut windows) = self.document_windows.lock() {
+            windows.remove(label);
+        }
+        if let Ok(mut focused) = self.focused_windows.lock() {
+            focused.retain(|known| known != label);
+        }
         if let Ok(mut pending) = self.pending_files.lock() {
             pending.remove(label);
         }
@@ -312,7 +395,14 @@ pub fn initialize(app: &mut tauri::App) -> tauri::Result<()> {
     let state = app.state::<AppState>();
     state.mark_empty(MAIN_WINDOW_LABEL);
 
+    let open_files_in_tabs = app
+        .state::<SettingsState>()
+        .get()
+        .windows
+        .open_files_in_tabs;
+    let mut batch_target = None;
     if let Some(main) = app.get_webview_window(MAIN_WINDOW_LABEL) {
+        state.register_document_window(MAIN_WINDOW_LABEL);
         #[cfg(target_os = "windows")]
         disable_browser_accelerator_keys(&main);
         install_window_handlers(&main, app.handle());
@@ -328,8 +418,17 @@ pub fn initialize(app: &mut tauri::App) -> tauri::Result<()> {
 
     for path in env::args().skip(1).map(PathBuf::from) {
         if path.is_file() {
-            if let Err(error) = route_file(app.handle(), &path) {
-                eprintln!("Could not open startup file: {error}");
+            match route_external_file(
+                app.handle(),
+                &path,
+                open_files_in_tabs,
+                batch_target.as_deref(),
+            ) {
+                Ok(Some(label)) if batch_target.is_none() => {
+                    batch_target = Some(label);
+                }
+                Ok(_) => {}
+                Err(error) => eprintln!("Could not open startup file: {error}"),
             }
         }
     }
@@ -347,12 +446,27 @@ pub fn handle_single_instance(app: &tauri::AppHandle, argv: Vec<String>) {
         .name("marknote-single-instance-route".to_owned())
         .spawn(move || {
             let mut opened = false;
+            let open_files_in_tabs = handle
+                .state::<SettingsState>()
+                .get()
+                .windows
+                .open_files_in_tabs;
+            let mut batch_target = None;
 
             for path in argv.into_iter().skip(1).map(PathBuf::from) {
                 if path.is_file() {
                     opened = true;
-                    if let Err(error) = route_file(&handle, &path) {
-                        eprintln!("Could not open requested file: {error}");
+                    match route_external_file(
+                        &handle,
+                        &path,
+                        open_files_in_tabs,
+                        batch_target.as_deref(),
+                    ) {
+                        Ok(Some(label)) if batch_target.is_none() => {
+                            batch_target = Some(label);
+                        }
+                        Ok(_) => {}
+                        Err(error) => eprintln!("Could not open requested file: {error}"),
                     }
                 }
             }
@@ -372,7 +486,25 @@ pub fn handle_single_instance(app: &tauri::AppHandle, argv: Vec<String>) {
 /// If no startup window is free, creates one from the `main` configuration,
 /// preserving the same dimensions, theme, and webview policies.
 pub fn route_file(app: &tauri::AppHandle, path: impl AsRef<Path>) -> Result<(), String> {
-    route_file_with_policy(app, path, true, None)
+    let open_in_tab = app
+        .state::<SettingsState>()
+        .get()
+        .windows
+        .open_files_in_tabs;
+    route_file_with_policy(app, path, true, None, open_in_tab, None).map(|_| ())
+}
+
+fn route_external_file(
+    app: &tauri::AppHandle,
+    path: impl AsRef<Path>,
+    open_in_tab: bool,
+    batch_target: Option<&str>,
+) -> Result<Option<String>, String> {
+    if open_in_tab {
+        route_file_with_policy(app, path, true, None, true, batch_target).map(Some)
+    } else {
+        route_file(app, path).map(|_| None)
+    }
 }
 
 /// Routes a file whose bytes were already validated and decoded by the
@@ -383,7 +515,7 @@ pub fn route_file_in_new_window_with_data(
     path: impl AsRef<Path>,
     data: PendingOpenData,
 ) -> Result<(), String> {
-    route_file_with_policy(app, path, false, Some(data))
+    route_file_with_policy(app, path, false, Some(data), false, None).map(|_| ())
 }
 
 fn route_file_with_policy(
@@ -391,7 +523,9 @@ fn route_file_with_policy(
     path: impl AsRef<Path>,
     reuse_empty_window: bool,
     pending_open_data: Option<PendingOpenData>,
-) -> Result<(), String> {
+    open_in_tab: bool,
+    batch_target: Option<&str>,
+) -> Result<String, String> {
     let canonical = canonical_path(path.as_ref())?;
     let key = registry_key(&canonical);
     let settings = app.state::<SettingsState>().get();
@@ -403,39 +537,61 @@ fn route_file_with_policy(
         // the end of this block is unsafe: reserve_file takes the same lock and
         // a regular Rust Mutex is not reentrant, so the thread would deadlock.
         // This was the cause of freezes when opening files by double-click.
-        let existing = {
+        let (file_is_open, existing) = {
             let open_files = state.open_files.lock().map_err(|error| {
                 eprintln!("Could not lock the open-file registry: {error}");
                 UserMessage::WindowRouting.to_string()
             })?;
-            existing_window_label(&settings, &open_files, &key)
+            (
+                open_files.contains_key(&key),
+                existing_window_label(&settings, &open_files, &key),
+            )
         };
 
-        if let Some(label) = existing {
-            state.set_pending_file(&label, canonical.clone());
-            RouteTarget::Existing(label)
-        } else if reuse_empty_window {
-            if let Some(label) = state.take_empty() {
-                state.reserve_file(key.clone(), &label);
-                state.set_pending_file(&label, canonical.clone());
-                RouteTarget::Existing(label)
-            } else {
-                let label = state.allocate_window_label();
-                state.reserve_file(key.clone(), &label);
-                state.set_pending_file(&label, canonical.clone());
-                RouteTarget::New(label)
-            }
+        let batch_target = batch_target
+            .filter(|label| app.get_webview_window(label).is_some())
+            .map(str::to_owned);
+        let last_focused = if open_in_tab {
+            state.last_focused_document_window(app)
         } else {
-            let label = state.allocate_window_label();
-            state.reserve_file(key.clone(), &label);
-            state.set_pending_file(&label, canonical.clone());
-            RouteTarget::New(label)
-        }
+            None
+        };
+        let any_document = if open_in_tab {
+            state.any_live_document_window(app)
+        } else {
+            None
+        };
+        let has_empty_window = reuse_empty_window && state.has_empty_window();
+        let decision = route_decision(
+            open_in_tab,
+            file_is_open,
+            settings.windows.raise_existing_window,
+            batch_target.is_some(),
+            last_focused.is_some(),
+            any_document.is_some(),
+            has_empty_window,
+        );
+
+        let target = match decision {
+            RouteDecision::AlreadyOpen => existing.map(RouteTarget::Existing),
+            RouteDecision::BatchTarget => batch_target.map(RouteTarget::Existing),
+            RouteDecision::LastFocused => last_focused.map(RouteTarget::Existing),
+            RouteDecision::AnyDocument => any_document.map(RouteTarget::Existing),
+            RouteDecision::EmptyWindow => state.take_empty().map(RouteTarget::Existing),
+            RouteDecision::NewWindow => None,
+        };
+        let target = target.unwrap_or_else(|| RouteTarget::New(state.allocate_window_label()));
+        let label = match &target {
+            RouteTarget::Existing(label) | RouteTarget::New(label) => label,
+        };
+        state.reserve_file(key.clone(), label);
+        state.set_pending_file(label, canonical.clone(), open_in_tab);
+        target
     };
 
-    let window = match target {
+    let (window, label) = match target {
         RouteTarget::Existing(label) => match app.get_webview_window(&label) {
-            Some(window) => window,
+            Some(window) => (window, label),
             None => {
                 // The window may have closed between reading the registry and routing.
                 app.state::<AppState>().forget_file(&key, &label);
@@ -445,11 +601,13 @@ fn route_file_with_policy(
                     canonical,
                     reuse_empty_window,
                     pending_open_data,
+                    open_in_tab,
+                    batch_target,
                 );
             }
         },
         RouteTarget::New(label) => match create_window(app, &label) {
-            Ok(window) => window,
+            Ok(window) => (window, label),
             Err(error) => {
                 app.state::<AppState>().forget_file(&key, &label);
                 app.state::<AppState>().forget_pending_file(&label);
@@ -470,7 +628,10 @@ fn route_file_with_policy(
         .emit_to(
             EventTarget::webview_window(window.label()),
             "open-file-request",
-            serde_json::json!({ "path": canonical.to_string_lossy().into_owned() }),
+            serde_json::json!({
+                "path": canonical.to_string_lossy().into_owned(),
+                "openInTab": open_in_tab,
+            }),
         )
         .map_err(|error| {
             eprintln!(
@@ -478,7 +639,8 @@ fn route_file_with_policy(
                 window.label()
             );
             UserMessage::WindowRouting.to_string()
-        })
+        })?;
+    Ok(label)
 }
 
 /// Creates a fresh untitled window and hands its requested format to the
@@ -510,6 +672,46 @@ pub fn open_empty_window(app: &tauri::AppHandle, format_id: String) -> Result<()
 enum RouteTarget {
     Existing(String),
     New(String),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum RouteDecision {
+    AlreadyOpen,
+    BatchTarget,
+    LastFocused,
+    AnyDocument,
+    EmptyWindow,
+    NewWindow,
+}
+
+fn route_decision(
+    open_files_in_tabs: bool,
+    file_is_open: bool,
+    raise_existing_window: bool,
+    has_batch_target: bool,
+    has_last_focused_window: bool,
+    has_any_document_window: bool,
+    has_empty_window: bool,
+) -> RouteDecision {
+    if file_is_open && raise_existing_window {
+        return RouteDecision::AlreadyOpen;
+    }
+
+    if open_files_in_tabs && has_batch_target {
+        return RouteDecision::BatchTarget;
+    }
+    if open_files_in_tabs && has_last_focused_window {
+        return RouteDecision::LastFocused;
+    }
+    if open_files_in_tabs && has_any_document_window {
+        return RouteDecision::AnyDocument;
+    }
+
+    if has_empty_window {
+        RouteDecision::EmptyWindow
+    } else {
+        RouteDecision::NewWindow
+    }
 }
 
 fn existing_window_label(
@@ -558,6 +760,8 @@ fn create_window(app: &tauri::AppHandle, label: &str) -> Result<WebviewWindow, S
             UserMessage::MainWindowUnavailable.to_string()
         })?;
 
+    app.state::<AppState>().register_document_window(label);
+
     #[cfg(target_os = "windows")]
     disable_browser_accelerator_keys(&window);
 
@@ -594,6 +798,9 @@ fn install_window_handlers(window: &WebviewWindow, app: &tauri::AppHandle) {
     let event_window = window.clone();
     window.on_window_event(move |event| {
         match event {
+            WindowEvent::Focused(true) => {
+                app.state::<AppState>().record_window_focus(&label);
+            }
             WindowEvent::CloseRequested { api, .. } => {
                 let state = app.state::<AppState>();
                 // `window.close()` below causes another CloseRequested on
@@ -711,7 +918,10 @@ pub fn apply_dark_titlebar(_window: &WebviewWindow) {}
 
 #[cfg(test)]
 mod tests {
-    use super::{existing_window_label, preserve_extended_path, INITIAL_WINDOW_TITLE};
+    use super::{
+        existing_window_label, preserve_extended_path, route_decision, RouteDecision,
+        INITIAL_WINDOW_TITLE,
+    };
     use crate::settings::Settings;
     use std::{
         collections::{HashMap, HashSet},
@@ -767,5 +977,68 @@ mod tests {
             existing_window_label(&settings, &open_files, &key).as_deref(),
             Some("win-1") | Some("win-2")
         ));
+    }
+
+    #[test]
+    fn external_routing_decision_covers_tab_setting_open_file_focus_and_empty_window() {
+        for open_files_in_tabs in [false, true] {
+            for file_is_open in [false, true] {
+                for has_last_focused_window in [false, true] {
+                    for has_empty_window in [false, true] {
+                        let has_any_document_window =
+                            has_last_focused_window || has_empty_window;
+                        let actual = route_decision(
+                            open_files_in_tabs,
+                            file_is_open,
+                            true,
+                            false,
+                            has_last_focused_window,
+                            has_any_document_window,
+                            has_empty_window,
+                        );
+                        let expected = if file_is_open {
+                            RouteDecision::AlreadyOpen
+                        } else if open_files_in_tabs && has_last_focused_window {
+                            RouteDecision::LastFocused
+                        } else if open_files_in_tabs && has_empty_window {
+                            RouteDecision::AnyDocument
+                        } else if has_empty_window {
+                            RouteDecision::EmptyWindow
+                        } else {
+                            RouteDecision::NewWindow
+                        };
+                        assert_eq!(actual, expected);
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn external_routing_only_reuses_open_file_when_raise_existing_is_enabled() {
+        assert_eq!(
+            route_decision(true, true, false, false, true, true, true),
+            RouteDecision::LastFocused
+        );
+        assert_eq!(
+            route_decision(false, true, false, false, false, false, true),
+            RouteDecision::EmptyWindow
+        );
+    }
+
+    #[test]
+    fn external_routing_uses_batch_target_and_falls_back_to_any_live_document_window() {
+        assert_eq!(
+            route_decision(true, false, true, true, false, true, true),
+            RouteDecision::BatchTarget
+        );
+        assert_eq!(
+            route_decision(true, false, true, false, false, true, false),
+            RouteDecision::AnyDocument
+        );
+        assert_eq!(
+            route_decision(true, false, true, false, false, false, false),
+            RouteDecision::NewWindow
+        );
     }
 }

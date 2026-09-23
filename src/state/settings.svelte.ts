@@ -10,7 +10,12 @@ export type StartupAction = "startScreen" | "recentFiles";
 
 export type Settings = {
   language: string;
-  spellcheck: { enabled: boolean; skipCodeFormulaLinks: boolean };
+  spellcheck: {
+    enabled: boolean;
+    skipCodeFormulaLinks: boolean;
+    dictionaries: string[];
+    inlineSuggestions: boolean;
+  };
   autoCorrect: {
     smartQuotes: boolean;
     doubleHyphenToEmDash: boolean;
@@ -46,7 +51,12 @@ export type Settings = {
     trimTrailingSpaces: boolean;
     finalNewline: boolean;
   };
-  windows: { rememberSizeAndPosition: boolean; startupAction: StartupAction; raiseExistingWindow: boolean };
+  windows: {
+    rememberSizeAndPosition: boolean;
+    startupAction: StartupAction;
+    raiseExistingWindow: boolean;
+    openFilesInTabs: boolean;
+  };
 };
 
 export type SettingsPatch = {
@@ -72,7 +82,12 @@ export type SettingsState = {
 
 export const defaultSettings: Settings = {
   language: "en",
-  spellcheck: { enabled: true, skipCodeFormulaLinks: true },
+  spellcheck: {
+    enabled: true,
+    skipCodeFormulaLinks: true,
+    dictionaries: ["en"],
+    inlineSuggestions: false,
+  },
   autoCorrect: {
     smartQuotes: false,
     doubleHyphenToEmDash: false,
@@ -112,7 +127,12 @@ export const defaultSettings: Settings = {
     trimTrailingSpaces: false,
     finalNewline: false,
   },
-  windows: { rememberSizeAndPosition: true, startupAction: "startScreen", raiseExistingWindow: true },
+  windows: {
+    rememberSizeAndPosition: true,
+    startupAction: "startScreen",
+    raiseExistingWindow: true,
+    openFilesInTabs: false,
+  },
 };
 
 export const settingsState = $state<SettingsState>({
@@ -134,10 +154,27 @@ let revision = 0;
 let persistedRevision = 0;
 let languagePreferenceRevision = 0;
 
+const SPELLCHECK_DICTIONARY_TAGS = new Set(["en", "ru", "de", "es", "fr", "it", "pt", "ar"]);
+
+export function normalizeSpellcheckDictionaries(values: readonly unknown[]): string[] {
+  const normalized = new Set<string>();
+  for (const value of values) {
+    if (typeof value !== "string") continue;
+    const tag = value.trim().split("-")[0]?.toLowerCase();
+    if (tag && SPELLCHECK_DICTIONARY_TAGS.has(tag)) normalized.add(tag);
+  }
+  return [...normalized];
+}
+
 function cloneSettings(settings: Settings): Settings {
   return {
     ...settings,
-    spellcheck: { ...settings.spellcheck },
+    spellcheck: {
+      enabled: settings.spellcheck.enabled,
+      skipCodeFormulaLinks: settings.spellcheck.skipCodeFormulaLinks,
+      dictionaries: normalizeSpellcheckDictionaries(settings.spellcheck.dictionaries),
+      inlineSuggestions: settings.spellcheck.inlineSuggestions,
+    },
     autoCorrect: { ...settings.autoCorrect },
     editor: { ...settings.editor },
     livePreview: { ...settings.livePreview },
@@ -206,10 +243,23 @@ function scheduleSave(): void {
 export function updateSettings(patch: SettingsPatch, options: UpdateOptions = {}): Settings {
   const previousLanguage = settingsState.settings.language;
   const previous = settingsState.settings;
+  const spellcheckPatch = patch.spellcheck ?? {};
+  const mergedSpellcheck = {
+    enabled: typeof spellcheckPatch.enabled === "boolean" ? spellcheckPatch.enabled : previous.spellcheck.enabled,
+    skipCodeFormulaLinks: typeof spellcheckPatch.skipCodeFormulaLinks === "boolean"
+      ? spellcheckPatch.skipCodeFormulaLinks
+      : previous.spellcheck.skipCodeFormulaLinks,
+    dictionaries: normalizeSpellcheckDictionaries(
+      Array.isArray(spellcheckPatch.dictionaries) ? spellcheckPatch.dictionaries : previous.spellcheck.dictionaries,
+    ),
+    inlineSuggestions: typeof spellcheckPatch.inlineSuggestions === "boolean"
+      ? spellcheckPatch.inlineSuggestions
+      : previous.spellcheck.inlineSuggestions,
+  };
   settingsState.settings = {
     ...previous,
     ...patch,
-    spellcheck: { ...previous.spellcheck, ...patch.spellcheck },
+    spellcheck: mergedSpellcheck,
     autoCorrect: { ...previous.autoCorrect, ...patch.autoCorrect },
     editor: { ...previous.editor, ...patch.editor },
     livePreview: { ...previous.livePreview, ...patch.livePreview },

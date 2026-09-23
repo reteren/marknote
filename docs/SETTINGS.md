@@ -10,8 +10,9 @@ and column width are the first things people want to adapt to their monitor.
 
 The principle remains: **a setting appears when reasonable people can have
 different answers**. Where there is one answer, behavior remains fixed.
-Therefore there is no dark-theme switch (there is only one theme), no editor
-choice, and no tabs.
+Therefore there is no dark-theme switch (there is only one theme) and no editor
+choice. One window per file remains the default; external file opens can be
+configured to use tabs in the Windows section.
 
 ---
 
@@ -70,19 +71,21 @@ that translation is unavailable.”
 
 ## 3. Spell checking and autocorrect
 
-Spell checking is provided by WebView2, so Windows chooses the dictionary from
-the system interface language. This limitation cannot be overridden with the
-page’s `lang` attribute or a MarkNote setting: Wry sets the environment
-language when creating WebView2
-([lines 331–334](https://github.com/tauri-apps/wry/blob/v0.55.1/src/webview2/mod.rs#L331-L334)),
-and WebView2 tracks this issue in
-[issue #5294](https://github.com/MicrosoftEdge/WebView2Feedback/issues/5294).
-Therefore the interface does not show a spell-check language selector that
-would have no effect.
+Spell checking uses bundled Hunspell dictionaries for English, Russian,
+German, Spanish, French, Italian, Portuguese (Portugal), and Arabic. They work
+offline and load only when first used. A word is checked only against selected
+dictionaries for its script and is considered correct when any matching
+dictionary accepts it.
 
 Settings:
 
 - spell checking — enabled or disabled;
+- dictionaries — the selected language tags (`en`, `ru`, `de`, `es`, `fr`,
+  `it`, `pt`, and `ar`), defaulting to `en`. Older region tags such as
+  `en-US` and `ru-RU` migrate to their bundled base language; unsupported tags
+  are dropped. An explicitly empty selection remains empty;
+- inline suggestions — disabled by default because suggestions are shown on
+  demand when this option is off;
 - skip code, formulas, and links — enabled by default: the dictionary does
   not underline syntax and identifiers. Disable this when those parts should
   also be checked;
@@ -143,6 +146,7 @@ user typed, which is an unpleasant surprise for an existing document.
 | Remember window size and position | enabled |
 | Open at startup | start screen (option: recent files) |
 | Raise an already open window instead of opening another | enabled |
+| Open files in a tab of the existing window | disabled |
 
 ## 8. Other
 
@@ -156,6 +160,8 @@ user typed, which is an unpleasant surprise for an existing document.
 
 - **Light theme.** The specification promises one dark theme; a switch would
   imply a second theme that does not exist.
-- **Tabs.** One window per file is a principle, not a setting.
+- **Tabs by default.** One window per file remains the default. External opens
+  can be configured to add files as tabs in the most recently focused document
+  window.
 - **Plugins and vaults.** The same applies.
 - **Interface font selection.** Zoom solves the same problem more simply.

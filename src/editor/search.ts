@@ -17,6 +17,11 @@ import {
 } from "@codemirror/state";
 import { EditorView, keymap, type Command } from "@codemirror/view";
 
+/** Scrolls a search match to the vertical center of the editor, not its nearest edge. */
+export function centerMatch(from: number, to: number) {
+  return EditorView.scrollIntoView(EditorSelection.range(from, to), { y: "center" });
+}
+
 export type SearchQueryConfig = {
   search: string;
   replace?: string;
@@ -153,6 +158,19 @@ export function getSearchStats(
   }
 
   return { total, current: 0 };
+}
+
+/**
+ * Scrolls the first match at or after the caret (wrapping to the first one)
+ * to the center of the editor while the query is typed. The selection stays
+ * where it is, so Enter still steps from the caret.
+ */
+export function revealMatchNearCaret(view: EditorView, queryConfig: SearchQueryConfig | SearchQuery): void {
+  const matches = findMatches(view.state, queryConfig);
+  if (matches.length === 0) return;
+  const caret = view.state.selection.main.from;
+  const match = matches.find((m) => m.from >= caret) ?? matches[0];
+  view.dispatch({ effects: centerMatch(match.from, match.to) });
 }
 
 /**
@@ -314,7 +332,7 @@ export const searchCommands = {
 
     view.dispatch({
       selection: EditorSelection.single(next.from, next.to),
-      scrollIntoView: true,
+      effects: centerMatch(next.from, next.to),
       userEvent: "select.search",
     });
     return true;
@@ -330,7 +348,7 @@ export const searchCommands = {
 
     view.dispatch({
       selection: EditorSelection.single(prev.from, prev.to),
-      scrollIntoView: true,
+      effects: centerMatch(prev.from, prev.to),
       userEvent: "select.search",
     });
     return true;
@@ -369,7 +387,7 @@ export const searchCommands = {
       view.dispatch({
         changes,
         selection: newSelection,
-        scrollIntoView: true,
+        effects: centerMatch(newSelection.main.from, newSelection.main.to),
         userEvent: "input.replace",
       });
       return true;
@@ -409,6 +427,7 @@ export function marknoteSearch(): Extension {
   return [
     search({
       top: true,
+      scrollToMatch: (range) => centerMatch(range.from, range.to),
       createPanel: () => ({
         dom: typeof document !== "undefined" ? document.createElement("span") : ({} as HTMLElement),
       }),

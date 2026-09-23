@@ -18,6 +18,7 @@ const MIN_AUTOSAVE_DELAY_MS: i64 = 250;
 const MAX_AUTOSAVE_DELAY_MS: i64 = 60_000;
 const MIN_TAB_WIDTH: u8 = 1;
 const MAX_TAB_WIDTH: u8 = 16;
+const SPELLCHECK_DICTIONARIES: &[&str] = &["en", "ru", "de", "es", "fr", "it", "pt", "ar"];
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -65,6 +66,8 @@ impl Settings {
             .files
             .autosave_delay_ms
             .clamp(MIN_AUTOSAVE_DELAY_MS, MAX_AUTOSAVE_DELAY_MS);
+        self.spellcheck.dictionaries =
+            normalize_spellcheck_dictionaries(std::mem::take(&mut self.spellcheck.dictionaries));
     }
 
     /// Resolves `system` to the system language and falls back to English when no translation exists.
@@ -80,6 +83,13 @@ pub struct SpellcheckSettings {
     pub enabled: bool,
     #[serde(default = "default_true")]
     pub skip_code_formula_links: bool,
+    #[serde(
+        default = "default_spellcheck_dictionaries",
+        deserialize_with = "deserialize_spellcheck_dictionaries"
+    )]
+    pub dictionaries: Vec<String>,
+    #[serde(default)]
+    pub inline_suggestions: bool,
 }
 
 impl Default for SpellcheckSettings {
@@ -87,6 +97,8 @@ impl Default for SpellcheckSettings {
         Self {
             enabled: true,
             skip_code_formula_links: true,
+            dictionaries: default_spellcheck_dictionaries(),
+            inline_suggestions: false,
         }
     }
 }
@@ -260,6 +272,8 @@ pub struct WindowSettings {
     pub startup_action: StartupAction,
     #[serde(default = "default_true")]
     pub raise_existing_window: bool,
+    #[serde(default)]
+    pub open_files_in_tabs: bool,
 }
 
 impl Default for WindowSettings {
@@ -268,6 +282,7 @@ impl Default for WindowSettings {
             remember_size_and_position: true,
             startup_action: StartupAction::default(),
             raise_existing_window: true,
+            open_files_in_tabs: false,
         }
     }
 }
@@ -597,6 +612,39 @@ const fn default_true() -> bool {
     true
 }
 
+fn default_spellcheck_dictionaries() -> Vec<String> {
+    vec!["en".to_owned()]
+}
+
+fn deserialize_spellcheck_dictionaries<'de, D>(deserializer: D) -> Result<Vec<String>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let dictionaries = Vec::<String>::deserialize(deserializer)?;
+    Ok(normalize_spellcheck_dictionaries(dictionaries))
+}
+
+fn normalize_spellcheck_dictionaries(dictionaries: Vec<String>) -> Vec<String> {
+    let mut seen = std::collections::HashSet::new();
+    dictionaries
+        .into_iter()
+        .filter_map(|tag| {
+            let base = tag
+                .trim()
+                .split(['-', '_'])
+                .next()
+                .unwrap_or_default()
+                .to_ascii_lowercase();
+            SPELLCHECK_DICTIONARIES
+                .iter()
+                .copied()
+                .find(|candidate| *candidate == base)
+        })
+        .filter(|tag| seen.insert(*tag))
+        .map(str::to_owned)
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -671,12 +719,73 @@ mod tests {
     }
 
     #[test]
+    fn spellcheck_defaults_and_old_dictionary_tags_migrate_to_bundled_languages() {
+        let defaults = SpellcheckSettings::default();
+        assert_eq!(defaults.dictionaries, vec!["en"]);
+        assert!(!defaults.inline_suggestions);
+
+        let migrated: Settings = serde_json::from_str(
+            r#"{"spellcheck":{"dictionaries":["en-US","ru-RU","pt-PT","EN","ja-JP","ru"]}}"#,
+        )
+        .expect("parse old dictionary tags");
+        assert_eq!(migrated.spellcheck.dictionaries, ["en", "ru", "pt"]);
+
+        let explicitly_empty: Settings =
+            serde_json::from_str(r#"{"spellcheck":{"dictionaries":[]}}"#)
+                .expect("parse empty dictionary selection");
+        assert!(explicitly_empty.spellcheck.dictionaries.is_empty());
+
+        let unsupported_only: Settings =
+            serde_json::from_str(r#"{"spellcheck":{"dictionaries":["ja-JP","zh-CN","xx"]}}"#)
+                .expect("parse unsupported dictionary tags");
+        assert!(unsupported_only.spellcheck.dictionaries.is_empty());
+
+        let mut edited = Settings::default();
+        edited.spellcheck.dictionaries =
+            vec!["en-US".to_owned(), "en".to_owned(), "ru-RU".to_owned()];
+        edited.validate();
+        assert_eq!(edited.spellcheck.dictionaries, ["en", "ru"]);
+    }
+
+    #[test]
+    fn open_files_in_tabs_defaults_off_and_uses_camel_case_serde() {
+        let defaults = Settings::default();
+        assert!(!defaults.windows.open_files_in_tabs);
+
+        let parsed: Settings = serde_json::from_str(
+            r#"{"windows":{"openFilesInTabs":true}}"#,
+        )
+        .expect("parse tab-opening setting");
+        assert!(parsed.windows.open_files_in_tabs);
+
+        let serialized = serde_json::to_value(parsed).expect("serialize settings");
+        assert_eq!(serialized["windows"]["openFilesInTabs"], Value::Bool(true));
+        assert!(serialized["windows"].get("open_files_in_tabs").is_none());
+
+        let old_settings: Settings = serde_json::from_str(
+            r#"{"windows":{"raiseExistingWindow":false}}"#,
+        )
+        .expect("parse settings without tab-opening setting");
+        assert!(!old_settings.windows.open_files_in_tabs);
+    }
+
+    #[test]
+    fn old_settings_without_spellcheck_fields_use_new_defaults() {
+        let parsed: Settings = serde_json::from_str(r#"{"spellcheck":{"enabled":true}}"#)
+            .expect("parse settings with old spellcheck shape");
+        assert_eq!(parsed.spellcheck.dictionaries, vec!["en"]);
+        assert!(!parsed.spellcheck.inline_suggestions);
+    }
+
+    #[test]
     fn json_round_trip_preserves_every_settings_field() {
         let settings = Settings {
             language: "ar".to_owned(),
             spellcheck: SpellcheckSettings {
                 enabled: false,
                 skip_code_formula_links: false,
+                dictionaries: vec!["en".to_owned(), "ru".to_owned()],
+                inline_suggestions: true,
             },
             auto_correct: AutoCorrectSettings {
                 smart_quotes: true,
@@ -717,6 +826,7 @@ mod tests {
                 remember_size_and_position: false,
                 startup_action: StartupAction::RecentFiles,
                 raise_existing_window: false,
+                open_files_in_tabs: true,
             },
         };
 
@@ -867,12 +977,13 @@ mod tests {
             let directory = tempfile::tempdir().expect("temporary directory");
             let path = directory.path().join("settings.json");
             let source = format!(
-                r#"{{"spellcheck":{{"enabled":{json_enabled},"language":"ru","languages":["ru","en"],"futureSpellcheck":{{"kept":true}}}},"migrations":{{"spellcheckSingleLanguage":true}}}}"#
+                r#"{{"spellcheck":{{"enabled":{json_enabled},"language":"ru","languages":["ru","en"],"suggestionCount":2,"futureSpellcheck":{{"kept":true}}}},"migrations":{{"spellcheckSingleLanguage":true}}}}"#
             );
             fs::write(&path, source).expect("write legacy settings");
 
             let state = SettingsState::load(&path).expect("legacy settings must load");
             assert_eq!(state.get().spellcheck.enabled, enabled);
+            assert_eq!(state.get().spellcheck.dictionaries, ["en"]);
 
             state.save(state.get()).expect("save legacy settings");
             let written: Value =
@@ -880,6 +991,7 @@ mod tests {
                     .expect("parse saved JSON");
             assert_eq!(written["spellcheck"]["language"], "ru");
             assert_eq!(written["spellcheck"]["languages"][0], "ru");
+            assert_eq!(written["spellcheck"]["suggestionCount"], 2);
             assert_eq!(written["spellcheck"]["futureSpellcheck"]["kept"], true);
             assert_eq!(written["migrations"]["spellcheckSingleLanguage"], true);
         }

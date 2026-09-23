@@ -38,6 +38,11 @@ export const SETTINGS_EXCEPTIONS: readonly SettingException[] = [
     reason:
       "Handled in Rust: src-tauri/src/windows.rs (existing_window_label raises an existing window instead of creating a duplicate)",
   },
+  {
+    path: "windows.openFilesInTabs",
+    reason:
+      "Handled in Rust: src-tauri/src/windows.rs (external file routing targets the most recently focused document window)",
+  },
 
   // --- Interface language ---
   {
@@ -187,6 +192,7 @@ describe("settings are not a facade (settings wiring)", () => {
     expect(leafPaths).toContain("livePreview.enabled");
     expect(leafPaths).toContain("files.autosave");
     expect(leafPaths).toContain("windows.startupAction");
+    expect(leafPaths).toContain("windows.openFilesInTabs");
   });
 
   it("all SETTINGS_EXCEPTIONS entries are valid, unique, and justified", () => {

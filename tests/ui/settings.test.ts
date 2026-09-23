@@ -5,22 +5,26 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/sv
 const mocks = vi.hoisted(() => {
   const base = {
     language: "en",
-    spellcheck: { enabled: true, skipCodeFormulaLinks: true },
+    spellcheck: { enabled: true, skipCodeFormulaLinks: true, dictionaries: ["en"], inlineSuggestions: false },
     autoCorrect: { smartQuotes: false, doubleHyphenToEmDash: false, capitalizeAfterPeriod: false, threeDotsToEllipsis: false },
     editor: { fontFamily: "system-serif", fontSize: 15, zoomPercent: 100, columnWidth: "normal", tabWidth: 4, insertSpaces: true, softWrap: true, showInvisibles: false, lineNumbers: false },
     livePreview: { enabled: true, revealMarkup: "cursor", renderFormulas: true, renderImages: true, maxImageWidth: "column", disableAboveBytes: 5 * 1024 * 1024 },
     files: { autosave: true, autosaveDelayMs: 2_000, saveOnWindowBlur: true, newDocumentFormat: "markdown", newDocumentEncoding: "utf8", newDocumentLineEnding: "system", trimTrailingSpaces: false, finalNewline: false },
-    windows: { rememberSizeAndPosition: true, startupAction: "startScreen", raiseExistingWindow: true },
+    windows: { rememberSizeAndPosition: true, startupAction: "startScreen", raiseExistingWindow: true, openFilesInTabs: false },
   };
   const invoke = vi.fn(async (command: string, args?: { settings?: unknown }) => {
     if (command === "get_settings" || command === "reset_settings") return structuredClone(base);
     if (command === "save_settings") return args?.settings;
     if (command === "list_creatable_formats") return [{ id: "markdown", label: "Markdown", creatable: true }];
+    if (command === "spellcheck_languages") return [
+      { tag: "en", name: "English" }, { tag: "ru", name: "Russian" }, { tag: "de", name: "German" },
+      { tag: "es", name: "Spanish" }, { tag: "fr", name: "French" }, { tag: "it", name: "Italian" },
+      { tag: "pt", name: "Portuguese" }, { tag: "ar", name: "Arabic" },
+    ];
     return undefined;
   });
   return { invoke, base };
 });
-
 const labels: Record<string, string> = {
   "settings.title": "Settings",
   "settings.search": "Search settings",
@@ -31,14 +35,30 @@ const labels: Record<string, string> = {
   "settings.section.editor": "Editor",
   "settings.section.preview": "Preview",
   "settings.section.spelling": "Spellcheck",
+  "settings.spelling.enabled": "Check spelling",
+  "settings.spelling.enabledDescription": "Checks spelling with the selected dictionaries.",
+  "settings.spelling.languages": "Spellcheck languages",
+  "settings.spelling.languagesDescription": "Japanese and Chinese have no spelling dictionaries.",
+  "settings.spelling.inlineSuggestions": "Show suggestions above misspelled words",
+  "settings.spelling.noLanguages": "No spelling languages are available.",
+  "settings.spelling.skipCodeFormulaLinks": "Skip code, formulas, and links",
+  "settings.spelling.skipCodeFormulaLinksDescription": "Avoid false spelling warnings in code, math, and links.",
   "settings.section.files": "Files",
   "settings.section.windows": "Windows",
+  "settings.windows.openFilesInTabs": "Open files in a tab of the existing window",
+  "settings.windows.openFilesInTabsDescription": "Files opened from outside MarkNote become tabs in the most recently focused window.",
   "settings.section.other": "Other",
   "settings.editor.lineNumbers": "Line numbers",
   "settings.editor.tabWidth": "Tab width",
   "settings.editor.tabWidthDescription": "Number of spaces per indentation level",
   "settings.language.name.en": "English",
   "settings.language.name.ru": "Russian",
+  "settings.language.name.de": "German",
+  "settings.language.name.es": "Spanish",
+  "settings.language.name.fr": "French",
+  "settings.language.name.it": "Italian",
+  "settings.language.name.pt": "Portuguese",
+  "settings.language.name.ar": "Arabic",
   "settings.modified": "Modified",
   "settings.resetValue": "Restore default",
   "settings.noResults": "No matching settings",
@@ -111,6 +131,11 @@ describe("SettingsWindow", () => {
       if (command === "get_settings" || command === "reset_settings") return structuredClone(mocks.base);
       if (command === "save_settings") return args?.settings;
       if (command === "list_creatable_formats") return [{ id: "markdown", label: "Markdown", creatable: true }];
+      if (command === "spellcheck_languages") return [
+        { tag: "en", name: "English" }, { tag: "ru", name: "Russian" }, { tag: "de", name: "German" },
+        { tag: "es", name: "Spanish" }, { tag: "fr", name: "French" }, { tag: "it", name: "Italian" },
+        { tag: "pt", name: "Portuguese" }, { tag: "ar", name: "Arabic" },
+      ];
       return undefined;
     });
     settingsState.settings = structuredClone(defaultSettings);
@@ -139,6 +164,23 @@ describe("SettingsWindow", () => {
     const lineNumbers = screen.getByRole("checkbox", { name: "Line numbers" });
     await fireEvent.click(lineNumbers);
     expect(settingsState.settings.editor.lineNumbers).toBe(true);
+    await waitFor(() => expect(mocks.invoke).toHaveBeenCalledWith("save_settings", expect.anything()), { timeout: 1200 });
+  });
+
+  it("shows and persists the external file tab setting", async () => {
+    mount();
+    await selectSection("Windows");
+
+    const openFilesInTabs = screen.getByRole("checkbox", {
+      name: "Open files in a tab of the existing window",
+    });
+    expect(openFilesInTabs).not.toBeChecked();
+    expect(screen.getByText(
+      "Files opened from outside MarkNote become tabs in the most recently focused window.",
+    )).toBeInTheDocument();
+
+    await fireEvent.click(openFilesInTabs);
+    expect(settingsState.settings.windows.openFilesInTabs).toBe(true);
     await waitFor(() => expect(mocks.invoke).toHaveBeenCalledWith("save_settings", expect.anything()), { timeout: 1200 });
   });
 
@@ -184,13 +226,52 @@ describe("SettingsWindow", () => {
     await waitFor(() => expect(mocks.invoke).toHaveBeenCalledWith("reset_settings"));
   });
 
-  it("offers only the spellcheck toggle and explains the system dictionary", async () => {
+  it("offers the language checklist and keeps interface language separate", async () => {
     mount();
     await selectSection("Spellcheck");
 
-    expect(screen.getByRole("checkbox", { name: "settings.spelling.enabled" })).toBeInTheDocument();
-    expect(screen.getByText("settings.spelling.enabledDescription")).toBeInTheDocument();
-    expect(screen.queryByRole("combobox", { name: "settings.spelling.language" })).not.toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: "Check spelling" })).toBeInTheDocument();
+    expect(screen.getByText("Checks spelling with the selected dictionaries.")).toBeInTheDocument();
+    expect(screen.getByRole("group", { name: "Spellcheck languages" })).toBeInTheDocument();
+    const languageGroup = screen.getByRole("group", { name: "Spellcheck languages" });
+    expect(languageGroup.querySelectorAll('input[type="checkbox"]')).toHaveLength(8);
+    expect(screen.getByText("Japanese and Chinese have no spelling dictionaries.")).toBeInTheDocument();
+    expect(screen.queryByText("en")).not.toBeInTheDocument();
+    const english = screen.getByRole("checkbox", { name: "English" });
+    expect(english).toBeChecked();
+    await fireEvent.click(english);
+    expect(settingsState.settings.spellcheck.dictionaries).toEqual([]);
+
+    expect(screen.queryByRole("combobox", { name: "Suggestions" })).not.toBeInTheDocument();
+    const inline = screen.getByRole("checkbox", { name: "Show suggestions above misspelled words" });
+    await fireEvent.click(inline);
+    expect(settingsState.settings.spellcheck.inlineSuggestions).toBe(true);
+    expect(settingsState.settings.language).toBe("en");
+  });
+
+  it("shows all bundled languages when the backend language call fails", async () => {
+    mocks.invoke.mockImplementation(async (command: string, args?: { settings?: unknown }) => {
+      if (command === "get_settings" || command === "reset_settings") return structuredClone(mocks.base);
+      if (command === "save_settings") return args?.settings;
+      if (command === "list_creatable_formats") return [];
+      if (command === "spellcheck_languages") throw new Error("Unavailable");
+      return undefined;
+    });
+    mount();
+    await selectSection("Spellcheck");
+
+    const languageGroup = screen.getByRole("group", { name: "Spellcheck languages" });
+    await waitFor(() => expect(languageGroup.querySelectorAll('input[type="checkbox"]')).toHaveLength(8));
+    expect(screen.getByRole("checkbox", { name: "Russian" })).toBeInTheDocument();
+  });
+
+  it("searches spellcheck settings by localized language name", async () => {
+    mount();
+    const search = screen.getByRole("searchbox", { name: "Search settings" });
+    await fireEvent.input(search, { target: { value: "Russian" } });
+    expect(screen.getByRole("tab", { name: "Spellcheck" })).toBeInTheDocument();
+    await selectSection("Spellcheck");
+    expect(screen.getByRole("checkbox", { name: "Russian" })).toBeInTheDocument();
   });
 
   it("marks a changed value and removes the marker when restored", async () => {

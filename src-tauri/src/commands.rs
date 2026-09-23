@@ -18,9 +18,10 @@ use crate::{
     formats::{self, FormatCapabilities},
     messages::UserMessage,
     recent_files::{RecentFileEntry, RecentFilesState},
+    recovery::{FileFingerprint, RecoveryEntry, RecoverySnapshot, RecoveryStore},
     settings::{Settings, SettingsError, SettingsState},
     startup_trace,
-    windows::{self, AppState, FileSnapshot, PendingOpenData},
+    windows::{self, AppState, FileSnapshot, PendingFileRequest, PendingOpenData},
 };
 
 pub(crate) const MAX_IMAGE_BYTES: u64 = 16 * 1024 * 1024;
@@ -116,6 +117,53 @@ pub fn reveal_attachment_cache(app: AppHandle) -> Result<(), CommandError> {
     crate::attachments::reveal_attachment_cache(app)
 }
 
+#[tauri::command]
+pub async fn spellcheck_languages(
+    state: State<'_, crate::spellcheck::SpellcheckService>,
+) -> Result<Vec<crate::spellcheck::SpellLanguage>, String> {
+    let service = state.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || service.languages())
+        .await
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub async fn spellcheck_check(
+    state: State<'_, crate::spellcheck::SpellcheckService>,
+    text: String,
+    languages: Vec<String>,
+) -> Result<Vec<crate::spellcheck::Misspelling>, String> {
+    let service = state.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || service.check(text, languages))
+        .await
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub async fn spellcheck_suggest(
+    state: State<'_, crate::spellcheck::SpellcheckService>,
+    word: String,
+    languages: Vec<String>,
+    limit: u32,
+) -> Result<Vec<String>, String> {
+    let service = state.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || service.suggest(word, languages, limit))
+        .await
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub async fn spellcheck_add_word(
+    state: State<'_, crate::spellcheck::SpellcheckService>,
+    word: String,
+    languages: Vec<String>,
+) -> Result<(), String> {
+    let service = state.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || service.add_word(word, languages))
+        .await
+        .map_err(|error| error.to_string())
+}
+
 impl CommandError {
     fn log_internal_details(&self) {
         match self {
@@ -151,6 +199,7 @@ pub struct OpenedFile {
     pub encoding: String,
     pub bom: bool,
     pub line_ending: text_encoding::LineEnding,
+    pub base_fingerprint: FileFingerprint,
     pub format: FormatCapabilities,
     pub readonly: bool,
 }
@@ -160,6 +209,7 @@ pub struct OpenedFile {
 pub struct SaveResult {
     pub path: String,
     pub saved_at: String,
+    pub base_fingerprint: Option<FileFingerprint>,
     pub format: FormatCapabilities,
     pub lossy_warning: bool,
 }
@@ -244,18 +294,90 @@ pub fn open_file(
         encoding: decoded.encoding,
         bom: decoded.bom,
         line_ending: decoded.line_ending,
+        base_fingerprint: FileFingerprint::from_metadata(&metadata),
         format,
         readonly,
     })
 }
 
-/// Returns the file queued for this window during startup, consuming it so a
-/// simultaneous event and IPC fallback cannot open it twice.
+/// Returns the previous process's recovery snapshots to the first window only.
 #[tauri::command]
-pub fn take_pending_file(window: WebviewWindow, state: State<'_, AppState>) -> Option<String> {
-    state
-        .take_pending_file(window.label())
-        .map(|path| path.to_string_lossy().into_owned())
+pub fn take_recovery_entries(
+    window: WebviewWindow,
+    recovery: State<'_, RecoveryStore>,
+) -> Vec<RecoveryEntry> {
+    if window.label() != "main" {
+        return Vec::new();
+    }
+    recovery.list()
+}
+
+/// Persists one tab snapshot on a blocking worker thread.
+#[tauri::command]
+pub async fn write_recovery_snapshot(
+    window: WebviewWindow,
+    recovery: State<'_, RecoveryStore>,
+    snapshot: RecoverySnapshot,
+) -> Result<(), String> {
+    if snapshot.window_label != window.label() {
+        return Err("recovery window label does not match the caller".to_string());
+    }
+    let store = recovery.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || store.write(snapshot))
+        .await
+        .map_err(|error| error.to_string())?
+        .map(|_| ())
+        .map_err(|error| error.to_string())
+}
+
+/// Removes a tab snapshot after its document becomes clean or is discarded.
+#[tauri::command]
+#[allow(non_snake_case)]
+pub async fn delete_recovery_snapshot(
+    window: WebviewWindow,
+    recovery: State<'_, RecoveryStore>,
+    tabId: String,
+) -> Result<(), String> {
+    let label = window.label().to_string();
+    let store = recovery.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || store.delete_tab(&label, &tabId))
+        .await
+        .map_err(|error| error.to_string())?
+        .map_err(|error| error.to_string())
+}
+
+/// Removes a source snapshot after a recovered document has been journaled
+/// under its new tab id.
+#[tauri::command]
+pub async fn delete_recovery_entry(
+    recovery: State<'_, RecoveryStore>,
+    id: String,
+) -> Result<(), String> {
+    let store = recovery.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || store.delete_entry(&id))
+        .await
+        .map_err(|error| error.to_string())?
+        .map_err(|error| error.to_string())
+}
+
+/// Returns queued startup requests in order, consuming them once so the event
+/// and IPC fallback cannot permanently duplicate a launch batch.
+#[tauri::command]
+pub fn take_pending_file(
+    window: WebviewWindow,
+    state: State<'_, AppState>,
+) -> Vec<PendingFileRequest> {
+    state.take_pending_files(window.label())
+}
+
+/// Removes a pending startup fallback when the matching window event arrives.
+#[tauri::command]
+pub fn acknowledge_pending_file(
+    window: WebviewWindow,
+    state: State<'_, AppState>,
+    path: String,
+) {
+    state.acknowledge_pending_file(window.label(), Path::new(&path));
 }
 
 #[tauri::command]
@@ -327,12 +449,13 @@ pub fn save_file(
         .map_err(CommandError::Format)?;
     atomic_write::write_atomic(&path, &bytes).map_err(CommandError::AtomicWrite)?;
     state.track_file(&path, window.label());
-    if let Ok(metadata) = fs::metadata(&path) {
+    let base_fingerprint = fs::metadata(&path).ok().map(|metadata| {
         state.remember_file_snapshot(&path, &metadata);
-    }
+        FileFingerprint::from_metadata(&metadata)
+    });
     let _ = recent_files.add(&path.to_string_lossy());
 
-    Ok(save_result(path, format))
+    Ok(save_result(path, format, base_fingerprint))
 }
 
 #[allow(non_snake_case)]
@@ -392,12 +515,13 @@ pub async fn save_as(
     atomic_write::write_atomic(&path, &bytes).map_err(CommandError::AtomicWrite)?;
     state.watcher.watch(window.label(), &path);
     state.track_file(&path, window.label());
-    if let Ok(metadata) = fs::metadata(&path) {
+    let base_fingerprint = fs::metadata(&path).ok().map(|metadata| {
         state.remember_file_snapshot(&path, &metadata);
-    }
+        FileFingerprint::from_metadata(&metadata)
+    });
     let _ = recent_files.add(&path.to_string_lossy());
 
-    Ok(Some(save_result(path, format)))
+    Ok(Some(save_result(path, format, base_fingerprint)))
 }
 
 #[tauri::command]
@@ -586,10 +710,15 @@ fn map_settings_error(error: SettingsError) -> CommandError {
     }
 }
 
-fn save_result(path: PathBuf, format: FormatCapabilities) -> SaveResult {
+fn save_result(
+    path: PathBuf,
+    format: FormatCapabilities,
+    base_fingerprint: Option<FileFingerprint>,
+) -> SaveResult {
     SaveResult {
         path: path.to_string_lossy().into_owned(),
         saved_at: now_iso8601(),
+        base_fingerprint,
         lossy_warning: format.lossy,
         format,
     }

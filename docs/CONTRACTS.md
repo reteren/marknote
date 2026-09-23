@@ -47,12 +47,25 @@ formatId, suggestedName) returns an optional SaveResult. pick_file returns an
 optional path. new_document returns NewDocument. list_creatable_formats and
 format_for_extension expose the format registry. read_image(docPath, src)
 returns a validated local-image URL. open_in_new_window, reveal_in_explorer, and
-respond_to_close return unit. take_pending_file returns an optional queued
-path. get_settings, save_settings, reset_settings, get_resolved_language, and
-reveal_settings_file implement the settings contract.
+respond_to_close return unit. take_pending_file returns queued startup paths.
+take_recovery_entries returns journal snapshots to the first window;
+write_recovery_snapshot atomically persists one dirty tab; delete_recovery_snapshot
+removes a clean or closed tab; delete_recovery_entry removes a restored source
+after its new tab snapshot is durable. get_settings, save_settings, reset_settings,
+get_resolved_language, and reveal_settings_file implement the settings contract.
 
-OpenedFile contains path, text, encoding, BOM, lineEnding, FormatCapabilities,
-and readonly. SaveResult contains path, ISO savedAt, format, and lossyWarning.
+| Recovery command | Result |
+| --- | --- |
+| `take_recovery_entries` | `()` → `[RecoveryEntry]` (first window only) |
+| `write_recovery_snapshot` | `(snapshot)` → `()` |
+| `delete_recovery_snapshot` | `(tabId)` → `()` |
+| `delete_recovery_entry` | `(id)` → `()` |
+
+OpenedFile contains path, text, encoding, BOM, lineEnding, the file's base
+fingerprint, FormatCapabilities, and readonly. SaveResult contains path, ISO
+savedAt, the post-save fingerprint, format, and lossyWarning. Recovery entries
+include version, path, title, formatId, encoding, lineEnding, text, updatedAt,
+and the base fingerprint used to avoid overwriting a changed file.
 NewDocument contains template text and format.
 
 The open-file-request event carries a path. During first startup events are not
@@ -92,6 +105,25 @@ document path plus source, and clears the cache on document change.
 | `attachment_cache_stats` | `()` → `{ files, bytes, path }` |
 | `clear_attachment_cache` | `()` → `{ files, bytes }` |
 | `reveal_attachment_cache` | `()` → `()` |
+
+### Spellcheck IPC additions
+
+| Command | Result |
+| --- | --- |
+| `spellcheck_languages` | `()` → `[{ tag, name }]` |
+| `spellcheck_check` | `(text, languages)` → `[{ from, to }]` |
+| `spellcheck_suggest` | `(word, languages, limit)` → `[string]` |
+| `spellcheck_add_word` | `(word, languages)` → `()` |
+
+Spellcheck language tags are the bundled set `en`, `ru`, `de`, `es`, `fr`,
+`it`, `pt`, and `ar`, in that order. Check ranges use UTF-16 code units.
+Words are checked only against selected dictionaries for their script and are
+correct when any such dictionary accepts them; unsupported tags are ignored.
+Suggestions merge matching-script dictionaries, preserve input capitalization,
+and keep candidates within the best Damerau-Levenshtein distance (plus one for
+words of at least seven letters), capped at distance three and the requested
+upper bound. Added words are saved in the application config directory by
+language.
 
 ## 6. Shared rules
 
