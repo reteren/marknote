@@ -28,7 +28,7 @@ import { onMount, tick } from "svelte";
   } from "./editor/createEditor";
   import { applyEditorSettings } from "./editor/settings";
   import { settingsState } from "./state/settings.svelte";
-  import { dispatchSearchOpen } from "./editor/search";
+  import { correctMatchCentering, dispatchSearchOpen } from "./editor/search";
   import { createAutosave, saveAs as saveAsFile } from "./state/autosave";
   import { restoreRecoveryEntries } from "./state/recovery";
   import {
@@ -309,6 +309,7 @@ import { EditorView, type EditorView as EditorViewType } from "@codemirror/view"
       selection: EditorSelection.cursor(line.from),
       effects: EditorView.scrollIntoView(line.from, { y: "center" }),
     });
+    correctMatchCentering(view, line.from);
     view.focus();
     goToLineOpen = false;
   }

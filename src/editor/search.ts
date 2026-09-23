@@ -22,6 +22,39 @@ export function centerMatch(from: number, to: number) {
   return EditorView.scrollIntoView(EditorSelection.range(from, to), { y: "center" });
 }
 
+const CENTER_TOLERANCE_PX = 2;
+const CENTER_CORRECTION_PASSES = 4;
+
+/**
+ * CodeMirror scrolls to a far-away match using estimated heights for lines it
+ * has not drawn yet, and those estimates can be off by hundreds of pixels in a
+ * long document, which left matches above the viewport. Once the match is
+ * rendered, measure its real position and scroll again until it is centered.
+ */
+export function correctMatchCentering(view: EditorView, pos: number, passes = CENTER_CORRECTION_PASSES): void {
+  // Wait a frame so CodeMirror has applied its own scroll and drawn the match;
+  // measuring earlier reads the pre-scroll position and overshoots.
+  const schedule = typeof requestAnimationFrame === "function"
+    ? requestAnimationFrame
+    : (callback: FrameRequestCallback) => setTimeout(() => callback(0), 16);
+  schedule(() => {
+    if (!view.dom?.isConnected) return;
+    const coords = view.coordsAtPos(pos);
+    if (coords) {
+      const scroller = view.scrollDOM.getBoundingClientRect();
+      const delta = (coords.top + coords.bottom) / 2 - (scroller.top + scroller.height / 2);
+      if (Math.abs(delta) <= CENTER_TOLERANCE_PX) return;
+      view.scrollDOM.scrollTop += delta;
+    }
+    if (passes > 1) correctMatchCentering(view, pos, passes - 1);
+  });
+}
+
+function centerMatchInView(view: EditorView, from: number, to: number) {
+  correctMatchCentering(view, from);
+  return centerMatch(from, to);
+}
+
 export type SearchQueryConfig = {
   search: string;
   replace?: string;
@@ -170,7 +203,7 @@ export function revealMatchNearCaret(view: EditorView, queryConfig: SearchQueryC
   if (matches.length === 0) return;
   const caret = view.state.selection.main.from;
   const match = matches.find((m) => m.from >= caret) ?? matches[0];
-  view.dispatch({ effects: centerMatch(match.from, match.to) });
+  view.dispatch({ effects: centerMatchInView(view, match.from, match.to) });
 }
 
 /**
@@ -302,8 +335,12 @@ export function dispatchSearchOpen(view: EditorView, replaceMode = false): void 
 }
 
 export function dispatchSearchClose(view: EditorView): void {
-  if (typeof window !== "undefined") {
-    view.dom?.dispatchEvent(new CustomEvent(SEARCH_CLOSE_EVENT, { bubbles: true }));
+  if (typeof window === "undefined") return;
+  // One event only: a bubbling event from the editor already reaches window
+  // listeners, and sending a second copy to window doubled every close.
+  if (view.dom?.isConnected) {
+    view.dom.dispatchEvent(new CustomEvent(SEARCH_CLOSE_EVENT, { bubbles: true }));
+  } else {
     window.dispatchEvent(new CustomEvent(SEARCH_CLOSE_EVENT));
   }
 }
@@ -332,7 +369,7 @@ export const searchCommands = {
 
     view.dispatch({
       selection: EditorSelection.single(next.from, next.to),
-      effects: centerMatch(next.from, next.to),
+      effects: centerMatchInView(view, next.from, next.to),
       userEvent: "select.search",
     });
     return true;
@@ -348,7 +385,7 @@ export const searchCommands = {
 
     view.dispatch({
       selection: EditorSelection.single(prev.from, prev.to),
-      effects: centerMatch(prev.from, prev.to),
+      effects: centerMatchInView(view, prev.from, prev.to),
       userEvent: "select.search",
     });
     return true;
@@ -387,7 +424,7 @@ export const searchCommands = {
       view.dispatch({
         changes,
         selection: newSelection,
-        effects: centerMatch(newSelection.main.from, newSelection.main.to),
+        effects: centerMatchInView(view, newSelection.main.from, newSelection.main.to),
         userEvent: "input.replace",
       });
       return true;
@@ -427,7 +464,7 @@ export function marknoteSearch(): Extension {
   return [
     search({
       top: true,
-      scrollToMatch: (range) => centerMatch(range.from, range.to),
+      scrollToMatch: (range, view) => centerMatchInView(view, range.from, range.to),
       createPanel: () => ({
         dom: typeof document !== "undefined" ? document.createElement("span") : ({} as HTMLElement),
       }),

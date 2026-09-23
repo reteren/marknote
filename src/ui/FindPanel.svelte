@@ -120,6 +120,10 @@
   }
 
   export function close(): void {
+    // searchCommands.close broadcasts SEARCH_CLOSE_EVENT, which this panel
+    // listens to and answers with close() again. Without this guard every close
+    // recursed until the stack overflowed and froze the window on Escape.
+    if (!isOpen) return;
     if (debounceTimer) {
       clearTimeout(debounceTimer);
       debounceTimer = null;

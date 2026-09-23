@@ -85,6 +85,29 @@ describe("FindPanel interaction contract", () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
+  it("closes once on Escape even though closing broadcasts the close event back to the panel", async () => {
+    const view = createView();
+    const onClose = vi.fn();
+    // The real searchCommands.close announces the close on window; the panel
+    // listens to that event. This used to recurse without end and freeze the app.
+    searchMock.close.mockClear();
+    searchMock.close.mockImplementation(() => {
+      window.dispatchEvent(new CustomEvent("marknote:search-close"));
+      window.dispatchEvent(new CustomEvent("marknote:search-close"));
+    });
+    try {
+      render(FindPanel, { props: { view, isOpen: true, onClose } });
+      const input = document.querySelector<HTMLInputElement>(`input[aria-label="${t("search.queryLabel")}"]`)!;
+      await fireEvent.keyDown(input, { key: "Escape" });
+      await settle();
+      expect(document.querySelector('[role="dialog"]')).toBeNull();
+      expect(searchMock.close).toHaveBeenCalledTimes(1);
+      expect(onClose).toHaveBeenCalledTimes(1);
+    } finally {
+      searchMock.close.mockReset();
+    }
+  });
+
   it("updates the counter and toggles case, whole-word, and regexp modes", async () => {
     const view = createView();
     render(FindPanel, { props: { view, isOpen: true } });

@@ -1,7 +1,7 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { EditorState } from "@codemirror/state";
 import type { EditorView } from "@codemirror/view";
-import { centerMatch, revealMatchNearCaret } from "../src/editor/search";
+import { centerMatch, correctMatchCentering, revealMatchNearCaret } from "../src/editor/search";
 
 type ScrollTarget = { range: { from: number; to: number }; y: string };
 
@@ -33,5 +33,45 @@ describe("search scrolling", () => {
     revealMatchNearCaret(view, { search: "alpha" });
 
     expect(dispatched[0]!.effects.value.range.from).toBe(0);
+  });
+});
+
+describe("measured centering correction", () => {
+  it("scrolls by the measured offset after CodeMirror's own scroll, until the match is centered", () => {
+    vi.useFakeTimers();
+    try {
+      let lineMid = 900;
+      let scrollTop = 0;
+      const view = {
+        dom: { isConnected: true },
+        scrollDOM: {
+          getBoundingClientRect: () => ({ top: 100, height: 600 }),
+          get scrollTop() { return scrollTop; },
+          set scrollTop(value: number) { lineMid -= value - scrollTop; scrollTop = value; },
+        },
+        coordsAtPos: () => ({ top: lineMid - 10, bottom: lineMid + 10 }),
+      } as unknown as EditorView;
+
+      correctMatchCentering(view, 42);
+      // Nothing is measured synchronously: CodeMirror has not scrolled yet.
+      expect(scrollTop).toBe(0);
+      vi.runAllTimers();
+
+      expect(lineMid).toBe(400);
+      expect(scrollTop).toBe(500);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("stops quietly when the editor is gone", () => {
+    vi.useFakeTimers();
+    try {
+      const view = { dom: { isConnected: false }, coordsAtPos: () => { throw new Error("must not measure"); } } as unknown as EditorView;
+      correctMatchCentering(view, 1);
+      expect(() => vi.runAllTimers()).not.toThrow();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
