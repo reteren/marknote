@@ -200,7 +200,10 @@ type DocumentState = {
 The same field controls the appearance of the `Save` and `Save as…` buttons.
 An independent recovery journal atomically snapshots every dirty tab, including
 untitled and autosave-disabled tabs, after 300 ms idle with a one-second max wait;
-startup restores entries only when their saved file fingerprint still matches.
+startup restores a matching path as a dirty file tab and opens a changed or
+missing path as an untitled “(recovered)” tab. Source entries are removed only
+after the replacement tab snapshot is durable; clean and closed tabs are removed
+from the journal so a normal quit leaves it empty.
 
 ---
 

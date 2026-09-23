@@ -59,6 +59,10 @@ function makeDirty(formatValue = markdownFormat): void {
   setDocumentText("edited");
 }
 
+function saveCalls(): typeof tauri.invoke.mock.calls {
+  return tauri.invoke.mock.calls.filter(([command]) => command === "save_file");
+}
+
 async function settle(): Promise<void> {
   await Promise.resolve();
   await Promise.resolve();
@@ -116,7 +120,7 @@ describe("document state and autosave", () => {
 
     expect(documentState.path).toBeNull();
     expect(documentState.dirty).toBe(true);
-    expect(tauri.invoke).not.toHaveBeenCalled();
+    expect(saveCalls()).toHaveLength(0);
     controller.dispose();
   });
 
@@ -132,7 +136,7 @@ describe("document state and autosave", () => {
     emit("save-before-close");
     await settle();
 
-    expect(tauri.invoke).not.toHaveBeenCalled();
+    expect(saveCalls()).toHaveLength(0);
     expect(documentState.dirty).toBe(true);
     controller.dispose();
   });
@@ -145,10 +149,19 @@ describe("document state and autosave", () => {
 
     await controller.flush(true);
 
-    expect(tauri.invoke).not.toHaveBeenCalled();
+    expect(saveCalls()).toHaveLength(0);
     expect(documentState.readonly).toBe(true);
     expect(documentState.saveStatus).toBe("readonly");
     controller.dispose();
+  });
+
+  it("marks a file clean when its text is reverted to the loaded version", () => {
+    replaceDocument(opened({ text: "saved text" }));
+    setDocumentText("edited text");
+    expect(documentState.dirty).toBe(true);
+
+    setDocumentText("saved text");
+    expect(documentState.dirty).toBe(false);
   });
 
   it("waits two seconds after the last edit and resets the idle timer", async () => {
@@ -158,18 +171,18 @@ describe("document state and autosave", () => {
     controller.schedule();
     vi.advanceTimersByTime(1_999);
     await settle();
-    expect(tauri.invoke).not.toHaveBeenCalled();
+    expect(saveCalls()).toHaveLength(0);
 
     setDocumentText("edited again");
     controller.schedule();
     vi.advanceTimersByTime(1);
     await settle();
-    expect(tauri.invoke).not.toHaveBeenCalled();
+    expect(saveCalls()).toHaveLength(0);
     vi.advanceTimersByTime(1_999);
     await settle();
 
-    expect(tauri.invoke).toHaveBeenCalledTimes(1);
-    expect(tauri.invoke.mock.calls[0]?.[1]).toMatchObject({ text: "edited again" });
+    expect(saveCalls()).toHaveLength(1);
+    expect(saveCalls()[0]?.[1]).toMatchObject({ text: "edited again" });
     controller.dispose();
   });
 
@@ -182,7 +195,7 @@ describe("document state and autosave", () => {
     tauri.focusHandler?.({ payload: false });
     await settle();
 
-    expect(tauri.invoke).toHaveBeenCalledTimes(1);
+    expect(saveCalls()).toHaveLength(1);
     controller.dispose();
   });
 
@@ -195,7 +208,7 @@ describe("document state and autosave", () => {
     emit("save-before-close");
     await settle();
 
-    expect(tauri.invoke).not.toHaveBeenCalled();
+    expect(saveCalls()).toHaveLength(0);
     controller.dispose();
   });
 
@@ -209,17 +222,17 @@ describe("document state and autosave", () => {
     const controller = createAutosave();
 
     const first = controller.flush();
-    expect(tauri.invoke).toHaveBeenCalledTimes(1);
+    expect(saveCalls()).toHaveLength(1);
     setDocumentText("second edit while saving");
     const second = controller.flush();
-    expect(tauri.invoke).toHaveBeenCalledTimes(1);
+    expect(saveCalls()).toHaveLength(1);
 
     resolveFirst(result());
     await Promise.all([first, second]);
     await settle();
 
-    expect(tauri.invoke).toHaveBeenCalledTimes(2);
-    expect(tauri.invoke.mock.calls[1]?.[1]).toMatchObject({ text: "second edit while saving" });
+    expect(saveCalls()).toHaveLength(2);
+    expect(saveCalls()[1]?.[1]).toMatchObject({ text: "second edit while saving" });
     expect(documentState.dirty).toBe(false);
     controller.dispose();
   });
@@ -289,7 +302,7 @@ describe("document state and autosave", () => {
 
     expect(documentState.externalChange).toBe("changed");
     expect(documentState.externalChangePath).toBe("C:\\notes\\draft.md");
-    expect(tauri.invoke).not.toHaveBeenCalled();
+    expect(saveCalls()).toHaveLength(0);
     clearExternalChange();
     controller.dispose();
   });
@@ -317,7 +330,7 @@ describe("document state and autosave", () => {
     await settle();
 
     expect(documentState.externalChange).toBe("none");
-    expect(tauri.invoke).not.toHaveBeenCalled();
+    expect(saveCalls()).toHaveLength(0);
     controller.dispose();
   });
 

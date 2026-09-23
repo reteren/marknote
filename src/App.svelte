@@ -87,6 +87,7 @@ import { EditorView, type EditorView as EditorViewType } from "@codemirror/view"
   let openingPathKey: string | null = null;
   let fileOpenQueue: Promise<void> = Promise.resolve();
   let recoveryRestoreReady = false;
+  let startupHasRecoveredDocuments = false;
   const deferredOpenRequests: Array<{ path: string; openInTab: boolean }> = [];
   let unlistenDrop: UnlistenFn | undefined;
   let lastDropKey: string | null = null;
@@ -405,6 +406,7 @@ import { EditorView, type EditorView as EditorViewType } from "@codemirror/view"
       deferredOpenRequests.push({ path, openInTab });
       return;
     }
+    const shouldOpenInTab = openInTab || startupHasRecoveredDocuments;
     fileOpenQueue = fileOpenQueue
       .then(async () => {
         try {
@@ -412,7 +414,7 @@ import { EditorView, type EditorView as EditorViewType } from "@codemirror/view"
         } catch {
           // The startup fallback may already have been consumed by IPC.
         }
-        if (openInTab) await openFileInTab(path);
+        if (shouldOpenInTab) await openFileInTab(path);
         else await openFile(path);
       })
       .catch(reportError);
@@ -525,12 +527,7 @@ import { EditorView, type EditorView as EditorViewType } from "@codemirror/view"
   }
 
   function isTabDirty(tab: WorkspaceTab): boolean {
-    const doc = tab.document;
-    if (doc.readonly || !doc.format.editable) return false;
-    if (doc.path === null) {
-      return doc.dirty && doc.text.length > 0;
-    }
-    return doc.dirty;
+    return tab.document.dirty;
   }
 
   function getTabsRequiringPrompt(): WorkspaceTab[] {
@@ -569,6 +566,9 @@ import { EditorView, type EditorView as EditorViewType } from "@codemirror/view"
     }
     const dirtyTabs = getTabsRequiringPrompt();
     if (dirtyTabs.length === 0) {
+      for (const tab of workspace.tabs) {
+        await autosaveController?.discardRecovery(tab.id);
+      }
       await respondToNativeClose(true);
       return;
     }
@@ -594,6 +594,9 @@ import { EditorView, type EditorView as EditorViewType } from "@codemirror/view"
     }
     const dirtyTabs = getTabsRequiringPrompt();
     if (dirtyTabs.length === 0) {
+      for (const tab of workspace.tabs) {
+        await autosaveController?.discardRecovery(tab.id);
+      }
       await closeWindowAfterDecision();
       return;
     }
@@ -675,6 +678,7 @@ import { EditorView, type EditorView as EditorViewType } from "@codemirror/view"
       return;
     }
 
+    await autosaveController?.discardRecovery(id);
     tabEditorStates.delete(id);
     const wasActive = workspace.activeId === id;
     closeTab(id);
@@ -726,7 +730,8 @@ import { EditorView, type EditorView as EditorViewType } from "@codemirror/view"
       }
     }
 
-    for (const tab of tabsToProcess) {
+    const tabsToClear = source === "tab" ? tabsToProcess : workspace.tabs;
+    for (const tab of tabsToClear) {
       await autosaveController?.discardRecovery(tab.id);
     }
 
@@ -1216,10 +1221,16 @@ import { EditorView, type EditorView as EditorViewType } from "@codemirror/view"
           unlistenDrop?.();
           return;
         }
-        const recoveredIds = await restoreRecoveryEntries(
-          (tabId) => autosaveController?.captureRecoveryNow(tabId) ?? Promise.resolve(false),
-        );
+        let recoveredIds: TabId[] = [];
+        try {
+          recoveredIds = await restoreRecoveryEntries(
+            (tabId) => autosaveController?.captureRecoveryNow(tabId) ?? Promise.resolve(false),
+          );
+        } catch (error) {
+          reportError(error);
+        }
         if (recoveredIds.length > 0) {
+          startupHasRecoveredDocuments = true;
           recoveryNoticeCount = recoveredIds.length;
           startScreenDismissed = true;
           const view = editorView;
@@ -1246,6 +1257,7 @@ import { EditorView, type EditorView as EditorViewType } from "@codemirror/view"
         const pendingFormat = await invoke<string | null>("take_pending_format");
         if (pendingFormat) {
           try {
+            if (startupHasRecoveredDocuments) handleOpenNewTab();
             const created = await invoke<NewDocument>("new_document", { formatId: pendingFormat });
             resetDocument(created.format, created.text);
             startScreenDismissed = true;

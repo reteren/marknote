@@ -8,11 +8,12 @@ import {
   tabIdForDocument,
   type DocumentState,
   type ExternalChangeStatus,
+  type FileFingerprint,
   type LineEnding,
   type SaveStatus,
 } from "./workspace.svelte";
 
-export type { DocumentState, ExternalChangeStatus, LineEnding, SaveStatus } from "./workspace.svelte";
+export type { DocumentState, ExternalChangeStatus, FileFingerprint, LineEnding, SaveStatus } from "./workspace.svelte";
 export { resolveNewDocumentEncoding, resolveNewDocumentLineEnding } from "./workspace.svelte";
 
 export type OpenedFile = {
@@ -21,6 +22,7 @@ export type OpenedFile = {
   encoding: string;
   bom: boolean;
   lineEnding: LineEnding;
+  baseFingerprint?: FileFingerprint | null;
   format: FormatCapabilities;
   readonly: boolean;
 };
@@ -28,6 +30,7 @@ export type OpenedFile = {
 export type SaveResult = {
   path: string;
   savedAt: string;
+  baseFingerprint?: FileFingerprint | null;
   format: FormatCapabilities;
 };
 
@@ -68,10 +71,10 @@ export const documentState: DocumentState = new Proxy(documentProxyTarget, {
 });
 
 /** UI labels derived from the same document identity stored in DocumentState. */
-export function getDocumentTitle(state: Pick<DocumentState, "path" | "format">): string {
-  const name = state.path
+export function getDocumentTitle(state: Pick<DocumentState, "path" | "format" | "titleOverride">): string {
+  const name = state.titleOverride ?? (state.path
     ? state.path.split(/[\\/]/u).pop() || state.path
-    : `Untitled.${state.format.defaultExtension}`;
+    : `Untitled.${state.format.defaultExtension}`);
   return `${name} — MarkNote`;
 }
 
@@ -84,17 +87,23 @@ export function getClosePromptMessage(state: Pick<DocumentState, "path">): strin
 export function replaceDocument(opened: OpenedFile, target: DocumentState = documentState): void {
   const readonly = opened.readonly || !opened.format.editable;
   target.path = opened.path;
+  target.titleOverride = null;
   target.format = opened.format;
   target.saveStatus = readonly ? "readonly" : "saved";
   target.lastSavedAt = null;
   target.encoding = opened.encoding;
   target.bom = opened.bom;
   target.lineEnding = opened.lineEnding;
+  target.baseFingerprint = opened.baseFingerprint ?? null;
+  target.savedText = opened.text;
+  target.savedFormatId = opened.format.id;
+  target.recoverySourceId = null;
   target.text = opened.text;
   target.dirty = false;
   target.readonly = readonly;
   target.externalChange = "none";
   target.externalChangePath = null;
+  notifyTargetChanged(target);
 }
 
 export function resetDocument(
@@ -104,6 +113,7 @@ export function resetDocument(
   target: DocumentState = documentState,
 ): void {
   target.path = null;
+  target.titleOverride = null;
   target.format = format;
   target.saveStatus = "unsaved";
   target.lastSavedAt = null;
@@ -111,12 +121,17 @@ export function resetDocument(
   target.encoding = options?.encoding ?? resolveNewDocumentEncoding(files?.newDocumentEncoding);
   target.bom = false;
   target.lineEnding = options?.lineEnding ?? resolveNewDocumentLineEnding(files?.newDocumentLineEnding);
+  target.baseFingerprint = null;
+  target.savedText = "";
+  target.savedFormatId = null;
+  target.recoverySourceId = null;
   target.text = text;
   target.dirty = text.length > 0;
   target.readonly = !format.editable;
   target.saveStatus = target.readonly ? "readonly" : "unsaved";
   target.externalChange = "none";
   target.externalChangePath = null;
+  notifyTargetChanged(target);
 }
 
 /**
@@ -124,26 +139,31 @@ export function resetDocument(
  * A saved document becomes dirty because the new type requires a separate Save as.
  */
 export function setDocumentFormat(format: FormatCapabilities, target: DocumentState = documentState): void {
-  const changed = target.format.id !== format.id;
   target.format = format;
   target.readonly = !format.editable;
+  target.dirty = target.path === null
+    ? target.text.length > 0
+    : target.text !== target.savedText || format.id !== target.savedFormatId;
 
   if (target.readonly) {
     target.saveStatus = "readonly";
+    notifyTargetChanged(target);
     return;
   }
 
-  if (changed && target.path !== null) target.dirty = true;
   target.saveStatus = target.dirty || target.path === null ? "unsaved" : "saved";
+  notifyTargetChanged(target);
 }
 
 export function setDocumentText(text: string, target: DocumentState = documentState): void {
   if (text === target.text) return;
 
   target.text = text;
-  target.dirty = true;
+  target.dirty = target.path === null
+    ? text.length > 0
+    : text !== target.savedText || target.format.id !== target.savedFormatId;
   if (!target.readonly) {
-    target.saveStatus = "unsaved";
+    target.saveStatus = target.path !== null && !target.dirty ? "saved" : "unsaved";
   }
   const tabId = target === documentState ? activeTab().id : tabIdForDocument(target);
   if (tabId) notifyDocumentChanged(tabId);
@@ -159,7 +179,12 @@ export function markSaved(
   target: DocumentState = documentState,
 ): void {
   target.path = result.path;
+  target.titleOverride = null;
   target.format = result.format;
+  target.baseFingerprint = result.baseFingerprint ?? null;
+  target.savedText = snapshotText;
+  target.savedFormatId = result.format.id;
+  target.recoverySourceId = null;
   target.lastSavedAt = new Date(result.savedAt);
   target.saveStatus = !result.format.editable
     ? "readonly"
@@ -170,6 +195,7 @@ export function markSaved(
   target.readonly = !result.format.editable;
   target.externalChange = "none";
   target.externalChangePath = null;
+  notifyTargetChanged(target);
 }
 
 export function markSaveFailed(target: DocumentState = documentState): void {
@@ -199,6 +225,11 @@ export function clearExternalChange(target: DocumentState = documentState): void
 
 function samePath(left: string, right: string): boolean {
   return left.replaceAll("/", "\\").toLowerCase() === right.replaceAll("/", "\\").toLowerCase();
+}
+
+function notifyTargetChanged(target: DocumentState): void {
+  const tabId = target === documentState ? activeTab().id : tabIdForDocument(target);
+  if (tabId) notifyDocumentChanged(tabId);
 }
 
 /**

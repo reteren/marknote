@@ -35,7 +35,7 @@ const defaultSettings = () => ({
     newDocumentFormat: "markdown", newDocumentEncoding: "utf8", newDocumentLineEnding: "system",
     trimTrailingSpaces: false, finalNewline: false,
   },
-  windows: { rememberSizeAndPosition: true, startupAction: "startScreen", raiseExistingWindow: true },
+  windows: { rememberSizeAndPosition: true, startupAction: "startScreen", raiseExistingWindow: true, openFilesInTabs: false },
 });
 
 describe("translation fallback and formatting", () => {

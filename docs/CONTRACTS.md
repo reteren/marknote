@@ -33,8 +33,8 @@ encoding, line ending, and BOM.
 
 ## 3. Atomic writes and watcher
 
-write_atomic writes a temporary file in the same directory and renames it over
-the target; it never opens the target directly for writing. FileWatcher watches
+write_atomic writes a temporary file in the same directory, flushes it to disk,
+and replaces the target without opening the target directly for writing. FileWatcher watches
 a path for a window, removes a watch, and suppresses our own write for about
 1.5 seconds. Events are file-changed-externally and file-deleted, each carrying
 a path string.

@@ -65,10 +65,17 @@ fn replace_existing(temp_path: &Path, target_path: &Path) -> io::Result<()> {
 
         // Replace the target through Win32 MoveFileExW without deleting it first.
         use windows_sys::Win32::Foundation::GetLastError;
-        use windows_sys::Win32::Storage::FileSystem::{MoveFileExW, MOVEFILE_REPLACE_EXISTING};
+        use windows_sys::Win32::Storage::FileSystem::{
+            MoveFileExW, MOVEFILE_REPLACE_EXISTING, MOVEFILE_WRITE_THROUGH,
+        };
 
-        let replaced =
-            unsafe { MoveFileExW(source.as_ptr(), target.as_ptr(), MOVEFILE_REPLACE_EXISTING) };
+        let replaced = unsafe {
+            MoveFileExW(
+                source.as_ptr(),
+                target.as_ptr(),
+                MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH,
+            )
+        };
         if replaced == 0 {
             let error = unsafe { GetLastError() };
             return Err(io::Error::from_raw_os_error(error as i32));
@@ -78,7 +85,9 @@ fn replace_existing(temp_path: &Path, target_path: &Path) -> io::Result<()> {
 
     #[cfg(not(windows))]
     {
-        fs::rename(temp_path, target_path)
+        fs::rename(temp_path, target_path)?;
+        let parent = target_path.parent().unwrap_or_else(|| Path::new("."));
+        OpenOptions::new().read(true).open(parent)?.sync_all()
     }
 }
 

@@ -14,6 +14,7 @@ import {
   type SaveResult,
 } from "./document.svelte";
 import { settingsState, type Settings } from "./settings.svelte";
+import { createRecoveryJournal } from "./recovery";
 import {
   subscribeWorkspace,
   tabById,
@@ -31,6 +32,9 @@ export type AutosaveController = {
   flush: (force?: boolean, tabId?: TabId) => Promise<SaveResult | null>;
   /** Flush every dirty tab in this window (used by close-all flows). */
   flushAll: (force?: boolean) => Promise<SaveResult | null>;
+  /** Persist or remove recovery data independently of the autosave setting. */
+  captureRecoveryNow: (tabId: TabId) => Promise<boolean>;
+  discardRecovery: (tabId: TabId) => Promise<void>;
   dispose: () => void;
 };
 
@@ -116,6 +120,11 @@ export function createAutosave(options: AutosaveOptions = {}): AutosaveControlle
     return tabById(tabId)?.document ?? null;
   };
 
+  const recoveryJournal = createRecoveryJournal({
+    getState: (tabId) => stateFor(tabId),
+    onError: (error, tabId) => options.onError?.(error, tabId),
+  });
+
   const clearTimer = (tabId: string): void => {
     const runtime = runtimes.get(tabId);
     if (!runtime) return;
@@ -175,6 +184,7 @@ export function createAutosave(options: AutosaveOptions = {}): AutosaveControlle
           lineEnding: beforeSave.lineEnding,
         });
         markSaved(result, beforeSave.text, current);
+        recoveryJournal.schedule(tabId);
         // The legacy App callback updates the live editor path.  Restrict it
         // to the active tab so an inactive save cannot retarget that editor;
         // the tab document itself is already updated above.
@@ -288,13 +298,17 @@ export function createAutosave(options: AutosaveOptions = {}): AutosaveControlle
         if (event.type === "closed") {
           clearTimer(event.id);
           runtimes.delete(event.id);
+          void recoveryJournal.closed(event.id);
         } else if (event.type === "changed") {
           schedule(event.id);
+          recoveryJournal.schedule(event.id);
         } else {
           scheduleUnscheduled();
+          if (event.type === "opened") recoveryJournal.schedule(event.id);
         }
       });
       scheduleAll();
+      recoveryJournal.scheduleAll(tabIds());
     }
     try {
       const currentWindow = getCurrentWindow();
@@ -317,6 +331,7 @@ export function createAutosave(options: AutosaveOptions = {}): AutosaveControlle
   const dispose = (): void => {
     disposed = true;
     for (const tabId of runtimes.keys()) clearTimer(tabId);
+    recoveryJournal.dispose();
     workspaceUnsubscribe?.();
     workspaceUnsubscribe = undefined;
     globalThis.removeEventListener("blur", handleBlur);
@@ -368,6 +383,8 @@ export function createAutosave(options: AutosaveOptions = {}): AutosaveControlle
       }
       return result;
     },
+    captureRecoveryNow: (tabId) => recoveryJournal.writeNow(tabId),
+    discardRecovery: (tabId) => recoveryJournal.discard(tabId),
     dispose,
   };
 }

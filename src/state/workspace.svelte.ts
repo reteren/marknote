@@ -11,16 +11,22 @@ export type TabId = string;
 export type LineEnding = "lf" | "crlf";
 export type SaveStatus = "unsaved" | "pending" | "saved" | "readonly";
 export type ExternalChangeStatus = "none" | "changed" | "deleted";
+export type FileFingerprint = { size: number; modified: string | null };
 
 /** The complete document metadata and buffer owned by one workspace tab. */
 export type DocumentState = {
   path: string | null;
+  titleOverride: string | null;
   format: FormatCapabilities;
   saveStatus: SaveStatus;
   lastSavedAt: Date | null;
   encoding: string;
   bom: boolean;
   lineEnding: LineEnding;
+  baseFingerprint: FileFingerprint | null;
+  savedText: string;
+  savedFormatId: string | null;
+  recoverySourceId: string | null;
   text: string;
   dirty: boolean;
   readonly: boolean;
@@ -56,12 +62,17 @@ export function resolveNewDocumentEncoding(preference?: NewDocumentEncoding): st
 function defaultDocument(): DocumentState {
   return {
     path: null,
+    titleOverride: null,
     format: markdownFormat,
     saveStatus: "unsaved",
     lastSavedAt: null,
     encoding: resolveNewDocumentEncoding(settingsState?.settings?.files?.newDocumentEncoding),
     bom: false,
     lineEnding: resolveNewDocumentLineEnding(settingsState?.settings?.files?.newDocumentLineEnding),
+    baseFingerprint: null,
+    savedText: "",
+    savedFormatId: null,
+    recoverySourceId: null,
     text: "",
     dirty: false,
     readonly: false,
@@ -73,9 +84,15 @@ function defaultDocument(): DocumentState {
 /** Creates a complete tab document while keeping omitted fields at defaults. */
 export function createDocumentState(overrides: Partial<DocumentState> = {}): DocumentState {
   const document = { ...defaultDocument(), ...overrides };
+  if (overrides.path != null) {
+    if (overrides.savedText === undefined) document.savedText = document.text;
+    if (overrides.savedFormatId === undefined) document.savedFormatId = document.format.id;
+  }
   if (overrides.readonly === undefined) document.readonly = !document.format.editable;
   if (overrides.dirty === undefined) {
-    document.dirty = document.path === null && document.text.length > 0;
+    document.dirty = document.path === null
+      ? document.text.length > 0
+      : document.text !== document.savedText || document.format.id !== document.savedFormatId;
   }
   if (overrides.saveStatus === undefined) {
     document.saveStatus = document.readonly
@@ -181,11 +198,13 @@ export function activateTab(id: TabId): void {
 /** Returns the display name and format label shown by the tab strip. */
 export function tabLabel(tab: WorkspaceTab): { name: string; format: string } {
   const document = tab.document;
-  const name = document.path
+  const hasTitleOverride = document.titleOverride !== null;
+  const name = document.titleOverride ?? (document.path
     ? document.path.split(/[\\/]/u).pop() || document.path
-    : document.text.trim().replace(/\s+/gu, " ").slice(0, 48) || "Untitled";
+    : document.text.trim().replace(/\s+/gu, " ").slice(0, 48) || "Untitled");
   const ext = document.format.defaultExtension?.trim();
-  const format = ext ? `.${ext.replace(/^\./u, "")}` : (document.format.label || document.format.id);
+  const format = hasTitleOverride
+    ? ""
+    : ext ? `.${ext.replace(/^\./u, "")}` : (document.format.label || document.format.id);
   return { name, format };
 }
-

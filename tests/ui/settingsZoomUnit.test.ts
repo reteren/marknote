@@ -10,7 +10,7 @@ const mocks = vi.hoisted(() => {
     editor: { fontFamily: "system-serif", fontSize: 15, zoomPercent: 170, columnWidth: "normal", tabWidth: 4, insertSpaces: true, softWrap: true, showInvisibles: false, lineNumbers: false },
     livePreview: { enabled: true, revealMarkup: "cursor", renderFormulas: true, renderImages: true, maxImageWidth: "column", disableAboveBytes: 5 * 1024 * 1024 },
     files: { autosave: true, autosaveDelayMs: 2_000, saveOnWindowBlur: true, newDocumentFormat: "markdown", newDocumentEncoding: "utf8", newDocumentLineEnding: "system", trimTrailingSpaces: false, finalNewline: false },
-    windows: { rememberSizeAndPosition: true, startupAction: "startScreen", raiseExistingWindow: true },
+    windows: { rememberSizeAndPosition: true, startupAction: "startScreen", raiseExistingWindow: true, openFilesInTabs: false },
   };
   const invoke = vi.fn(async (command: string, args?: { settings?: unknown }) => {
     if (command === "get_settings" || command === "reset_settings") return structuredClone(base);
