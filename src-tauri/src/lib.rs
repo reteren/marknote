@@ -93,6 +93,7 @@ pub fn run() {
             commands::attachment_cache_stats,
             commands::clear_attachment_cache,
             commands::reveal_attachment_cache,
+            commands::open_image,
             commands::spellcheck_languages,
             commands::spellcheck_check,
             commands::spellcheck_suggest,

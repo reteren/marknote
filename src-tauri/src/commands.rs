@@ -113,6 +113,12 @@ pub fn clear_attachment_cache(
 }
 
 #[tauri::command]
+#[allow(non_snake_case)]
+pub fn open_image(app: AppHandle, docPath: Option<String>, src: String) -> Result<(), CommandError> {
+    crate::attachments::open_image(app, docPath, src)
+}
+
+#[tauri::command]
 pub fn reveal_attachment_cache(app: AppHandle) -> Result<(), CommandError> {
     crate::attachments::reveal_attachment_cache(app)
 }

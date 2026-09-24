@@ -105,6 +105,7 @@ document path plus source, and clears the cache on document change.
 | `attachment_cache_stats` | `()` → `{ files, bytes, path }` |
 | `clear_attachment_cache` | `()` → `{ files, bytes }` |
 | `reveal_attachment_cache` | `()` → `()` |
+| `open_image` | `(docPath, src)` → `()`: opens an http(s) image, or an image file inside the document folder or the attachment cache, in the default Windows program; anything else is refused |
 
 ### Spellcheck IPC additions
 

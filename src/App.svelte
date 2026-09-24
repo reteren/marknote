@@ -214,10 +214,7 @@ import { EditorView, type EditorView as EditorViewType } from "@codemirror/view"
         const href = safeLinkHref(url);
         if (href) window.open(href, "_blank", "noopener,noreferrer");
       },
-      openImage: (src) => {
-        const href = safeLinkHref(src);
-        if (href) window.open(href, "_blank", "noopener,noreferrer");
-      },
+      openImage: (src) => openImageExternally(src),
       chooseFormat: async () => {
         formatPickerOpen = true;
         return await new Promise<string | null>((resolve) => {
@@ -283,6 +280,15 @@ import { EditorView, type EditorView as EditorViewType } from "@codemirror/view"
     installZoom(editorView);
     tabEditorStates.set(workspace.activeId, editorView.state);
     if (focus) editorView.focus();
+  }
+
+  /** WebView2 ignores window.open for local files, so Windows opens the image in its default program. */
+  async function openImageExternally(src: string): Promise<void> {
+    try {
+      await invoke("open_image", { docPath: documentState.path, src });
+    } catch (error) {
+      reportError(error);
+    }
   }
 
   function reportError(error: unknown): void {
@@ -879,8 +885,10 @@ import { EditorView, type EditorView as EditorViewType } from "@codemirror/view"
       case "strikethrough": void actions.run("format.strikethrough"); break;
       case "highlight": void actions.run("format.highlight"); break;
       case "link": insertLink(); break;
-      case "open-link":
       case "open-image":
+        if (payload) void openImageExternally(payload);
+        break;
+      case "open-link":
         if (payload) {
           const href = safeLinkHref(payload);
           if (href) window.open(href, "_blank", "noopener,noreferrer");

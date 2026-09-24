@@ -228,6 +228,65 @@ pub fn clear_attachment_cache(app: AppHandle) -> Result<CacheClearStats, Command
     clear_cache(&cache_root)
 }
 
+/// What "Open Image" hands to Windows: a web address for remote images, or a
+/// local image file that passed the same containment checks as rendering.
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum ExternalImage {
+    Url(String),
+    File(PathBuf),
+}
+
+/// Resolves an image reference for opening in the default Windows program.
+/// Only http(s) addresses and real image files inside the document folder or
+/// the attachment cache qualify, so a crafted `![](tool.exe)` cannot launch
+/// anything.
+pub(crate) fn external_image_target(
+    doc_path: Option<&str>,
+    src: &str,
+    cache_root: &Path,
+) -> Result<ExternalImage, CommandError> {
+    if src.starts_with("http://") || src.starts_with("https://") {
+        return Ok(ExternalImage::Url(src.to_owned()));
+    }
+    let path = validate_image_path(doc_path, src, cache_root)?;
+    let extension = path
+        .extension()
+        .and_then(|value| value.to_str())
+        .map(str::to_ascii_lowercase)
+        .unwrap_or_default();
+    if !is_supported_extension(&extension) {
+        return Err(CommandError::InvalidPath(
+            UserMessage::ImageNotRegularFile.to_string(),
+        ));
+    }
+    Ok(ExternalImage::File(path))
+}
+
+/// Opens an image in the program Windows associates with its type (Photos,
+/// a browser for GIF or SVG, and so on).
+#[allow(non_snake_case)]
+pub fn open_image(app: AppHandle, docPath: Option<String>, src: String) -> Result<(), CommandError> {
+    let cache_root = cache_dir(&app)?;
+    let target = external_image_target(docPath.as_deref(), &src, &cache_root)?;
+    #[cfg(windows)]
+    {
+        let argument = match &target {
+            ExternalImage::Url(url) => std::ffi::OsString::from(url),
+            ExternalImage::File(path) => path.as_os_str().to_owned(),
+        };
+        Command::new("explorer")
+            .arg(argument)
+            .spawn()
+            .map_err(CommandError::Io)?;
+        Ok(())
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = target;
+        Err(CommandError::Message(UserMessage::ExplorerWindowsOnly))
+    }
+}
+
 pub fn reveal_attachment_cache(app: AppHandle) -> Result<(), CommandError> {
     let cache_root = cache_dir(&app)?;
     #[cfg(windows)]
@@ -732,6 +791,43 @@ fn promote_in_roots(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn external_image_target_accepts_web_addresses_and_images_beside_the_document() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let cache = dir.path().join("cache");
+        let document = dir.path().join("note.md");
+        fs::write(&document, "text").expect("document");
+        fs::write(dir.path().join("shot.PNG"), b"png").expect("image");
+        let doc = document.to_string_lossy().into_owned();
+
+        assert_eq!(
+            external_image_target(Some(&doc), "https://example.com/a.gif", &cache).unwrap(),
+            ExternalImage::Url("https://example.com/a.gif".to_owned())
+        );
+        match external_image_target(Some(&doc), "shot.PNG", &cache).unwrap() {
+            ExternalImage::File(path) => assert!(path.ends_with("shot.PNG")),
+            other => panic!("expected a file, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn external_image_target_refuses_non_images_and_paths_outside_the_document() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let cache = dir.path().join("cache");
+        let folder = dir.path().join("notes");
+        fs::create_dir_all(&folder).expect("folder");
+        let document = folder.join("note.md");
+        fs::write(&document, "text").expect("document");
+        fs::write(folder.join("tool.exe"), b"MZ").expect("program");
+        fs::write(dir.path().join("outside.png"), b"png").expect("outside image");
+        let doc = document.to_string_lossy().into_owned();
+
+        assert!(external_image_target(Some(&doc), "tool.exe", &cache).is_err());
+        assert!(external_image_target(Some(&doc), "../outside.png", &cache).is_err());
+        assert!(external_image_target(Some(&doc), "data:image/png;base64,AAAA", &cache).is_err());
+        assert!(external_image_target(None, "shot.png", &cache).is_err());
+    }
 
     #[test]
     fn registry_deduplicates_a_canonical_path() {
