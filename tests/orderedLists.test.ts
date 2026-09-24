@@ -41,6 +41,16 @@ describe("Obsidian-style ordered lists", () => {
     );
   });
 
+  it("keeps a changed first number and renumbers the items after it", () => {
+    let state = EditorState.create({
+      doc: "1. first\n2. second\n\n1. third\n2. fourth",
+      extensions: [markdown(), orderedListNormalization],
+    });
+    const third = state.doc.line(4);
+    state = state.update({ changes: { from: third.from, to: third.from + 1, insert: "3" } }).state;
+    expect(state.doc.toString()).toBe("1. first\n2. second\n\n3. third\n4. fourth");
+  });
+
   it("renumbers inserted and deleted items through the document transaction filter", () => {
     let state = EditorState.create({
       doc: "1. first\n2. second",
@@ -182,10 +192,11 @@ describe("Obsidian-style ordered lists", () => {
     expect(state.selection.main.head).toBe(11);
   });
 
-  it("starts after one at a heading or blank line and only accepts separated markers", () => {
+  it("lets a list after a heading or blank line open at any number and only accepts separated markers", () => {
     expect(normalizeOrderedLists("1. first\n\n15. second\n# Heading\n8. third")).toBe(
-      "1. first\n\n1. second\n# Heading\n1. third",
+      "1. first\n\n15. second\n# Heading\n8. third",
     );
+    expect(normalizeOrderedLists("1. a\n2. b\n\n3. c\n1. d\n7. e")).toBe("1. a\n2. b\n\n3. c\n4. d\n5. e");
     expect(normalizeOrderedLists("1. first\n9. second\n\n1) third\n9) fourth\n1 plain\n2 plain")).toBe(
       "1. first\n2. second\n\n1) third\n2) fourth\n1 plain\n2 plain",
     );

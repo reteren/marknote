@@ -139,7 +139,12 @@ function orderedListMarkerChanges(text: string): MarkerChange[] {
       if (!context || context.type !== "ordered") {
         const index = contexts.findIndex((candidate) => candidate.indent === indent);
         if (index >= 0) contexts.splice(index, contexts.length - index);
-        context = { indent, type: "ordered", nextNumber: 1 };
+        // A top-level list starts where its first item says, as in Markdown
+        // itself: it may open at 3 and continue 4, 5. A nested list (one made
+        // with Tab) always starts at 1 under its parent item.
+        const written = Number.parseInt(ordered.groups.number ?? "1", 10);
+        const start = contexts.length === 0 && Number.isFinite(written) ? written : 1;
+        context = { indent, type: "ordered", nextNumber: start };
         contexts.push(context);
       }
 
