@@ -8,6 +8,7 @@ import {
   normalizeOrderedLists,
   orderedListNormalization,
   softBreak,
+  removeContinuationIndent,
   getMarknoteKeyBindings,
   isListLine,
 } from "../src/editor/keymap";
@@ -89,11 +90,40 @@ describe("Obsidian-style ordered lists", () => {
     expect(outdented.state.doc.toString()).toBe("1. outer\n2. child\n3. outer two");
   });
 
-  it("uses Shift+Enter as a soft break without creating another marker", () => {
+  it("uses Shift+Enter as a soft break that stays under the item's text without another marker", () => {
     const view = makeView("1. same item", 12);
     expect(softBreak(view as EditorView)).toBe(true);
-    expect(view.state.doc.toString()).toBe("1. same item\n");
-    expect(view.state.selection.main.head).toBe(13);
+    expect(view.state.doc.toString()).toBe("1. same item\n   ");
+    expect(view.state.selection.main.head).toBe(16);
+
+    const nested = makeView("1. outer\n    12. inner", 22);
+    expect(softBreak(nested as EditorView)).toBe(true);
+    expect(nested.state.doc.toString()).toBe("1. outer\n    12. inner\n        ");
+
+    const task = makeView("- [ ] todo", 10);
+    expect(softBreak(task as EditorView)).toBe(true);
+    expect(task.state.doc.toString()).toBe("- [ ] todo\n      ");
+
+    const continued = makeView("1. item\n   more", 15);
+    expect(softBreak(continued as EditorView)).toBe(true);
+    expect(continued.state.doc.toString()).toBe("1. item\n   more\n   ");
+
+    const plain = makeView("plain text", 10);
+    expect(softBreak(plain as EditorView)).toBe(true);
+    expect(plain.state.doc.toString()).toBe("plain text\n");
+  });
+
+  it("removes a continuation line's indentation with one Backspace at its start", () => {
+    const view = makeView("1. item\n   more", 11);
+    expect(removeContinuationIndent(view as EditorView)).toBe(true);
+    expect(view.state.doc.toString()).toBe("1. item\nmore");
+    expect(view.state.selection.main.head).toBe(8);
+
+    // Not at the start of the text, inside ordinary indented text, or on a list line.
+    expect(removeContinuationIndent(makeView("1. item\n   more", 12) as EditorView)).toBe(false);
+    expect(removeContinuationIndent(makeView("para\n   more", 8) as EditorView)).toBe(false);
+    expect(removeContinuationIndent(makeView("1. item\n\n   code", 12) as EditorView)).toBe(false);
+    expect(removeContinuationIndent(makeView("1. a\n    1. b", 9) as EditorView)).toBe(false);
   });
 
   it("renumbers only after digit, delimiter, and space are typed, preserving cursor position", () => {

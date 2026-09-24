@@ -432,11 +432,30 @@ function continueMarkdownList(view: EditorView): boolean {
   return handled;
 }
 
-/** Shift+Enter inserts a line break and preserves current line indentation without list markup. */
+const listContentPrefixLine = /^(?<indent>[ \t]*)(?<marker>(?:\d+[.)]|[-+*])[ \t]+(?:\[[ xX]\][ \t]+)?)/u;
+
+/**
+ * The indentation that puts a continuation line under the text of a list
+ * item: its own indent plus spaces as wide as the marker ("1. ", "- [ ] ").
+ * Null when the line is not a list item.
+ */
+function listContentIndent(lineText: string): string | null {
+  const match = listContentPrefixLine.exec(lineText);
+  if (!match?.groups) return null;
+  return (match.groups.indent ?? "") + " ".repeat(match.groups.marker?.length ?? 0);
+}
+
+/**
+ * Shift+Enter starts a new line inside the same paragraph without list markup.
+ * On a list item the new line is indented under the item's text, so it stays
+ * part of that item; elsewhere the current indentation is kept.
+ */
 function softBreak(view: EditorView): boolean {
   const tr = view.state.changeByRange((range) => {
     const line = view.state.doc.lineAt(range.from);
-    const indent = line.text.slice(0, range.from - line.from).match(/^[ \t]*/u)?.[0] ?? "";
+    const leading = line.text.slice(0, range.from - line.from).match(/^[ \t]*/u)?.[0] ?? "";
+    const itemIndent = listContentIndent(line.text);
+    const indent = itemIndent !== null && range.from - line.from >= itemIndent.length ? itemIndent : leading;
     const insert = "\n" + indent;
     return {
       changes: { from: range.from, to: range.to, insert },
@@ -445,6 +464,35 @@ function softBreak(view: EditorView): boolean {
   });
   view.dispatch(tr, { userEvent: "input", scrollIntoView: true });
   return true;
+}
+
+/**
+ * Backspace at the start of a list item's continuation line removes the whole
+ * indentation at once, taking the line out from under the item.
+ */
+function removeContinuationIndent(view: EditorView): boolean {
+  const { state } = view;
+  if (state.selection.ranges.length !== 1) return false;
+  const range = state.selection.main;
+  if (!range.empty) return false;
+  const line = state.doc.lineAt(range.head);
+  const leading = line.text.match(/^[ \t]*/u)?.[0] ?? "";
+  if (!leading.length || range.head !== line.from + leading.length || isListLine(line.text)) return false;
+  for (let number = line.number - 1; number >= 1; number -= 1) {
+    const text = state.doc.line(number).text;
+    if (isListBlockBoundary(text)) return false;
+    const itemIndent = listContentIndent(text);
+    if (itemIndent === null) continue;
+    if (indentationWidth(itemIndent) !== indentationWidth(leading)) return false;
+    view.dispatch({
+      changes: { from: line.from, to: line.from + leading.length },
+      selection: EditorSelection.cursor(line.from),
+      userEvent: "delete.backward",
+      scrollIntoView: true,
+    });
+    return true;
+  }
+  return false;
 }
 
 function pairInputHandler(
@@ -799,6 +847,7 @@ function createBindings(options: MarknoteKeymapOptions): KeyBinding[] {
     commandBinding("Tab", (view) => indent(view, isInTable)),
     commandBinding("Shift-Tab", (view) => outdent(view, isInTable)),
     commandBinding("Shift-Enter", markdownCommand(softBreak)),
+    commandBinding("Backspace", markdownCommand(removeContinuationIndent)),
     commandBinding("Enter", markdownCommand(continueMarkdownList)),
     commandBinding("Mod-b", markdownCommand((view) => toggleWrapper(view, "**", "**"))),
     commandBinding("Mod-i", markdownCommand((view) => toggleWrapper(view, "*", "*"))),
@@ -837,4 +886,4 @@ export function createMarknoteKeymap(options: MarknoteKeymapOptions = {}): Exten
 export const marknoteKeyBindings: readonly KeyBinding[] = createBindings({});
 export const getMarknoteKeyBindings = (options: MarknoteKeymapOptions = {}): readonly KeyBinding[] => createBindings(options);
 
-export { isListLine, toggleWrapper, toggleCodeBlock, indent, outdent, continueMarkdownList, softBreak };
+export { isListLine, toggleWrapper, toggleCodeBlock, indent, outdent, continueMarkdownList, softBreak, removeContinuationIndent };
