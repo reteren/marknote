@@ -67,49 +67,7 @@ function isTaskChecked(node: SyntaxNode, state: EditorState) {
   return Boolean(marker && /^\[[xX]\]$/.test(state.doc.sliceString(marker.from, marker.to)));
 }
 
-function indentationWidth(text: string): number {
-  const indent = text.match(/^[ \t]*/u)?.[0] ?? "";
-  let width = 0;
-  for (const character of indent) {
-    width = character === "\t" ? width + (4 - (width % 4)) : width + 1;
-  }
-  return width;
-}
-
-export function indentationGuideForLine(target: { from: number; text: string }): DecorationSpec | null {
-  const width = indentationWidth(target.text);
-  if (width < 4) return null;
-  const indent = Math.max(1, Math.min(64, width));
-  return line(target.from, `cm-marknote-nested-list-line cm-marknote-nested-list-indent-${indent}`);
-}
-
 type VisibleRange = { from: number; to: number };
-
-function nestedListGuide(
-  node: SyntaxNode,
-  state: EditorState,
-  visibleRanges?: readonly VisibleRange[],
-): DecorationSpec[] {
-  if (visibleRanges && visibleRanges.length === 0) return [];
-  const ranges = visibleRanges ?? [{ from: node.from, to: node.to }];
-  const specs: DecorationSpec[] = [];
-  const seen = new Set<number>();
-  for (const visible of ranges) {
-    const from = Math.max(node.from, visible.from);
-    const to = Math.min(node.to, visible.to);
-    if (from > to) continue;
-    const first = state.doc.lineAt(from).number;
-    const last = state.doc.lineAt(to).number;
-    for (let number = first; number <= last; number += 1) {
-      const spec = indentationGuideForLine(state.doc.line(number));
-      if (spec && !seen.has(spec.from)) {
-        seen.add(spec.from);
-        specs.push(spec);
-      }
-    }
-  }
-  return specs;
-}
 
 /** Builds headings, lists, quotes, and block widgets. */
 export function decorationsForBlockNode(
@@ -135,7 +93,7 @@ export function decorationsForBlockNode(
   }
 
   if (node.name === "OrderedList" || node.name === "BulletList") {
-    return nestedListGuide(node, state, visibleRanges);
+    return [];
   }
 
   if (node.name === "ListMark") {

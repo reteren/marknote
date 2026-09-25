@@ -9,7 +9,7 @@ import {
 } from "@codemirror/view";
 import type { SyntaxNode } from "@lezer/common";
 import { isNodeActive } from "./isNodeActive";
-import { decorationsForBlockNode, indentationGuideForLine } from "./blocks";
+import { decorationsForBlockNode } from "./blocks";
 import { codeBlockBuilder } from "./codeBlocks";
 import { tableBuilder } from "./tables";
 import { calloutBuilder } from "./callouts";
@@ -161,11 +161,6 @@ function buildDecorationSetsInternal(
     for (const visible of visibleRanges) {
       const startLine = state.doc.lineAt(visible.from).number;
       const endLine = state.doc.lineAt(visible.to).number;
-      for (let number = startLine; number <= endLine; number += 1) {
-        const spec = indentationGuideForLine(state.doc.line(number));
-        if (spec) specs.push(spec);
-      }
-
       tree.iterate({
         from: visible.from,
         to: visible.to,

@@ -1,6 +1,7 @@
 import type { Extension } from "@codemirror/state";
 import { livePreviewPlugin } from "./plugin";
 import { blockMathField } from "./blockMath";
+import { listIndentField, listIndentMeasurePlugin } from "./listIndent";
 import { livePreviewTheme } from "./blocks";
 import { codeBlockTheme } from "./codeBlocks";
 import { tableTheme } from "./tables";
@@ -22,6 +23,8 @@ export function livePreview(opts?: {
     imageSelectionField,
     livePreviewPlugin.of(opts ?? {}),
     blockMathField,
+    listIndentField,
+    listIndentMeasurePlugin,
     livePreviewTheme,
     codeBlockTheme,
     tableTheme,
