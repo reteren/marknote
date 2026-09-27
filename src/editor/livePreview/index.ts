@@ -1,13 +1,12 @@
 import type { Extension } from "@codemirror/state";
 import { livePreviewPlugin } from "./plugin";
 import { blockMathField } from "./blockMath";
-import { listIndentField, listIndentMeasurePlugin } from "./listIndent";
 import { livePreviewTheme } from "./blocks";
+import { indentLayoutPlugin, indentLayoutTheme } from "./indentLayout";
 import { codeBlockTheme } from "./codeBlocks";
 import { tableTheme } from "./tables";
 import { calloutTheme } from "./callouts";
 import { footnoteTheme, footnoteTooltip } from "./footnotes";
-import { orderedListNormalization } from "../keymap";
 import { imageSelectionField } from "../imageResize";
 
 export function livePreview(opts?: {
@@ -19,13 +18,12 @@ export function livePreview(opts?: {
   resolveImage?: (src: string) => Promise<string>;
 }): Extension {
   return [
-    orderedListNormalization,
     imageSelectionField,
     livePreviewPlugin.of(opts ?? {}),
     blockMathField,
-    listIndentField,
-    listIndentMeasurePlugin,
     livePreviewTheme,
+    indentLayoutPlugin,
+    indentLayoutTheme,
     codeBlockTheme,
     tableTheme,
     calloutTheme,

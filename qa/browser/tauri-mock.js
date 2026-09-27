@@ -20,6 +20,9 @@
           return { text: "", format: md };
         case "get_settings": return structuredClone(settings);
         case "save_settings": return args?.settings ?? structuredClone(settings);
+        case "write_recovery_snapshot": return null;
+        case "delete_recovery_snapshot": return null;
+        case "take_recovery_entries": return [];
         case "spellcheck_languages": return [{ tag: "en", name: "English" }, { tag: "ru", name: "Russian" }, { tag: "de", name: "German" }, { tag: "es", name: "Spanish" }, { tag: "fr", name: "French" }, { tag: "it", name: "Italian" }, { tag: "pt", name: "Portuguese" }, { tag: "ar", name: "Arabic" }];
         case "spellcheck_check": {
           const text = args?.text ?? "";

@@ -220,27 +220,6 @@ export const livePreviewTheme = EditorView.theme({
   ".cm-marknote-heading-6": { fontSize: "var(--h6-size)", fontWeight: "var(--h6-weight)", color: "var(--h6-color)" },
   ".cm-marknote-bullet": { display: "inline-block", width: "1.25em", textAlign: "center", color: "var(--text-muted)" },
   ".cm-marknote-ordered-marker": { color: "var(--text-muted)" },
-  ".cm-line.cm-marknote-nested-list-line": { backgroundRepeat: "no-repeat" },
-  ...Object.fromEntries(
-    Array.from({ length: 64 }, (_, index) => {
-      const indent = index + 1;
-      const levels = Math.floor(indent / 4);
-      if (levels <= 0) return [`.cm-line.cm-marknote-nested-list-indent-${indent}`, {}];
-      const stops: string[] = [];
-      for (let k = 0; k < levels; k += 1) {
-        const pos = `${0.625 + k * 1.25}em`;
-        stops.push(
-          `transparent calc(${pos} - 1px), var(--bg-modifier-border-hover) calc(${pos} - 1px), var(--bg-modifier-border-hover) ${pos}, transparent ${pos}`,
-        );
-      }
-      return [
-        `.cm-line.cm-marknote-nested-list-indent-${indent}`,
-        {
-          backgroundImage: `linear-gradient(to right, ${stops.join(", ")})`,
-        },
-      ];
-    }),
-  ),
   ".cm-marknote-task-done": { color: "var(--text-muted)", textDecoration: "line-through" },
   ".cm-marknote-checkbox": {
     display: "inline-flex",

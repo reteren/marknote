@@ -1,7 +1,8 @@
 import { markdown } from "@codemirror/lang-markdown";
 import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
 import { EditorState } from "@codemirror/state";
-import type { Extension } from "@codemirror/state";
+import type { Extension, TransactionSpec } from "@codemirror/state";
+import { indentUnit } from "@codemirror/language";
 import type { EditorView, KeyBinding } from "@codemirror/view";
 import { describe, expect, it, vi } from "vitest";
 import {
@@ -20,14 +21,14 @@ function makeView(doc: string, from = 0, to = from, extra: Extension[] = []): Te
   let state = EditorState.create({
     doc,
     selection: { anchor: from, head: to },
-    extensions: [markdown(), ...extra],
+    extensions: [markdown(), indentUnit.of("    "), ...extra],
   });
   return {
     get state() {
       return state;
     },
-    dispatch(spec) {
-      state = state.update(spec).state;
+    dispatch(...specs: TransactionSpec[]) {
+      state = state.update(...specs).state;
     },
     lineWrapping: false,
     moveVertically: (range: unknown) => range,
@@ -57,7 +58,7 @@ describe("MarkNote editor keymap", () => {
     expect(undone.state.doc.toString()).toBe("one!");
   });
 
-  it("indents a list item with Tab and uses four spaces outside a list", () => {
+  it("indents the whole line with Tab, in a list and in prose alike", () => {
     const list = makeView("- item", 2);
     expect(run("Tab", list)).toBe(true);
     expect(list.state.doc.toString()).toBe("    - item");
@@ -65,14 +66,14 @@ describe("MarkNote editor keymap", () => {
 
     const prose = makeView("text", 2);
     expect(run("Tab", prose)).toBe(true);
-    expect(prose.state.doc.toString()).toBe("te    xt");
+    expect(prose.state.doc.toString()).toBe("    text");
     expect(prose.state.selection.main.head).toBe(6);
   });
 
   it("undoes Tab indentation with a single Ctrl+Z", () => {
     const view = makeView("text", 2, 2, [history()]);
     expect(run("Tab", view)).toBe(true);
-    expect(view.state.doc.toString()).toBe("te    xt");
+    expect(view.state.doc.toString()).toBe("    text");
     expect(view.state.selection.main.head).toBe(6);
     expect(run("Mod-z", view)).toBe(true);
     expect(view.state.doc.toString()).toBe("text");
@@ -140,10 +141,10 @@ describe("MarkNote editor keymap", () => {
     expect(indentedUnspaced.state.selection.main.head).toBe(11);
   });
 
-  it("applies Tab list indent only after delimiter space", () => {
+  it("indents a line with Tab whether or not it is a list item yet", () => {
     const unspaced = makeView("1.", 2);
     expect(run("Tab", unspaced)).toBe(true);
-    expect(unspaced.state.doc.toString()).toBe("1.    ");
+    expect(unspaced.state.doc.toString()).toBe("    1.");
     expect(unspaced.state.selection.main.head).toBe(6);
 
     const spaced = makeView("1. item", 7);

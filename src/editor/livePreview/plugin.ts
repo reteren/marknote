@@ -159,8 +159,6 @@ function buildDecorationSetsInternal(
   const tree = profileMeasure("preview.parse", () => syntaxTree(state));
   profileMeasure("preview.decorate", () => {
     for (const visible of visibleRanges) {
-      const startLine = state.doc.lineAt(visible.from).number;
-      const endLine = state.doc.lineAt(visible.to).number;
       tree.iterate({
         from: visible.from,
         to: visible.to,

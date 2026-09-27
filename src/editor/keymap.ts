@@ -7,13 +7,16 @@ import {
   moveLineUp,
   redo,
   undo,
-  insertNewlineAndIndent,
 } from "@codemirror/commands";
-import { ChangeSet, EditorSelection, EditorState, Transaction, type Extension } from "@codemirror/state";
+import { EditorSelection, EditorState, type Extension } from "@codemirror/state";
 import { keymap, EditorView, type Command, type KeyBinding } from "@codemirror/view";
-import { insertNewlineContinueMarkup } from "@codemirror/lang-markdown";
 import { editorMarkdownCommandsStateField } from "./settings";
-import { profileMeasure } from "./profile";
+import {
+  continueMarkdownList,
+  removeIndentUnit,
+  shiftIndentation,
+  softBreak,
+} from "./listCommands";
 
 type Pair = { open: string; close: string };
 
@@ -50,258 +53,6 @@ export interface MarknoteKeymapOptions {
   isInTable?: (state: EditorState, position: number) => boolean;
   /** Whether Markdown-only commands should handle a key in this editor state. */
   isMarkdownCommands?: (state: EditorState) => boolean;
-}
-
-function currentLine(state: EditorState, position: number): string {
-  return state.doc.lineAt(position).text;
-}
-
-const orderedListLine = /^(?<indent>[ \t]*)(?<number>\d+)(?<delimiter>[.)])(?<spacing>[ \t]+)(?<content>.*)$/u;
-const bulletListLine = /^(?<indent>[ \t]*)(?<marker>[-+*])(?<spacing>[ \t]+)(?<content>.*)$/u;
-const headingLine = /^[ \t]{0,3}#{1,6}(?:[ \t]+|$)/u;
-const fenceLine = /^[ \t]{0,3}(?<marker>`{3,}|~{3,})/u;
-
-type ListContext = {
-  indent: number;
-  type: "ordered" | "bullet";
-  nextNumber: number;
-};
-
-type MarkerChange = { from: number; to: number; insert: string };
-
-function indentationWidth(indent: string): number {
-  let width = 0;
-  for (const character of indent) {
-    width = character === "\t" ? width + (4 - (width % 4)) : width + 1;
-  }
-  return width;
-}
-
-function indentationPrefixLength(text: string, maximumWidth = 4): number {
-  const indent = text.match(/^[ \t]*/u)?.[0] ?? "";
-  let width = 0;
-  for (let index = 0; index < indent.length; index += 1) {
-    const character = indent[index];
-    width = character === "\t" ? width + (4 - (width % 4)) : width + 1;
-    if (width >= maximumWidth) return index + 1;
-  }
-  return indent.length;
-}
-
-function isFenceClose(text: string, fence: string): boolean {
-  const marker = fence[0];
-  const minimum = fence.length;
-  return new RegExp(`^[ \\t]{0,3}${marker}{${minimum},}[ \\t]*$`, "u").test(text);
-}
-
-function isHorizontalRule(text: string): boolean {
-  const trimmed = text.trim();
-  return /^(?:\*\s*){3,}$|^(?:-\s*){3,}$|^(?:_\s*){3,}$/u.test(trimmed);
-}
-
-/**
- * Finds the marker edits needed to make each contiguous ordered list count
- * from one. The returned positions refer to `text`, so callers can compose
- * these edits with the user's transaction without disturbing the selection.
- */
-function orderedListMarkerChanges(text: string): MarkerChange[] {
-  const changes: MarkerChange[] = [];
-  const contexts: ListContext[] = [];
-  let fence: string | null = null;
-  let offset = 0;
-
-  for (const rawLine of text.split("\n")) {
-    const line = rawLine.endsWith("\r") ? rawLine.slice(0, -1) : rawLine;
-    const lineOffset = offset;
-    offset += rawLine.length + 1;
-
-    if (fence) {
-      if (isFenceClose(line, fence)) fence = null;
-      continue;
-    }
-    const possibleFence = fenceLine.exec(line)?.groups?.marker;
-    if (possibleFence) {
-      fence = possibleFence;
-      contexts.length = 0;
-      continue;
-    }
-    if (/^[ \t]*$/u.test(line) || headingLine.test(line) || isHorizontalRule(line)) {
-      contexts.length = 0;
-      continue;
-    }
-
-    const ordered = orderedListLine.exec(line);
-    if (ordered?.groups && ordered.groups.spacing) {
-      const indent = indentationWidth(ordered.groups.indent ?? "");
-      while (contexts.length && contexts[contexts.length - 1].indent > indent) contexts.pop();
-
-      let context = contexts.find((candidate) => candidate.indent === indent);
-      if (!context || context.type !== "ordered") {
-        const index = contexts.findIndex((candidate) => candidate.indent === indent);
-        if (index >= 0) contexts.splice(index, contexts.length - index);
-        // A top-level list starts where its first item says, as in Markdown
-        // itself: it may open at 3 and continue 4, 5. A nested list (one made
-        // with Tab) always starts at 1 under its parent item.
-        const written = Number.parseInt(ordered.groups.number ?? "1", 10);
-        const start = contexts.length === 0 && Number.isFinite(written) ? written : 1;
-        context = { indent, type: "ordered", nextNumber: start };
-        contexts.push(context);
-      }
-
-      const expected = context.nextNumber;
-      context.nextNumber += 1;
-      const number = ordered.groups.number ?? "";
-      if (number !== String(expected)) {
-        const numberFrom = lineOffset + (ordered.groups.indent?.length ?? 0);
-        changes.push({ from: numberFrom, to: numberFrom + number.length, insert: String(expected) });
-      }
-      continue;
-    }
-
-    const bullet = bulletListLine.exec(line);
-    if (bullet?.groups) {
-      const indent = indentationWidth(bullet.groups.indent ?? "");
-      while (contexts.length && contexts[contexts.length - 1].indent > indent) contexts.pop();
-      const index = contexts.findIndex((candidate) => candidate.indent === indent);
-      if (index >= 0) contexts.splice(index, contexts.length - index);
-      contexts.push({ indent, type: "bullet", nextNumber: 1 });
-      continue;
-    }
-
-    // A non-empty, non-heading line is a lazy continuation of the current
-    // list item in Markdown. Keep the open contexts so the next marker still
-    // continues its sequence. Blank lines and headings above explicitly close it.
-  }
-
-  return changes;
-}
-
-/** Renumber all ordered-list markers in a Markdown document. */
-export function normalizeOrderedLists(text: string): string {
-  const changes = orderedListMarkerChanges(text);
-  if (!changes.length) return text;
-  let result = text;
-  for (let index = changes.length - 1; index >= 0; index -= 1) {
-    const change = changes[index];
-    result = result.slice(0, change.from) + change.insert + result.slice(change.to);
-  }
-  return result;
-}
-
-function normalizeViewOrderedLists(view: EditorView): void {
-  const text = view.state.doc.toString();
-  if (normalizeOrderedLists(text) === text) return;
-  const changes = orderedListMarkerChanges(text);
-  if (changes.length) {
-    const norm = ChangeSet.of(changes, text.length);
-    view.dispatch({
-      changes,
-      selection: view.state.selection.map(norm),
-      userEvent: "input",
-    });
-  }
-}
-
-const listPrefixRegex = /^[ \t]*(?:\d+[.)]|[-+*])[ \t]+/u;
-
-function getListPrefix(lineText: string): string | null {
-  const match = listPrefixRegex.exec(lineText);
-  return match ? match[0] : null;
-}
-
-function isListBlockBoundary(text: string): boolean {
-  return /^[ \t]*$/u.test(text) || headingLine.test(text) || isHorizontalRule(text) || fenceLine.test(text);
-}
-
-function getMarkerChangesForTransaction(transaction: Transaction): MarkerChange[] {
-  let couldAffect = false;
-  let minFromB = transaction.newDoc.length;
-  let maxToB = 0;
-
-  transaction.changes.iterChanges((fromA, toA, fromB, toB, inserted) => {
-    if (fromB < minFromB) minFromB = fromB;
-    if (toB > maxToB) maxToB = toB;
-    if (couldAffect) return;
-
-    if (inserted.lines > 1 || transaction.startState.doc.lineAt(fromA).number !== transaction.startState.doc.lineAt(toA).number) {
-      couldAffect = true;
-      return;
-    }
-    const startLineText = transaction.startState.doc.lineAt(fromA).text;
-    const newLineText = transaction.newDoc.lineAt(fromB).text;
-    if (getListPrefix(startLineText) !== getListPrefix(newLineText)) {
-      couldAffect = true;
-      return;
-    }
-    const wasBlank = /^[ \t]*$/u.test(startLineText);
-    const isBlank = /^[ \t]*$/u.test(newLineText);
-    if (wasBlank !== isBlank) {
-      couldAffect = true;
-      return;
-    }
-    const wasBoundary = headingLine.test(startLineText) || isHorizontalRule(startLineText) || fenceLine.test(startLineText);
-    const isBoundaryLine = headingLine.test(newLineText) || isHorizontalRule(newLineText) || fenceLine.test(newLineText);
-    if (wasBoundary !== isBoundaryLine) {
-      couldAffect = true;
-      return;
-    }
-  });
-
-  if (!couldAffect) return [];
-
-  if (minFromB > maxToB) {
-    minFromB = 0;
-    maxToB = transaction.newDoc.length;
-  }
-
-  let startLine = transaction.newDoc.lineAt(Math.min(minFromB, transaction.newDoc.length)).number;
-  let endLine = transaction.newDoc.lineAt(Math.min(maxToB, transaction.newDoc.length)).number;
-
-  while (startLine > 1) {
-    const text = transaction.newDoc.line(startLine - 1).text;
-    if (isListBlockBoundary(text)) break;
-    startLine -= 1;
-  }
-
-  while (endLine < transaction.newDoc.lines) {
-    const text = transaction.newDoc.line(endLine + 1).text;
-    if (isListBlockBoundary(text)) break;
-    endLine += 1;
-  }
-
-  const fromPos = transaction.newDoc.line(startLine).from;
-  const toPos = transaction.newDoc.line(endLine).to;
-  const blockText = transaction.newDoc.sliceString(fromPos, toPos);
-  const blockChanges = orderedListMarkerChanges(blockText);
-  if (!blockChanges.length) return [];
-
-  return blockChanges.map((change) => ({
-    from: change.from + fromPos,
-    to: change.to + fromPos,
-    insert: change.insert,
-  }));
-}
-
-/**
- * Keeps the persisted Markdown in sync with the displayed numbering after
- * arbitrary edits, paste, line moves, and deletes. The filter composes the
- * marker-only edits with the user's transaction, preserving cursor mapping.
- */
-export const orderedListNormalization: Extension = EditorState.transactionFilter.of((transaction) => {
-  if (!transaction.docChanged) return transaction;
-  const changes = profileMeasure("lists.filter", () => getMarkerChangesForTransaction(transaction));
-  if (!changes.length) return transaction;
-  // Return the original transaction unchanged and add renumbering as a separate
-  // follow-up change. CodeMirror then carries over the cursor, effects, and all
-  // annotations — including undo-history annotations — without manual copying.
-  // The old version built a new transaction field by field and lost anything it
-  // forgot to list; it also accessed the private annotations field through a
-  // type cast, which could silently break on a library update.
-  return [transaction, { changes, sequential: true }];
-});
-
-function isListLine(text: string): boolean {
-  return orderedListLine.test(text) || bulletListLine.test(text);
 }
 
 function isTableRow(text: string): boolean {
@@ -341,158 +92,16 @@ export function isTableContext(state: EditorState, position: number): boolean {
   return false;
 }
 
-function changeSelectedLines(view: EditorView, remove: boolean): boolean {
-  const { state } = view;
-  const ranges = state.selection.ranges;
-  const changes: { from: number; to: number; insert?: string }[] = [];
-  const seen = new Set<number>();
-
-  for (const range of ranges) {
-    const first = state.doc.lineAt(range.from).number;
-    const last = state.doc.lineAt(range.to).number;
-    for (let number = first; number <= last; number += 1) {
-      if (seen.has(number)) continue;
-      seen.add(number);
-      const line = state.doc.line(number);
-      if (remove) {
-        const amount = indentationPrefixLength(line.text);
-        if (amount > 0) changes.push({ from: line.from, to: line.from + amount });
-      } else if (isListLine(line.text)) {
-        changes.push({ from: line.from, to: line.from, insert: "    " });
-      }
-    }
-  }
-
-  if (changes.length > 0) {
-    view.dispatch({ changes, userEvent: remove ? "delete.dedent" : "input.indent", scrollIntoView: true });
-    return true;
-  }
-  return false;
-}
-
+/** Tab: one indent unit at the start of every touched line; tables keep their own Tab. */
 function indent(view: EditorView, isInTable: (state: EditorState, position: number) => boolean = isTableContext): boolean {
-  const range = view.state.selection.main;
-  if (isInTable(view.state, range.head)) return false;
-  if (!range.empty) {
-    const changed = changeSelectedLines(view, false);
-    if (changed) normalizeViewOrderedLists(view);
-    return changed;
-  }
-
-  const line = view.state.doc.lineAt(range.head);
-  if (isListLine(line.text)) {
-    view.dispatch({
-      changes: { from: line.from, to: line.from, insert: "    " },
-      selection: { anchor: range.anchor + 4, head: range.head + 4 },
-      userEvent: "input.indent",
-      scrollIntoView: true,
-    });
-  } else {
-    view.dispatch({
-      changes: { from: range.head, to: range.head, insert: "    " },
-      selection: { anchor: range.head + 4 },
-      userEvent: "input.indent",
-      scrollIntoView: true,
-    });
-  }
-  normalizeViewOrderedLists(view);
-  return true;
+  if (isInTable(view.state, view.state.selection.main.head)) return false;
+  return shiftIndentation(view, 1);
 }
 
+/** Shift+Tab: removes one indent unit from the start of every touched line. */
 function outdent(view: EditorView, isInTable: (state: EditorState, position: number) => boolean = isTableContext): boolean {
-  const range = view.state.selection.main;
-  if (isInTable(view.state, range.head)) return false;
-  if (!range.empty) {
-    const changed = changeSelectedLines(view, true);
-    if (changed) normalizeViewOrderedLists(view);
-    return changed;
-  }
-
-  const line = view.state.doc.lineAt(range.head);
-  const amount = indentationPrefixLength(line.text);
-  if (amount === 0) return true;
-  const newAnchor = Math.max(line.from, range.anchor - amount);
-  const newHead = Math.max(line.from, range.head - amount);
-  view.dispatch({
-    changes: { from: line.from, to: line.from + amount },
-    selection: { anchor: newAnchor, head: newHead },
-    userEvent: "delete.dedent",
-    scrollIntoView: true,
-  });
-  normalizeViewOrderedLists(view);
-  return true;
-}
-
-function continueMarkdownList(view: EditorView): boolean {
-  const range = view.state.selection.main;
-  const line = view.state.doc.lineAt(range.head);
-  const isUnspacedList = /^[ \t]*(?:\d+[.)]|[-+*])(?![ \t])/u.test(line.text);
-  const handled = (!isUnspacedList && insertNewlineContinueMarkup(view)) || insertNewlineAndIndent(view);
-  if (handled) normalizeViewOrderedLists(view);
-  return handled;
-}
-
-const listContentPrefixLine = /^(?<indent>[ \t]*)(?<marker>(?:\d+[.)]|[-+*])[ \t]+(?:\[[ xX]\][ \t]+)?)/u;
-
-/**
- * The indentation that puts a continuation line under the text of a list
- * item: its own indent plus spaces as wide as the marker ("1. ", "- [ ] ").
- * Null when the line is not a list item.
- */
-function listContentIndent(lineText: string): string | null {
-  const match = listContentPrefixLine.exec(lineText);
-  if (!match?.groups) return null;
-  return (match.groups.indent ?? "") + " ".repeat(match.groups.marker?.length ?? 0);
-}
-
-/**
- * Shift+Enter starts a new line inside the same paragraph without list markup.
- * On a list item the new line is indented under the item's text, so it stays
- * part of that item; elsewhere the current indentation is kept.
- */
-function softBreak(view: EditorView): boolean {
-  const tr = view.state.changeByRange((range) => {
-    const line = view.state.doc.lineAt(range.from);
-    const leading = line.text.slice(0, range.from - line.from).match(/^[ \t]*/u)?.[0] ?? "";
-    const itemIndent = listContentIndent(line.text);
-    const indent = itemIndent !== null && range.from - line.from >= itemIndent.length ? itemIndent : leading;
-    const insert = "\n" + indent;
-    return {
-      changes: { from: range.from, to: range.to, insert },
-      range: EditorSelection.cursor(range.from + insert.length),
-    };
-  });
-  view.dispatch(tr, { userEvent: "input", scrollIntoView: true });
-  return true;
-}
-
-/**
- * Backspace at the start of a list item's continuation line removes the whole
- * indentation at once, taking the line out from under the item.
- */
-function removeContinuationIndent(view: EditorView): boolean {
-  const { state } = view;
-  if (state.selection.ranges.length !== 1) return false;
-  const range = state.selection.main;
-  if (!range.empty) return false;
-  const line = state.doc.lineAt(range.head);
-  const leading = line.text.match(/^[ \t]*/u)?.[0] ?? "";
-  if (!leading.length || range.head !== line.from + leading.length || isListLine(line.text)) return false;
-  for (let number = line.number - 1; number >= 1; number -= 1) {
-    const text = state.doc.line(number).text;
-    if (isListBlockBoundary(text)) return false;
-    const itemIndent = listContentIndent(text);
-    if (itemIndent === null) continue;
-    if (indentationWidth(itemIndent) !== indentationWidth(leading)) return false;
-    view.dispatch({
-      changes: { from: line.from, to: line.from + leading.length },
-      selection: EditorSelection.cursor(line.from),
-      userEvent: "delete.backward",
-      scrollIntoView: true,
-    });
-    return true;
-  }
-  return false;
+  if (isInTable(view.state, view.state.selection.main.head)) return false;
+  return shiftIndentation(view, -1);
 }
 
 function pairInputHandler(
@@ -847,7 +456,7 @@ function createBindings(options: MarknoteKeymapOptions): KeyBinding[] {
     commandBinding("Tab", (view) => indent(view, isInTable)),
     commandBinding("Shift-Tab", (view) => outdent(view, isInTable)),
     commandBinding("Shift-Enter", markdownCommand(softBreak)),
-    commandBinding("Backspace", markdownCommand(removeContinuationIndent)),
+    commandBinding("Backspace", markdownCommand(removeIndentUnit)),
     commandBinding("Enter", markdownCommand(continueMarkdownList)),
     commandBinding("Mod-b", markdownCommand((view) => toggleWrapper(view, "**", "**"))),
     commandBinding("Mod-i", markdownCommand((view) => toggleWrapper(view, "*", "*"))),
@@ -886,4 +495,4 @@ export function createMarknoteKeymap(options: MarknoteKeymapOptions = {}): Exten
 export const marknoteKeyBindings: readonly KeyBinding[] = createBindings({});
 export const getMarknoteKeyBindings = (options: MarknoteKeymapOptions = {}): readonly KeyBinding[] => createBindings(options);
 
-export { isListLine, toggleWrapper, toggleCodeBlock, indent, outdent, continueMarkdownList, softBreak, removeContinuationIndent };
+export { toggleWrapper, toggleCodeBlock, indent, outdent, continueMarkdownList, softBreak, removeIndentUnit };
