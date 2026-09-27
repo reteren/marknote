@@ -16,7 +16,7 @@ import { tableKeymap } from "./livePreview/tables";
 import { keymap } from "@codemirror/view";
 import { marknoteTheme } from "./theme";
 import { createImageResolver } from "./imageResolver";
-import { supportsMarkdownCommands, type FormatCapabilities } from "../state/formats.svelte";
+import { acceptsImages, supportsMarkdownCommands, type FormatCapabilities } from "../state/formats.svelte";
 import type { Settings } from "../state/settings.svelte";
 import { createImagePasteHandler } from "./attachments";
 import {
@@ -386,7 +386,11 @@ function buildEditorState(runtime: EditorRuntime, opts: EditorStateOptions): Edi
     keymap.of(tableKeymap),
     createMarknoteKeymap({ handlers: runtime.handlers }),
     marknoteSearch(),
-    createImagePasteHandler((v) => v.state.field(runtime.documentPathField, false) ?? null, runtime.onNotice),
+    createImagePasteHandler(
+      (v) => v.state.field(runtime.documentPathField, false) ?? null,
+      runtime.onNotice,
+      (v) => acceptsImages(v.state.field(runtime.formatField, false)),
+    ),
     // Everything controlled by settings lives in one compartment: changing a
     // setting reconfigures it instead of recreating the editor.
     settingsCompartment.of(editorSettingsExtensions(opts.settings ?? null, Boolean(opts.format.syntaxMode))),

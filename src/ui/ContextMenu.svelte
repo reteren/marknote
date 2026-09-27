@@ -52,6 +52,8 @@
     hasSelection?: boolean;
     canPaste?: boolean;
     editable?: boolean;
+    /** Whether the document accepts images (editable Markdown only). */
+    imagesAllowed?: boolean;
     formatId?: string;
     targetElement?: HTMLElement | null;
     editorView?: EditorView | null;
@@ -72,6 +74,7 @@
     hasSelection = false,
     canPaste = true,
     editable = true,
+    imagesAllowed = true,
     formatId = undefined,
     targetElement = null,
     editorView = null,
@@ -169,7 +172,7 @@
       { id: "edit.pastePlainText", label: t("menu.pastePlainText"), shortcut: "Ctrl+Shift+V", disabled: !canPaste || !editable },
       { id: "delete", label: t("contextMenu.delete"), disabled: !selectionExists || !editable },
       { id: "select-all", label: t("menu.selectAll"), shortcut: "Ctrl+A" },
-      ...(targetType === "empty"
+      ...(targetType === "empty" && imagesAllowed
         ? [
             { separator: true } as const,
             { id: "insert-image" as ContextMenuAction, label: t("contextMenu.addImage"), disabled: !editable },

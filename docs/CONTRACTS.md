@@ -105,6 +105,7 @@ document path plus source, and clears the cache on document change.
 | `attachment_cache_stats` | `()` → `{ files, bytes, path }` |
 | `clear_attachment_cache` | `()` → `{ files, bytes }` |
 | `reveal_attachment_cache` | `()` → `()` |
+| `export_markdown_zip` | `(docPath, text, suggestedName)` → `{ path, embedded, skipped } | null`: asks where to save, writes a ZIP with `<name>.md` whose local images are embedded as data URIs plus the originals in `images/`; null when cancelled |
 | `open_image` | `(docPath, src)` → `()`: opens an http(s) image, or an image file inside the document folder or the attachment cache, in the default Windows program; anything else is refused |
 
 ### Spellcheck IPC additions

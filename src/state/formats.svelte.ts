@@ -26,6 +26,16 @@ export function supportsMarkdownCommands(format: Pick<FormatCapabilities, "edita
   return Boolean(format?.editable && format.livePreview && format.syntaxMode === null);
 }
 
+/** Only Markdown documents can hold images: every insertion path and ZIP export check this. */
+export function acceptsImages(format: Pick<FormatCapabilities, "id" | "editable"> | null | undefined): boolean {
+  return Boolean(format?.editable && format.id === "markdown");
+}
+
+/** Whether Markdown text references at least one image. */
+export function containsImages(text: string): boolean {
+  return /!\[[^\]\n]*\]\([^)\n]+\)/u.test(text);
+}
+
 export const markdownFormat: FormatCapabilities = {
   id: "markdown",
   label: "Markdown",

@@ -21,6 +21,20 @@ function allItems(items: MenuItem[]): MenuItem[] {
 }
 
 describe("menu model", () => {
+  it("offers Export as ZIP only for a Markdown document with images", () => {
+    const ids = (state: Parameters<typeof createMenuModel>[1]) => allItems(createMenuModel([], state).flatMap((section) => section.items)).map((item) => item.id);
+    expect(ids({ imagesAllowed: true, canExportZip: true })).toContain("file.exportZip");
+    expect(ids({ imagesAllowed: true, canExportZip: false })).not.toContain("file.exportZip");
+    expect(ids({})).not.toContain("file.exportZip");
+  });
+
+  it("hides Insert → Image where images are not allowed", () => {
+    const ids = (state: Parameters<typeof createMenuModel>[1]) => allItems(createMenuModel([], state).flatMap((section) => section.items)).map((item) => item.id);
+    expect(ids({ imagesAllowed: true })).toContain("insert.image");
+    expect(ids({ imagesAllowed: false })).not.toContain("insert.image");
+    expect(ids({ imagesAllowed: false })).not.toContain("edit.insert");
+  });
+
   it("contains File, Edit, View, and Help without a top-level Format section", () => {
     expect(createMenuModel([]).map((section) => section.id)).toEqual(["file", "edit", "view", "help"]);
   });

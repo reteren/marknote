@@ -114,6 +114,21 @@ pub fn clear_attachment_cache(
 
 #[tauri::command]
 #[allow(non_snake_case)]
+pub async fn export_markdown_zip(
+    app: AppHandle,
+    docPath: Option<String>,
+    text: String,
+    suggestedName: String,
+) -> Result<Option<crate::export_zip::ZipExportResult>, CommandError> {
+    tauri::async_runtime::spawn_blocking(move || {
+        crate::export_zip::export_markdown_zip(&app, docPath, text, suggestedName)
+    })
+    .await
+    .map_err(|error| CommandError::Dialog(error.to_string()))?
+}
+
+#[tauri::command]
+#[allow(non_snake_case)]
 pub fn open_image(app: AppHandle, docPath: Option<String>, src: String) -> Result<(), CommandError> {
     crate::attachments::open_image(app, docPath, src)
 }

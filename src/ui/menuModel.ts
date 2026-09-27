@@ -37,6 +37,10 @@ export type MenuState = {
   formatId?: string;
   /** Whether this document accepts Markdown editing commands. */
   markdownCommands?: boolean;
+  /** Whether images can be inserted (editable Markdown only). */
+  imagesAllowed?: boolean;
+  /** Whether "Export as ZIP" applies: a Markdown document that contains images. */
+  canExportZip?: boolean;
   zoomPercent?: number;
 };
 
@@ -121,6 +125,7 @@ export function createMenuModel(
         separator("file.separator.save"),
         item("file.save", t("menu.save"), "Ctrl+S", state.canSave === false),
         item("file.saveAs", t("menu.saveAs"), "Ctrl+Shift+S"),
+        ...(state.canExportZip ? [item("file.exportZip", t("menu.exportZip"))] : []),
         separator("file.separator.close"),
         item("file.close", t("menu.close"), "Ctrl+W"),
         separator("file.separator.settings"),
@@ -146,10 +151,14 @@ export function createMenuModel(
         item("edit.deleteLine", t("menu.deleteLine"), "Ctrl+D", notEditable),
         item("edit.moveLineUp", t("menu.moveLineUp"), "Alt+↑", notEditable),
         item("edit.moveLineDown", t("menu.moveLineDown"), "Alt+↓", notEditable),
-        separator("edit.separator.insert"),
-        item("edit.insert", t("menu.insert"), "", notEditable, [
-          item("insert.image", t("menu.insertImage"), "Ctrl+Shift+I", notEditable),
-        ]),
+        ...(state.imagesAllowed === false
+          ? []
+          : [
+              separator("edit.separator.insert"),
+              item("edit.insert", t("menu.insert"), "", notEditable, [
+                item("insert.image", t("menu.insertImage"), "Ctrl+Shift+I", notEditable),
+              ]),
+            ]),
       ],
     },
     {

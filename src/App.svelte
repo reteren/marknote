@@ -45,7 +45,7 @@ import { onMount, tick } from "svelte";
     type OpenedFile,
     type SaveResult,
   } from "./state/document.svelte";
-  import { formatsState, loadCreatableFormats, markdownFormat, type FormatCapabilities } from "./state/formats.svelte";
+  import { acceptsImages, containsImages, formatsState, loadCreatableFormats, markdownFormat, type FormatCapabilities } from "./state/formats.svelte";
   import MenuBar from "./ui/MenuBar.svelte";
   import SaveControls from "./ui/SaveControls.svelte";
   import StartScreen from "./ui/StartScreen.svelte";
@@ -158,7 +158,13 @@ import { EditorView, type EditorView as EditorViewType } from "@codemirror/view"
       documentState.saveStatus !== "pending" &&
       (documentState.path === null ? documentState.text.length > 0 : documentState.dirty),
   );
+  /** Images can be inserted and exported only in an editable Markdown document. */
+  const imagesAllowed = $derived(!isReadOnly && acceptsImages(documentState.format));
+  const canExportZip = $derived(imagesAllowed && containsImages(documentState.text));
+
   const menuState = $derived({
+    imagesAllowed,
+    canExportZip,
     editable: !isReadOnly,
     readOnly: isReadOnly,
     hasSelection: stats.selection !== null,
@@ -262,6 +268,7 @@ import { EditorView, type EditorView as EditorViewType } from "@codemirror/view"
       handlers: {
         ...actions.handlers,
         insertImage: () => {
+          if (!imagesAllowed) return false;
           void promptInsertImage();
           return true;
         },
@@ -472,6 +479,27 @@ import { EditorView, type EditorView as EditorViewType } from "@codemirror/view"
       editorView.focus();
     } else {
       rebuildEditor(true);
+    }
+  }
+
+  /** Saves the Markdown and its images as one ZIP; images are embedded so the file works anywhere. */
+  async function exportAsZip(): Promise<void> {
+    if (!editorView || !canExportZip) return;
+    const currentName = documentState.path?.split(/[\\/]/u).pop() ?? "Untitled";
+    const stem = currentName.replace(/\.[^.]*$/u, "") || "Untitled";
+    try {
+      const result = await invoke<{ path: string; embedded: number; skipped: string[] } | null>("export_markdown_zip", {
+        docPath: documentState.path,
+        text: editorView.state.doc.toString(),
+        suggestedName: `${stem}.md`,
+      });
+      if (!result) return;
+      const name = result.path.split(/[\\/]/u).pop() ?? result.path;
+      attachmentNotice = result.skipped.length
+        ? { message: t("notice.zipExportedWithMissing", { name, count: result.skipped.length }), severity: "warning" }
+        : { message: t("notice.zipExported", { name }), severity: "info" };
+    } catch (error) {
+      reportError(error);
     }
   }
 
@@ -802,7 +830,7 @@ import { EditorView, type EditorView as EditorViewType } from "@codemirror/view"
   }
 
   async function promptInsertImage(): Promise<void> {
-    if (!editorView || isReadOnly) return;
+    if (!editorView || !imagesAllowed) return;
     try {
       const selected = await openFileDialog({
         title: t("image.pickerTitle"),
@@ -918,6 +946,7 @@ import { EditorView, type EditorView as EditorViewType } from "@codemirror/view"
       case "file.open": void pickFile(); break;
       case "file.save": void saveNow(); break;
       case "file.saveAs": void saveDocumentAs(); break;
+      case "file.exportZip": void exportAsZip(); break;
       case "file.close":
         if (workspace.tabs.length > 1) {
           void handleCloseTab(workspace.activeId);
@@ -1046,7 +1075,7 @@ import { EditorView, type EditorView as EditorViewType } from "@codemirror/view"
     const imagePaths = normalized.filter(isImageExtension);
     const docPaths = normalized.filter((p) => !isImageExtension(p));
 
-    if (imagePaths.length > 0 && editorView && !isReadOnly) {
+    if (imagePaths.length > 0 && editorView && imagesAllowed) {
       let targetPos: number | undefined;
       if (position && typeof window !== "undefined") {
         const clientX = position.x / (window.devicePixelRatio || 1);
@@ -1105,7 +1134,7 @@ import { EditorView, type EditorView as EditorViewType } from "@codemirror/view"
 
     const files = Array.from(event.dataTransfer?.files ?? []);
     const imageFiles = files.filter((file) => isImageExtension(file.name) || file.type.startsWith("image/"));
-    if (imageFiles.length > 0 && editorView && !isReadOnly) {
+    if (imageFiles.length > 0 && editorView && imagesAllowed) {
       const coords = editorView.posAtCoords({ x: event.clientX, y: event.clientY });
       const targetPos = coords ?? undefined;
       void (async () => {
@@ -1436,6 +1465,7 @@ import { EditorView, type EditorView as EditorViewType } from "@codemirror/view"
 
   <ContextMenu
     editable={!isReadOnly}
+    {imagesAllowed}
     formatId={documentState.format.id}
     {editorView}
     onSelect={handleContextMenuAction}

@@ -320,9 +320,12 @@ export function handlePasteEvent(
 export function createImagePasteHandler(
   getDocPath: (view: EditorView) => string | null,
   onNotice?: (message: string, severity?: "info" | "warning" | "error") => void,
+  acceptsImagesIn: (view: EditorView) => boolean = () => true,
 ): Extension {
   return EditorView.domEventHandlers({
     paste(event: ClipboardEvent, view: EditorView): boolean {
+      // Outside Markdown an image on the clipboard is ignored; text still pastes normally.
+      if (!acceptsImagesIn(view)) return false;
       return handlePasteEvent(event, view, getDocPath, onNotice);
     },
   });
