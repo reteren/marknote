@@ -362,12 +362,14 @@ const ru = {
   "image.pickerTitle": "Выберите изображение",
   "image.filterLabel": "Изображения",
   "settings.attachments.title": "Вложения",
-  "settings.attachments.cache": "Кэш изображений",
-  "settings.attachments.cacheDescription": "Изображения, вставленные в несохранённые документы, хранятся здесь до сохранения документа.",
+  "settings.attachments.folder": "Папка для картинок",
+  "settings.attachments.folderDescription": "Сюда сохраняются все вставленные картинки. Ссылки не зависят от имени и места документа, поэтому переименование, перенос и копирование текста не ломают картинки.",
+  "settings.attachments.change": "Изменить…",
+  "settings.attachments.useDefault": "По умолчанию",
+  "settings.attachments.skipped": "Не перенесено картинок: {count} — в новой папке уже есть файлы с такими именами",
+  "settings.attachments.folderError": "Не удалось сменить папку для картинок",
   "settings.attachments.cacheSize": "{files} файлов, {size}",
   "settings.attachments.cacheEmpty": "Пусто",
-  "settings.attachments.clear": "Очистить кэш",
-  "settings.attachments.cleared": "Кэш изображений очищен",
   "settings.attachments.reveal": "Открыть папку",
 } satisfies Dictionary;
 

@@ -363,12 +363,14 @@ const en = {
   "image.pickerTitle": "Choose an image",
   "image.filterLabel": "Images",
   "settings.attachments.title": "Attachments",
-  "settings.attachments.cache": "Image cache",
-  "settings.attachments.cacheDescription": "Images pasted into unsaved documents are kept here until the document is saved.",
+  "settings.attachments.folder": "Image folder",
+  "settings.attachments.folderDescription": "Every image you insert is stored here. Links do not depend on the document's name or place, so renaming, moving or copying text keeps pictures working.",
+  "settings.attachments.change": "Change…",
+  "settings.attachments.useDefault": "Use default",
+  "settings.attachments.skipped": "{count} images were not moved because a file with the same name is already in the new folder",
+  "settings.attachments.folderError": "Could not change the image folder",
   "settings.attachments.cacheSize": "{files} files, {size}",
   "settings.attachments.cacheEmpty": "Empty",
-  "settings.attachments.clear": "Clear cache",
-  "settings.attachments.cleared": "Image cache cleared",
   "settings.attachments.reveal": "Open folder",
 } as const satisfies Dictionary;
 

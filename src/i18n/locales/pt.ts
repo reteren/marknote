@@ -362,12 +362,14 @@ const pt = {
   "image.pickerTitle": "Escolher uma imagem",
   "image.filterLabel": "Imagens",
   "settings.attachments.title": "Anexos",
-  "settings.attachments.cache": "Cache de imagens",
-  "settings.attachments.cacheDescription": "As imagens coladas em documentos não guardados são mantidas aqui até o documento ser guardado.",
+  "settings.attachments.folder": "Pasta de imagens",
+  "settings.attachments.folderDescription": "Todas as imagens inseridas são guardadas aqui. Os links não dependem do nome nem do local do documento, por isso renomear, mover ou copiar texto não estraga as imagens.",
+  "settings.attachments.change": "Alterar…",
+  "settings.attachments.useDefault": "Usar a predefinida",
+  "settings.attachments.skipped": "{count} imagens não foram movidas porque já existem ficheiros com o mesmo nome na nova pasta",
+  "settings.attachments.folderError": "Não foi possível alterar a pasta de imagens",
   "settings.attachments.cacheSize": "{files} ficheiros, {size}",
   "settings.attachments.cacheEmpty": "Vazio",
-  "settings.attachments.clear": "Limpar cache",
-  "settings.attachments.cleared": "Cache de imagens limpo",
   "settings.attachments.reveal": "Abrir pasta",
 } satisfies Dictionary;
 

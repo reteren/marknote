@@ -89,16 +89,6 @@ pub fn resolve_image(
 }
 
 #[tauri::command]
-#[allow(non_snake_case)]
-pub fn promote_attachments(
-    app: AppHandle,
-    docPath: String,
-    srcs: Vec<String>,
-) -> Result<Vec<crate::attachments::AttachmentRewrite>, CommandError> {
-    crate::attachments::promote_attachments(app, docPath, srcs)
-}
-
-#[tauri::command]
 pub fn attachment_cache_stats(
     app: AppHandle,
 ) -> Result<crate::attachments::CacheStats, CommandError> {
@@ -106,10 +96,11 @@ pub fn attachment_cache_stats(
 }
 
 #[tauri::command]
-pub fn clear_attachment_cache(
+pub fn move_attachments_folder(
     app: AppHandle,
-) -> Result<crate::attachments::CacheClearStats, CommandError> {
-    crate::attachments::clear_attachment_cache(app)
+    folder: String,
+) -> Result<crate::attachments::FolderMove, CommandError> {
+    crate::attachments::move_attachments_folder(app, folder)
 }
 
 #[tauri::command]

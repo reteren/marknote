@@ -362,12 +362,14 @@ const fr = {
   "image.pickerTitle": "Choisir une image",
   "image.filterLabel": "Images",
   "settings.attachments.title": "Pièces jointes",
-  "settings.attachments.cache": "Cache d'images",
-  "settings.attachments.cacheDescription": "Les images collées dans des documents non enregistrés sont conservées ici jusqu'à ce que le document soit enregistré.",
+  "settings.attachments.folder": "Dossier des images",
+  "settings.attachments.folderDescription": "Toutes les images insérées sont enregistrées ici. Les liens ne dépendent ni du nom ni de l'emplacement du document : renommer, déplacer ou copier du texte ne casse pas les images.",
+  "settings.attachments.change": "Modifier…",
+  "settings.attachments.useDefault": "Par défaut",
+  "settings.attachments.skipped": "{count} images n'ont pas été déplacées : des fichiers du même nom existent déjà dans le nouveau dossier",
+  "settings.attachments.folderError": "Impossible de changer le dossier des images",
   "settings.attachments.cacheSize": "{files} fichiers, {size}",
   "settings.attachments.cacheEmpty": "Vide",
-  "settings.attachments.clear": "Vider le cache",
-  "settings.attachments.cleared": "Cache d'images vidé",
   "settings.attachments.reveal": "Ouvrir le dossier",
 } satisfies Dictionary;
 

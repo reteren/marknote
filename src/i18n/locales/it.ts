@@ -362,12 +362,14 @@ const it = {
   "image.pickerTitle": "Scegli un'immagine",
   "image.filterLabel": "Immagini",
   "settings.attachments.title": "Allegati",
-  "settings.attachments.cache": "Cache immagini",
-  "settings.attachments.cacheDescription": "Le immagini incollate in documenti non salvati vengono conservate qui finché il documento non viene salvato.",
+  "settings.attachments.folder": "Cartella immagini",
+  "settings.attachments.folderDescription": "Qui vengono salvate tutte le immagini inserite. I collegamenti non dipendono dal nome o dalla posizione del documento, quindi rinominare, spostare o copiare testo non rompe le immagini.",
+  "settings.attachments.change": "Cambia…",
+  "settings.attachments.useDefault": "Usa predefinita",
+  "settings.attachments.skipped": "{count} immagini non sono state spostate perché nella nuova cartella esistono già file con lo stesso nome",
+  "settings.attachments.folderError": "Impossibile cambiare la cartella immagini",
   "settings.attachments.cacheSize": "{files} file, {size}",
   "settings.attachments.cacheEmpty": "Vuoto",
-  "settings.attachments.clear": "Cancella cache",
-  "settings.attachments.cleared": "Cache immagini cancellata",
   "settings.attachments.reveal": "Apri cartella",
 } satisfies Dictionary;
 

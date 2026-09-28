@@ -362,12 +362,14 @@ const zh = {
   "image.pickerTitle": "选择图片",
   "image.filterLabel": "图片",
   "settings.attachments.title": "附件",
-  "settings.attachments.cache": "图片缓存",
-  "settings.attachments.cacheDescription": "粘贴到未保存文档中的图片会保留在此处，直到保存该文档。",
+  "settings.attachments.folder": "图片文件夹",
+  "settings.attachments.folderDescription": "插入的所有图片都保存在这里。链接不依赖文档的名称或位置，因此重命名、移动或复制文本都不会破坏图片。",
+  "settings.attachments.change": "更改…",
+  "settings.attachments.useDefault": "使用默认",
+  "settings.attachments.skipped": "新文件夹中已有同名文件，有 {count} 张图片未移动",
+  "settings.attachments.folderError": "无法更改图片文件夹",
   "settings.attachments.cacheSize": "{files} 个文件，{size}",
   "settings.attachments.cacheEmpty": "空",
-  "settings.attachments.clear": "清除缓存",
-  "settings.attachments.cleared": "图片缓存已清除",
   "settings.attachments.reveal": "打开文件夹",
 } satisfies Dictionary;
 

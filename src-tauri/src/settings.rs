@@ -37,6 +37,17 @@ pub struct Settings {
     pub files: FileSettings,
     #[serde(default)]
     pub windows: WindowSettings,
+    #[serde(default)]
+    pub attachments: AttachmentSettings,
+}
+
+/// Where inserted images are stored. An empty folder means the default one
+/// inside the configuration directory.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct AttachmentSettings {
+    #[serde(default)]
+    pub folder: String,
 }
 
 impl Default for Settings {
@@ -49,6 +60,7 @@ impl Default for Settings {
             live_preview: LivePreviewSettings::default(),
             files: FileSettings::default(),
             windows: WindowSettings::default(),
+            attachments: AttachmentSettings::default(),
         }
     }
 }
@@ -827,6 +839,9 @@ mod tests {
                 startup_action: StartupAction::RecentFiles,
                 raise_existing_window: false,
                 open_files_in_tabs: true,
+            },
+            attachments: AttachmentSettings {
+                folder: r"D:\Pictures\MarkNote".to_owned(),
             },
         };
 

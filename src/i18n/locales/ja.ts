@@ -362,12 +362,14 @@ const ja = {
   "image.pickerTitle": "画像を選択",
   "image.filterLabel": "画像",
   "settings.attachments.title": "添付ファイル",
-  "settings.attachments.cache": "画像キャッシュ",
-  "settings.attachments.cacheDescription": "未保存のドキュメントに貼り付けられた画像は、ドキュメントが保存されるまでここに保持されます。",
+  "settings.attachments.folder": "画像フォルダー",
+  "settings.attachments.folderDescription": "挿入した画像はすべてここに保存されます。リンクはドキュメントの名前や場所に依存しないため、名前の変更や移動、テキストのコピーでも画像は壊れません。",
+  "settings.attachments.change": "変更…",
+  "settings.attachments.useDefault": "既定に戻す",
+  "settings.attachments.skipped": "新しいフォルダーに同じ名前のファイルがあるため、{count} 個の画像を移動しませんでした",
+  "settings.attachments.folderError": "画像フォルダーを変更できませんでした",
   "settings.attachments.cacheSize": "{files} 件のファイル、{size}",
   "settings.attachments.cacheEmpty": "空",
-  "settings.attachments.clear": "キャッシュを消去",
-  "settings.attachments.cleared": "画像キャッシュを消去しました",
   "settings.attachments.reveal": "フォルダーを開く",
 } satisfies Dictionary;
 

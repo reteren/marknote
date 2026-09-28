@@ -390,12 +390,14 @@ const ar = {
   "image.pickerTitle": "اختر صورة",
   "image.filterLabel": "الصور",
   "settings.attachments.title": "المرفقات",
-  "settings.attachments.cache": "ذاكرة التخزين المؤقت للصور",
-  "settings.attachments.cacheDescription": "يتم الاحتفاظ بالصور التي تم لصقها في المستندات غير المحفوظة هنا حتى يتم حفظ المستند.",
+  "settings.attachments.folder": "مجلد الصور",
+  "settings.attachments.folderDescription": "تُحفظ هنا كل الصور التي تُدرجها. لا تعتمد الروابط على اسم المستند أو مكانه، لذلك لا تتعطل الصور عند إعادة التسمية أو النقل أو نسخ النص.",
+  "settings.attachments.change": "تغيير…",
+  "settings.attachments.useDefault": "استخدام الافتراضي",
+  "settings.attachments.skipped": "لم يتم نقل {count} صور لأن ملفات بالأسماء نفسها موجودة في المجلد الجديد",
+  "settings.attachments.folderError": "تعذّر تغيير مجلد الصور",
   "settings.attachments.cacheSize": "{files} ملفات، {size}",
   "settings.attachments.cacheEmpty": "فارغ",
-  "settings.attachments.clear": "مسح ذاكرة التخزين المؤقت",
-  "settings.attachments.cleared": "تم مسح ذاكرة التخزين المؤقت للصور",
   "settings.attachments.reveal": "فتح المجلد",
 } satisfies Dictionary;
 

@@ -57,6 +57,10 @@ export type Settings = {
     raiseExistingWindow: boolean;
     openFilesInTabs: boolean;
   };
+  attachments: {
+    /** Folder for inserted images; empty means the default folder in the app data. */
+    folder: string;
+  };
 };
 
 export type SettingsPatch = {
@@ -67,6 +71,7 @@ export type SettingsPatch = {
   livePreview?: Partial<Settings["livePreview"]>;
   files?: Partial<Settings["files"]>;
   windows?: Partial<Settings["windows"]>;
+  attachments?: Partial<Settings["attachments"]>;
 };
 type UpdateOptions = { persist?: boolean; applyLanguage?: boolean };
 
@@ -133,6 +138,9 @@ export const defaultSettings: Settings = {
     raiseExistingWindow: true,
     openFilesInTabs: false,
   },
+  attachments: {
+    folder: "",
+  },
 };
 
 export const settingsState = $state<SettingsState>({
@@ -180,6 +188,7 @@ function cloneSettings(settings: Settings): Settings {
     livePreview: { ...settings.livePreview },
     files: { ...settings.files },
     windows: { ...settings.windows },
+    attachments: { ...defaultSettings.attachments, ...settings.attachments },
   };
 }
 
@@ -265,6 +274,7 @@ export function updateSettings(patch: SettingsPatch, options: UpdateOptions = {}
     livePreview: { ...previous.livePreview, ...patch.livePreview },
     files: { ...previous.files, ...patch.files },
     windows: { ...previous.windows, ...patch.windows },
+    attachments: { ...previous.attachments, ...patch.attachments },
   };
   if (options.persist !== false) {
     revision += 1;

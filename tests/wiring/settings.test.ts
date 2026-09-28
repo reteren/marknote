@@ -27,6 +27,11 @@ export type SettingException = {
  * Every entry must contain a clear technical justification.
  */
 export const SETTINGS_EXCEPTIONS: readonly SettingException[] = [
+  {
+    path: "attachments.folder",
+    reason:
+      "Handled in Rust: src-tauri/src/attachments.rs (cache_dir stores and resolves every image in this folder)",
+  },
   // --- Settings applied by the Rust backend (windows.*) ---
   {
     path: "windows.rememberSizeAndPosition",

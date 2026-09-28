@@ -11,9 +11,11 @@ const mocks = vi.hoisted(() => {
     livePreview: { enabled: true, revealMarkup: "cursor", renderFormulas: true, renderImages: true, maxImageWidth: "column", disableAboveBytes: 5 * 1024 * 1024 },
     files: { autosave: true, autosaveDelayMs: 2_000, saveOnWindowBlur: true, newDocumentFormat: "markdown", newDocumentEncoding: "utf8", newDocumentLineEnding: "system", trimTrailingSpaces: false, finalNewline: false },
     windows: { rememberSizeAndPosition: true, startupAction: "startScreen", raiseExistingWindow: true, openFilesInTabs: false },
+    attachments: { folder: "" },
   };
   const invoke = vi.fn();
-  return { invoke, base };
+  const openDialog = vi.fn();
+  return { invoke, base, openDialog };
 });
 
 const labels: Record<string, string> = {
@@ -30,11 +32,11 @@ const labels: Record<string, string> = {
   "settings.section.windows": "Windows",
   "settings.section.other": "Other",
   "settings.attachments.title": "Attachments",
-  "settings.attachments.cache": "Image cache",
-  "settings.attachments.cacheDescription": "Images pasted into unsaved documents are kept here until the document is saved.",
+  "settings.attachments.folder": "Image folder",
+  "settings.attachments.folderDescription": "Every image you insert is stored here.",
   "settings.attachments.cacheEmpty": "Empty",
-  "settings.attachments.clear": "Clear cache",
-  "settings.attachments.cleared": "Image cache cleared",
+  "settings.attachments.change": "Change…",
+  "settings.attachments.useDefault": "Use default",
   "settings.attachments.reveal": "Open folder",
   "settings.saved": "Saved",
   "settings.pendingSave": "Saving changes…",
@@ -42,6 +44,7 @@ const labels: Record<string, string> = {
 };
 
 vi.mock("@tauri-apps/api/core", () => ({ invoke: mocks.invoke }));
+vi.mock("@tauri-apps/plugin-dialog", () => ({ open: mocks.openDialog }));
 vi.mock("../../src/i18n", () => ({
   translate: (key: string, params?: Record<string, any>) => {
     if (key === "settings.attachments.cacheSize" && params) {
@@ -81,8 +84,8 @@ describe("SettingsWindow - Attachments Section", () => {
       if (command === "get_settings" || command === "reset_settings") return structuredClone(mocks.base);
       if (command === "save_settings") return args?.settings;
       if (command === "list_creatable_formats") return [{ id: "markdown", label: "Markdown", creatable: true }];
-      if (command === "attachment_cache_stats") return { files: 3, bytes: 1536 };
-      if (command === "clear_attachment_cache") return { files: 3, bytes: 1536 };
+      if (command === "attachment_cache_stats") return { files: 3, bytes: 1536, path: "C:\Data\attachments" };
+      if (command === "move_attachments_folder") return { files: 3, bytes: 1536, path: args?.folder || "C:\Data\attachments", skipped: 0 };
       if (command === "reveal_attachment_cache") return undefined;
       return undefined;
     });
@@ -95,7 +98,7 @@ describe("SettingsWindow - Attachments Section", () => {
     expect(tab).toBeInTheDocument();
   });
 
-  it("loads and displays cache stats when opened", async () => {
+  it("shows the image folder, its path and size when opened", async () => {
     mount();
     const tab = screen.getByRole("tab", { name: "Attachments" });
     await fireEvent.click(tab);
@@ -104,9 +107,12 @@ describe("SettingsWindow - Attachments Section", () => {
       expect(mocks.invoke).toHaveBeenCalledWith("attachment_cache_stats");
     });
 
-    expect(screen.getByText("Image cache")).toBeInTheDocument();
-    expect(screen.getByText("Images pasted into unsaved documents are kept here until the document is saved.")).toBeInTheDocument();
-    expect(screen.getByText("3 files, 1.5 KB")).toBeInTheDocument();
+    expect(screen.getByText("Image folder")).toBeInTheDocument();
+    expect(screen.getByText("Every image you insert is stored here.")).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText("3 files, 1.5 KB")).toBeInTheDocument());
+    expect(screen.getByText("C:\Data\attachments")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Clear cache" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Use default" })).toBeNull();
   });
 
   it("displays Empty when cache has 0 files", async () => {
@@ -124,23 +130,34 @@ describe("SettingsWindow - Attachments Section", () => {
     });
   });
 
-  it("clears cache and shows cleared feedback on Clear cache click", async () => {
+  it("moves the images to a chosen folder, then stores the folder in the settings", async () => {
+    mocks.openDialog.mockResolvedValue("D:\Pictures\MarkNote");
     mount();
     await fireEvent.click(screen.getByRole("tab", { name: "Attachments" }));
+    await fireEvent.click(await screen.findByRole("button", { name: "Change…" }));
 
     await waitFor(() => {
-      expect(screen.getByText("3 files, 1.5 KB")).toBeInTheDocument();
+      expect(mocks.invoke).toHaveBeenCalledWith("move_attachments_folder", { folder: "D:\Pictures\MarkNote" });
+      expect(settingsState.settings.attachments.folder).toBe("D:\Pictures\MarkNote");
     });
+    const moveCall = mocks.invoke.mock.calls.findIndex(([command]) => command === "move_attachments_folder");
+    const saveCall = mocks.invoke.mock.calls.findIndex(([command, args]) => command === "save_settings" && args?.settings?.attachments?.folder);
+    expect(moveCall).toBeGreaterThanOrEqual(0);
+    expect(saveCall).toBeGreaterThan(moveCall);
 
-    const clearButton = screen.getByRole("button", { name: "Clear cache" });
-    await fireEvent.click(clearButton);
-
-    expect(mocks.invoke).toHaveBeenCalledWith("clear_attachment_cache");
-
+    await fireEvent.click(await screen.findByRole("button", { name: "Use default" }));
     await waitFor(() => {
-      expect(screen.getByText("Image cache cleared")).toBeInTheDocument();
-      expect(screen.getByText("Empty")).toBeInTheDocument();
+      expect(mocks.invoke).toHaveBeenCalledWith("move_attachments_folder", { folder: "" });
+      expect(settingsState.settings.attachments.folder).toBe("");
     });
+  });
+
+  it("changes nothing when the folder dialog is cancelled", async () => {
+    mocks.openDialog.mockResolvedValue(null);
+    mount();
+    await fireEvent.click(screen.getByRole("tab", { name: "Attachments" }));
+    await fireEvent.click(await screen.findByRole("button", { name: "Change…" }));
+    expect(mocks.invoke).not.toHaveBeenCalledWith("move_attachments_folder", expect.anything());
   });
 
   it("opens folder on Open folder click", async () => {

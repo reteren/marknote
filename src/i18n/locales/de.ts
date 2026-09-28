@@ -362,12 +362,14 @@ const de = {
   "image.pickerTitle": "Bild wählen",
   "image.filterLabel": "Bilder",
   "settings.attachments.title": "Anhänge",
-  "settings.attachments.cache": "Bild-Cache",
-  "settings.attachments.cacheDescription": "Bilder, die in nicht gespeicherte Dokumente eingefügt werden, werden hier aufbewahrt, bis das Dokument gespeichert wird.",
+  "settings.attachments.folder": "Bilderordner",
+  "settings.attachments.folderDescription": "Hier werden alle eingefügten Bilder gespeichert. Links hängen nicht vom Namen oder Ort des Dokuments ab, daher funktionieren Bilder auch nach Umbenennen, Verschieben oder Kopieren von Text.",
+  "settings.attachments.change": "Ändern…",
+  "settings.attachments.useDefault": "Standard verwenden",
+  "settings.attachments.skipped": "{count} Bilder wurden nicht verschoben, weil im neuen Ordner bereits gleichnamige Dateien liegen",
+  "settings.attachments.folderError": "Der Bilderordner konnte nicht geändert werden",
   "settings.attachments.cacheSize": "{files} Dateien, {size}",
   "settings.attachments.cacheEmpty": "Leer",
-  "settings.attachments.clear": "Cache leeren",
-  "settings.attachments.cleared": "Bild-Cache geleert",
   "settings.attachments.reveal": "Ordner öffnen",
 } satisfies Dictionary;
 

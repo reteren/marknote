@@ -231,39 +231,3 @@ function notifyTargetChanged(target: DocumentState): void {
   const tabId = target === documentState ? activeTab().id : tabIdForDocument(target);
   if (tabId) notifyDocumentChanged(tabId);
 }
-
-/**
- * Extracts all image source paths from Markdown image syntax and HTML <img> tags.
- */
-export function extractImageSrcs(text: string): string[] {
-  const srcs = new Set<string>();
-  if (!text) return [];
-
-  const mdRegex = /!\[(?:[^\]]*)\]\(\s*(?:<([^>]+)>|([^\s)]+))(?:\s+["'][^"']*["'])?\s*\)/gu;
-  let match: RegExpExecArray | null;
-  while ((match = mdRegex.exec(text)) !== null) {
-    const src = match[1] ?? match[2];
-    if (src) srcs.add(src);
-  }
-
-  const htmlRegex = /<img\b[^>]*?\bsrc\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))[^>]*>/giu;
-  while ((match = htmlRegex.exec(text)) !== null) {
-    const src = match[1] ?? match[2] ?? match[3];
-    if (src) srcs.add(src);
-  }
-
-  return Array.from(srcs);
-}
-
-/**
- * Rewrites image sources in document text according to { from, to } mapping.
- */
-export function rewriteAttachmentSrcs(text: string, rewrites: Array<{ from: string; to: string }>): string {
-  if (!text || !rewrites || rewrites.length === 0) return text;
-  let result = text;
-  for (const { from, to } of rewrites) {
-    if (!from || from === to) continue;
-    result = result.replaceAll(from, to);
-  }
-  return result;
-}

@@ -7,11 +7,9 @@ import { toggleCodeBlock, toggleWrapper } from "../editor/keymap";
 import { safeLinkHref } from "../editor/livePreview/inline";
 import {
   documentState,
-  extractImageSrcs,
   markSaved,
   replaceDocument,
   resetDocument,
-  rewriteAttachmentSrcs,
   setDocumentText,
   type DocumentState,
   type NewDocument,
@@ -241,18 +239,6 @@ function replaceEditorText(view: EditorView | null | undefined, text: string): v
   view.dispatch({
     changes: { from: 0, to: view.state.doc.length, insert: text },
     selection: { anchor: 0 },
-  });
-}
-
-function replaceEditorTextPreservingSelection(view: EditorView | null | undefined, text: string): void {
-  if (!view) return;
-  const currentText = view.state.doc.toString();
-  if (currentText === text) return;
-  const currentSelection = view.state.selection;
-  const changes = view.state.changes({ from: 0, to: view.state.doc.length, insert: text });
-  view.dispatch({
-    changes,
-    selection: currentSelection.map(changes),
   });
 }
 
@@ -712,44 +698,6 @@ export function createActions(dependencies: ActionsDependencies = {}): AppAction
     }
   };
 
-  const promoteAttachments = async (docPath: string, view?: EditorView | null): Promise<void> => {
-    const currentText = state.text;
-    const srcs = extractImageSrcs(currentText);
-    if (srcs.length === 0) return;
-    const hasCacheSrcs = srcs.some((src) => src.startsWith("marknote-cache/") || src.startsWith("marknote-cache\\"));
-    if (!hasCacheSrcs) return;
-
-    try {
-      const rewrites = await invoke<Array<{ from: string; to: string }>>("promote_attachments", {
-        docPath,
-        srcs,
-      });
-
-      if (!rewrites || rewrites.length === 0) return;
-
-      const latestText = state.text;
-      const rewrittenText = rewriteAttachmentSrcs(latestText, rewrites);
-      if (rewrittenText === latestText) return;
-
-      const saveResult = await invoke<SaveResult>("save_file", {
-        path: docPath,
-        text: rewrittenText,
-        encoding: state.encoding,
-        bom: state.bom,
-        lineEnding: state.lineEnding,
-      });
-
-      const targetView = view ?? getView();
-      if (targetView) {
-        replaceEditorTextPreservingSelection(targetView, rewrittenText);
-      }
-      setDocumentText(rewrittenText);
-      markSaved(saveResult, rewrittenText);
-    } catch (error) {
-      notify(error instanceof Error ? error.message : String(error));
-    }
-  };
-
   const saveAs = async (_view?: EditorView | null): Promise<ActionResult> => {
     if (!canSaveAs() || !hasTextOrPath()) return unavailable("There is nothing to save");
     if (shouldWarnLossySave(state.format) && !(await prepareLossySave())) return false;
@@ -759,7 +707,6 @@ export function createActions(dependencies: ActionsDependencies = {}): AppAction
       const result = await saveAsFile(state, suggestedName);
       if (!result) return false;
       markSaved(result, beforeText);
-      await promoteAttachments(result.path, _view ?? getView());
       return true;
     } catch (error) {
       notify(error instanceof Error ? error.message : String(error));
@@ -784,7 +731,6 @@ export function createActions(dependencies: ActionsDependencies = {}): AppAction
           });
       if (!result) return false;
       markSaved(result, beforeText);
-      await promoteAttachments(result.path, view ?? getView());
       return true;
     } catch (error) {
       notify(error instanceof Error ? error.message : String(error));

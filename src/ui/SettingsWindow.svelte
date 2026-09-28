@@ -1,5 +1,6 @@
 <script lang="ts">
   import { invoke } from "@tauri-apps/api/core";
+  import { open as openFolderDialog } from "@tauri-apps/plugin-dialog";
   import { onMount, tick } from "svelte";
   import type { EditorView } from "@codemirror/view";
   import { getZoom, installZoom, resetZoom, setZoomPercent, zoomIn, zoomOut } from "../editor/zoom";
@@ -155,8 +156,8 @@
   let copiedVersion = $state(false);
   let settingsFileError = $state(false);
   let recentFilesCleared = $state(false);
-  let attachmentCacheCleared = $state(false);
   let attachmentCacheError = $state(false);
+  let attachmentFolderNotice = $state<string | null>(null);
   type AttachmentStats = { files: number; bytes: number; path?: string };
   let attachmentStats = $state<AttachmentStats | null>(null);
   let zoomView = $derived(editorView);
@@ -171,17 +172,26 @@
     }
   }
 
-  async function handleClearAttachmentCache(): Promise<void> {
+  type FolderMove = { files: number; bytes: number; path: string; skipped: number };
+
+  /** Moves the images to `folder` ("" = default) first, then stores the choice. */
+  async function applyAttachmentFolder(folder: string): Promise<void> {
+    attachmentCacheError = false;
+    attachmentFolderNotice = null;
     try {
-      await invoke("clear_attachment_cache");
-      attachmentStats = { files: 0, bytes: 0, path: attachmentStats?.path };
-      attachmentCacheCleared = true;
-      setTimeout(() => {
-        attachmentCacheCleared = false;
-      }, 2500);
+      const moved = await invoke<FolderMove>("move_attachments_folder", { folder });
+      updateSettings({ attachments: { folder } });
+      await flushSettings();
+      attachmentStats = { files: moved.files, bytes: moved.bytes, path: moved.path };
+      if (moved.skipped > 0) attachmentFolderNotice = t("settings.attachments.skipped", { count: moved.skipped });
     } catch {
-      // Ignored
+      attachmentCacheError = true;
     }
+  }
+
+  async function handleChangeAttachmentFolder(): Promise<void> {
+    const selected = await openFolderDialog({ directory: true, multiple: false, defaultPath: attachmentStats?.path });
+    if (typeof selected === "string" && selected) await applyAttachmentFolder(selected);
   }
 
   async function handleRevealAttachmentCache(): Promise<void> {
@@ -312,7 +322,7 @@
   function sectionHasMatch(id: SectionId, query = searchQuery): boolean {
     if (!query.trim()) return true;
     if (id === "attachments") {
-      const text = `${t("settings.attachments.title")} ${t("settings.attachments.cache")} ${t("settings.attachments.cacheDescription")}`.toLocaleLowerCase();
+      const text = `${t("settings.attachments.title")} ${t("settings.attachments.folder")} ${t("settings.attachments.folderDescription")}`.toLocaleLowerCase();
       return text.includes(query.trim().toLocaleLowerCase());
     }
     const section = sections.find((item) => item.id === id);
@@ -485,30 +495,30 @@
       <div class="settings-content" id={`settings-panel-${activeSection}`} role="tabpanel" aria-label={t(sections.find((item) => item.id === activeSection)?.labelKey ?? "settings.title")}>
         {#if activeSection === "attachments"}
           <SettingRow
-            id="settings-attachments-cache"
-            title={t("settings.attachments.cache")}
-            description={t("settings.attachments.cacheDescription")}
+            id="settings-attachments-folder"
+            title={t("settings.attachments.folder")}
+            description={t("settings.attachments.folderDescription")}
           >
             <div class="attachment-cache-control">
+              <span class="attachment-folder-path" title={attachmentStats?.path ?? ""}>{attachmentStats?.path ?? ""}</span>
               <span class="attachment-cache-size" data-testid="cache-size">
                 {cacheSummaryText}
               </span>
               <div class="attachment-cache-actions">
-                <button
-                  type="button"
-                  class="attachment-button"
-                  onclick={handleRevealAttachmentCache}
-                >
+                <button type="button" class="attachment-button" onclick={handleChangeAttachmentFolder}>
+                  {t("settings.attachments.change")}
+                </button>
+                <button type="button" class="attachment-button" onclick={handleRevealAttachmentCache}>
                   {t("settings.attachments.reveal")}
                 </button>
-                <button
-                  type="button"
-                  class="attachment-button"
-                  onclick={handleClearAttachmentCache}
-                >
-                  {attachmentCacheCleared ? t("settings.attachments.cleared") : t("settings.attachments.clear")}
-                </button>
+                {#if settingsState.settings.attachments.folder}
+                  <button type="button" class="attachment-button" onclick={() => applyAttachmentFolder("")}>
+                    {t("settings.attachments.useDefault")}
+                  </button>
+                {/if}
               </div>
+              {#if attachmentFolderNotice}<span class="attachment-cache-size" role="status">{attachmentFolderNotice}</span>{/if}
+              {#if attachmentCacheError}<span class="error-message" role="status">{t("settings.attachments.folderError")}</span>{/if}
             </div>
           </SettingRow>
         {:else if activeSection === "other"}
@@ -800,6 +810,7 @@
   .clear-recent-button { flex: 0 0 auto; font-size: 12px; white-space: nowrap; }
   .attachment-cache-control { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
   .attachment-cache-size { color: var(--text-muted); font-size: 13px; white-space: nowrap; }
+  .attachment-folder-path { max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; direction: rtl; text-align: end; font-size: 12px; color: var(--text-normal); }
   .attachment-cache-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
   .attachment-button { flex: 0 0 auto; font-size: 12px; white-space: nowrap; }
 

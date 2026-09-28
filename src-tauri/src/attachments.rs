@@ -10,7 +10,7 @@ use std::{
 use std::process::Command;
 
 use serde::Serialize;
-use tauri::{AppHandle, Runtime, State, UriSchemeResponder};
+use tauri::{AppHandle, Manager, Runtime, State, UriSchemeResponder};
 
 use crate::{
     commands::{self, CommandError},
@@ -20,6 +20,9 @@ use crate::{
 };
 
 pub(crate) const ATTACHMENT_SCHEME: &str = "marknote-attachment";
+/// Link prefix for images in the image folder. Every new image gets it.
+const IMAGES_PREFIX: &str = "marknote-images/";
+/// Older prefix for images staged by unsaved documents; they live in the same folder.
 const CACHE_PREFIX: &str = "marknote-cache/";
 const MAX_REGISTRY_ID: u64 = u64::MAX;
 
@@ -42,23 +45,11 @@ pub struct AttachmentRef {
     pub cached: bool,
 }
 
-#[derive(Debug, Clone, Serialize)]
-pub struct AttachmentRewrite {
-    pub from: String,
-    pub to: String,
-}
-
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 pub struct CacheStats {
     pub files: usize,
     pub bytes: u64,
     pub path: String,
-}
-
-#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
-pub struct CacheClearStats {
-    pub files: usize,
-    pub bytes: u64,
 }
 
 impl AttachmentRegistry {
@@ -102,22 +93,25 @@ impl AttachmentRegistry {
     }
 }
 
-/// Builds the `.assets` directory belonging to a saved document.
-pub(crate) fn assets_dir_for_document(doc_path: &Path) -> PathBuf {
-    let parent = doc_path.parent().unwrap_or_else(|| Path::new("."));
-    let stem = doc_path
-        .file_stem()
-        .and_then(|value| value.to_str())
-        .filter(|value| !value.is_empty())
-        .unwrap_or("document");
-    parent.join(format!("{stem}.assets"))
-}
-
-/// Returns the attachment cache path. The caller creates it only for a write operation.
-pub(crate) fn cache_dir<R: Runtime>(app: &AppHandle<R>) -> Result<PathBuf, CommandError> {
+/// The default image folder inside the configuration directory.
+fn default_images_dir<R: Runtime>(app: &AppHandle<R>) -> Result<PathBuf, CommandError> {
     config_dir::for_app(app)
         .map(|path| path.join("attachments"))
         .map_err(|error| CommandError::InvalidPath(error.to_string()))
+}
+
+/// The folder every inserted image is stored in: the one chosen in
+/// Settings -> Attachments, or the default. The caller creates it only for a write.
+pub(crate) fn cache_dir<R: Runtime>(app: &AppHandle<R>) -> Result<PathBuf, CommandError> {
+    let chosen = app
+        .try_state::<crate::settings::SettingsState>()
+        .map(|state| state.get().attachments.folder)
+        .unwrap_or_default();
+    let chosen = chosen.trim();
+    if !chosen.is_empty() && Path::new(chosen).is_absolute() {
+        return Ok(PathBuf::from(chosen));
+    }
+    default_images_dir(app)
 }
 
 #[allow(non_snake_case)]
@@ -202,30 +196,75 @@ pub(crate) fn resolve_image_with_registry<R: Runtime>(
     Ok(attachment_url(app, &id))
 }
 
-#[allow(non_snake_case)]
-pub fn promote_attachments(
-    app: AppHandle,
-    docPath: String,
-    srcs: Vec<String>,
-) -> Result<Vec<AttachmentRewrite>, CommandError> {
-    let cache_root = cache_dir(&app)?;
-    let document = canonical_document(Path::new(&docPath))?;
-    let document_directory = document
-        .parent()
-        .ok_or(CommandError::Message(UserMessage::DocumentFolderRequired))?;
-    let cache_root = ensure_cache_root(&cache_root)?;
-    let assets_root = ensure_assets_root(&document, document_directory)?;
-    promote_in_roots(&document, &cache_root, &assets_root, srcs)
-}
-
 pub fn attachment_cache_stats(app: AppHandle) -> Result<CacheStats, CommandError> {
     let cache_root = cache_dir(&app)?;
     cache_stats(&cache_root)
 }
 
-pub fn clear_attachment_cache(app: AppHandle) -> Result<CacheClearStats, CommandError> {
-    let cache_root = cache_dir(&app)?;
-    clear_cache(&cache_root)
+/// Result of moving the image folder: the files now in the new folder and
+/// how many could not be moved because a file of that name was already there.
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub struct FolderMove {
+    pub files: usize,
+    pub bytes: u64,
+    pub path: String,
+    pub skipped: usize,
+}
+
+/// Moves the images from the current folder to `folder` (empty = the default
+/// folder) so existing links keep working. The caller then stores the new
+/// folder in the settings.
+pub fn move_attachments_folder(app: AppHandle, folder: String) -> Result<FolderMove, CommandError> {
+    let from = cache_dir(&app)?;
+    let folder = folder.trim();
+    let to = if folder.is_empty() {
+        default_images_dir(&app)?
+    } else {
+        let path = PathBuf::from(folder);
+        if !path.is_absolute() || commands::is_windows_device_path(&path) {
+            return Err(CommandError::InvalidPath(UserMessage::ImagePathAbsoluteOrDevice.to_string()));
+        }
+        path
+    };
+    fs::create_dir_all(&to)?;
+    let skipped = move_images(&from, &to)?;
+    let stats = cache_stats(&to)?;
+    Ok(FolderMove { files: stats.files, bytes: stats.bytes, path: stats.path, skipped })
+}
+
+/// Moves the regular files directly inside `from` into `to`, never replacing
+/// a file that already exists there. Returns how many were left behind.
+fn move_images(from: &Path, to: &Path) -> Result<usize, CommandError> {
+    let same = match (windows::canonical_path(from), windows::canonical_path(to)) {
+        (Ok(left), Ok(right)) => registry_key(&left) == registry_key(&right),
+        _ => false,
+    };
+    if same {
+        return Ok(0);
+    }
+    let Ok(entries) = fs::read_dir(from) else {
+        return Ok(0);
+    };
+    let mut skipped = 0;
+    for entry in entries.flatten() {
+        let source = entry.path();
+        let Ok(metadata) = fs::symlink_metadata(&source) else {
+            continue;
+        };
+        if !metadata.file_type().is_file() {
+            continue;
+        }
+        let target = to.join(entry.file_name());
+        if target.exists() {
+            skipped += 1;
+            continue;
+        }
+        if fs::rename(&source, &target).is_err() {
+            // Another drive: copy without overwriting, then remove the original.
+            copy_then_delete(&source, &target)?;
+        }
+    }
+    Ok(skipped)
 }
 
 /// What "Open Image" hands to Windows: a web address for remote images, or a
@@ -305,26 +344,6 @@ pub fn reveal_attachment_cache(app: AppHandle) -> Result<(), CommandError> {
     }
 }
 
-fn clear_cache(cache_root: &Path) -> Result<CacheClearStats, CommandError> {
-    let mut removed = CacheClearStats { files: 0, bytes: 0 };
-    let Ok(entries) = fs::read_dir(cache_root) else {
-        return Ok(removed);
-    };
-    for entry in entries.flatten() {
-        let path = entry.path();
-        let Ok(metadata) = fs::symlink_metadata(&path) else {
-            continue;
-        };
-        if !metadata.file_type().is_file() {
-            continue;
-        }
-        if fs::remove_file(&path).is_ok() {
-            removed.files += 1;
-            removed.bytes += metadata.len();
-        }
-    }
-    Ok(removed)
-}
 
 /// Tauri invokes this handler on a webview request thread; file I/O is moved to
 /// a worker so a large GIF cannot stall the UI thread while its bytes are read.
@@ -485,19 +504,12 @@ fn destination_root(
     doc_path: Option<&Path>,
     cache_root: &Path,
 ) -> Result<(PathBuf, String, bool), CommandError> {
-    let Some(doc_path) = doc_path else {
-        return Ok((cache_root.to_path_buf(), CACHE_PREFIX.to_owned(), true));
-    };
-    let document = canonical_document(doc_path)?;
-    let document_directory = document
-        .parent()
-        .ok_or(CommandError::Message(UserMessage::DocumentFolderRequired))?;
-    let assets = ensure_assets_root(&document, document_directory)?;
-    let stem = document
-        .file_stem()
-        .and_then(|value| value.to_str())
-        .unwrap_or("document");
-    Ok((assets, format!("{stem}.assets/"), false))
+    // Every image lives in the one image folder, whatever the document: links
+    // do not depend on the document's name or place, so renaming, moving or
+    // copying text between documents keeps them working, and saving never
+    // has to move files or rewrite links.
+    let _ = doc_path;
+    Ok((cache_root.to_path_buf(), IMAGES_PREFIX.to_owned(), false))
 }
 
 fn canonical_document(path: &Path) -> Result<PathBuf, CommandError> {
@@ -508,24 +520,48 @@ fn canonical_document(path: &Path) -> Result<PathBuf, CommandError> {
     windows::canonical_path(path).map_err(CommandError::InvalidPath)
 }
 
-fn ensure_assets_root(document: &Path, document_directory: &Path) -> Result<PathBuf, CommandError> {
-    let assets = assets_dir_for_document(document);
-    fs::create_dir_all(&assets)?;
-    let canonical = windows::canonical_path(&assets).map_err(CommandError::InvalidPath)?;
-    if !commands::path_is_within(document_directory, &canonical) {
-        return Err(CommandError::InvalidPath(
-            UserMessage::ImagePathOutsideDocument.to_string(),
-        ));
-    }
-    Ok(canonical)
-}
-
 fn ensure_cache_root(cache_root: &Path) -> Result<PathBuf, CommandError> {
     fs::create_dir_all(cache_root)?;
     windows::canonical_path(cache_root).map_err(CommandError::InvalidPath)
 }
 
+/// Links are written percent-encoded ("my%20pic.png"); files are not.
+pub(crate) fn percent_decode(value: &str) -> String {
+    let bytes = value.as_bytes();
+    let mut decoded = Vec::with_capacity(bytes.len());
+    let mut index = 0;
+    while index < bytes.len() {
+        if bytes[index] == b'%' && index + 2 < bytes.len() {
+            if let Ok(byte) = u8::from_str_radix(&value[index + 1..index + 3], 16) {
+                decoded.push(byte);
+                index += 3;
+                continue;
+            }
+        }
+        decoded.push(bytes[index]);
+        index += 1;
+    }
+    String::from_utf8(decoded).unwrap_or_else(|_| value.to_owned())
+}
+
 pub(crate) fn validate_image_path(
+    doc_path: Option<&str>,
+    src: &str,
+    cache_root: &Path,
+) -> Result<PathBuf, CommandError> {
+    match validate_image_path_exact(doc_path, src, cache_root) {
+        Ok(path) => Ok(path),
+        Err(error) => {
+            let decoded = percent_decode(src);
+            if decoded == src {
+                return Err(error);
+            }
+            validate_image_path_exact(doc_path, &decoded, cache_root).map_err(|_| error)
+        }
+    }
+}
+
+fn validate_image_path_exact(
     doc_path: Option<&str>,
     src: &str,
     cache_root: &Path,
@@ -545,7 +581,8 @@ pub(crate) fn validate_image_path(
         ));
     }
 
-    let (root, candidate) = if let Some(relative) = src.strip_prefix(CACHE_PREFIX) {
+    let store_relative = src.strip_prefix(IMAGES_PREFIX).or_else(|| src.strip_prefix(CACHE_PREFIX));
+    let (root, candidate) = if let Some(relative) = store_relative {
         if relative.is_empty() {
             return Err(CommandError::Message(UserMessage::InvalidPath));
         }
@@ -658,37 +695,6 @@ where
     ))
 }
 
-fn move_to_unique(
-    source: &Path,
-    root: &Path,
-    stem: &str,
-    extension: &str,
-) -> io::Result<Option<PathBuf>> {
-    for collision in 0..=u32::MAX {
-        let suffix = if collision == 0 {
-            String::new()
-        } else {
-            format!("-{collision:06x}")
-        };
-        let target = root.join(format!("{stem}{suffix}.{extension}"));
-        if target.exists() {
-            continue;
-        }
-        match fs::rename(source, &target) {
-            Ok(()) => return Ok(Some(target)),
-            Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
-            Err(error) if error.kind() == io::ErrorKind::AlreadyExists => continue,
-            Err(_) => match copy_then_delete(source, &target) {
-                Ok(()) => return Ok(Some(target)),
-                Err(error) if error.kind() == io::ErrorKind::AlreadyExists => continue,
-                Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
-                Err(error) => return Err(error),
-            },
-        }
-    }
-    Ok(None)
-}
-
 fn copy_then_delete(source: &Path, target: &Path) -> io::Result<()> {
     let mut input = File::open(source)?;
     let mut output = OpenOptions::new()
@@ -741,51 +747,6 @@ fn registry_key(path: &Path) -> String {
 
 fn is_legacy_url(src: &str) -> bool {
     src.starts_with("data:") || src.starts_with("http://") || src.starts_with("https://")
-}
-
-fn promote_in_roots(
-    document: &Path,
-    cache_root: &Path,
-    assets_root: &Path,
-    srcs: Vec<String>,
-) -> Result<Vec<AttachmentRewrite>, CommandError> {
-    let mut rewrites = Vec::new();
-    for src in srcs {
-        let Some(name) = src.strip_prefix(CACHE_PREFIX) else {
-            continue;
-        };
-        if name.is_empty() || name.contains('/') || name.contains('\\') {
-            continue;
-        }
-        let source = match windows::canonical_path(&cache_root.join(name)) {
-            Ok(path) if commands::path_is_within(cache_root, &path) => path,
-            _ => continue,
-        };
-        let Ok(metadata) = fs::metadata(&source) else {
-            continue;
-        };
-        if !metadata.is_file() || metadata.len() > commands::MAX_IMAGE_BYTES {
-            continue;
-        }
-        let Some(file_name) = source.file_name().and_then(|value| value.to_str()) else {
-            continue;
-        };
-        let Ok((stem, extension)) = sanitized_name(file_name) else {
-            continue;
-        };
-        let Some(target) =
-            move_to_unique(&source, assets_root, &stem, &extension).map_err(CommandError::Io)?
-        else {
-            continue;
-        };
-        let target_name = target.file_name().unwrap().to_string_lossy();
-        let stem = document.file_stem().unwrap().to_string_lossy();
-        rewrites.push(AttachmentRewrite {
-            from: src,
-            to: format!("{stem}.assets/{target_name}"),
-        });
-    }
-    Ok(rewrites)
 }
 
 #[cfg(test)]
@@ -875,7 +836,7 @@ mod tests {
     }
 
     #[test]
-    fn saved_document_bytes_use_relative_assets_src() {
+    fn saved_document_bytes_go_to_the_image_folder() {
         let directory = tempfile::tempdir().expect("temporary directory");
         let document = directory.path().join("note.md");
         fs::write(&document, "# Note").expect("document");
@@ -884,8 +845,10 @@ mod tests {
             save_bytes_in_roots(Some(&document), &cache, Some("holiday picture.PNG"), b"png")
                 .expect("save attachment");
 
-        assert_eq!(result.src, "note.assets/holidaypicture.png");
+        assert_eq!(result.src, "marknote-images/holidaypicture.png");
         assert!(!result.cached);
+        assert!(Path::new(&result.path).starts_with(windows::canonical_path(&cache).unwrap()));
+        assert!(!directory.path().join("note.assets").exists());
         assert_eq!(fs::read(&result.path).expect("saved bytes"), b"png");
     }
 
@@ -906,18 +869,18 @@ mod tests {
         )
         .expect("copy attachment");
 
-        assert_eq!(result.src, "note.assets/source.gif");
+        assert_eq!(result.src, "marknote-images/source.gif");
         assert_eq!(fs::read(&result.path).unwrap(), b"gif");
     }
 
     #[test]
-    fn unsaved_document_bytes_use_cache_src() {
+    fn unsaved_document_bytes_use_the_same_image_folder() {
         let directory = tempfile::tempdir().expect("temporary directory");
         let cache = directory.path().join("cache");
         let result = save_bytes_in_roots(None, &cache, None, b"png").expect("save attachment");
 
-        assert!(result.src.starts_with(CACHE_PREFIX));
-        assert!(result.cached);
+        assert!(result.src.starts_with(IMAGES_PREFIX));
+        assert!(!result.cached);
         assert!(Path::new(&result.path).is_file());
     }
 
@@ -961,30 +924,7 @@ mod tests {
     }
 
     #[test]
-    fn cache_files_are_promoted_and_second_pass_is_harmless() {
-        let directory = tempfile::tempdir().expect("temporary directory");
-        let document = directory.path().join("note.md");
-        fs::write(&document, "# Note").expect("document");
-        let cache = directory.path().join("cache");
-        let saved = save_bytes_in_roots(None, &cache, Some("animation.gif"), b"gif")
-            .expect("cache attachment");
-        let canonical_cache = ensure_cache_root(&cache).expect("cache root");
-        let document = canonical_document(&document).expect("document");
-        let directory = document.parent().unwrap();
-        let assets = ensure_assets_root(&document, directory).expect("assets root");
-        let src = saved.src.clone();
-        let first = promote_in_roots(&document, &canonical_cache, &assets, vec![src.clone()])
-            .expect("promote attachment");
-        assert_eq!(first.len(), 1);
-        assert_eq!(first[0].from, src);
-        assert!(assets.join("animation.gif").is_file());
-        let second = promote_in_roots(&document, &canonical_cache, &assets, vec![saved.src])
-            .expect("second promotion");
-        assert!(second.is_empty());
-    }
-
-    #[test]
-    fn clear_cache_reports_only_direct_regular_files() {
+    fn cache_stats_counts_only_direct_regular_files() {
         let directory = tempfile::tempdir().expect("temporary directory");
         let cache = directory.path().join("cache");
         fs::create_dir_all(cache.join("nested")).expect("nested directory");
@@ -1000,9 +940,47 @@ mod tests {
                 path: cache.to_string_lossy().into_owned(),
             }
         );
-        let removed = clear_cache(&cache).expect("clear cache");
-        assert_eq!(removed, CacheClearStats { files: 2, bytes: 6 });
-        assert!(cache.join("nested/three.png").is_file());
+    }
+
+    #[test]
+    fn moving_the_folder_takes_the_images_along_and_never_overwrites() {
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let from = directory.path().join("from");
+        let to = directory.path().join("to");
+        fs::create_dir_all(from.join("nested")).expect("nested directory");
+        fs::create_dir_all(&to).expect("target");
+        fs::write(from.join("one.png"), b"one").expect("one");
+        fs::write(from.join("two.gif"), b"two").expect("two");
+        fs::write(from.join("nested/three.png"), b"three").expect("three");
+        fs::write(to.join("two.gif"), b"kept").expect("existing");
+
+        assert_eq!(move_images(&from, &to).expect("move"), 1);
+        assert_eq!(fs::read(to.join("one.png")).unwrap(), b"one");
+        assert_eq!(fs::read(to.join("two.gif")).unwrap(), b"kept");
+        assert!(from.join("two.gif").is_file());
+        assert!(!from.join("one.png").exists());
+        assert!(from.join("nested/three.png").is_file());
+        assert_eq!(move_images(&to, &to).expect("same folder"), 0);
+    }
+
+    #[test]
+    fn percent_encoded_links_find_files_with_spaces() {
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let assets = directory.path().join("debug 9.assets");
+        fs::create_dir_all(&assets).expect("assets");
+        fs::write(assets.join("my pic.png"), b"png").expect("image");
+        let document = directory.path().join("debug 9.md");
+        fs::write(&document, "x").expect("document");
+        let cache = directory.path().join("images");
+        fs::create_dir_all(&cache).expect("images");
+        fs::write(cache.join("shot 1.png"), b"png").expect("stored");
+        let doc = document.to_string_lossy().into_owned();
+
+        let found = validate_image_path(Some(&doc), "debug%209.assets/my%20pic.png", &cache).expect("encoded relative link");
+        assert!(found.ends_with("my pic.png"));
+        assert!(validate_image_path(Some(&doc), "debug 9.assets/my pic.png", &cache).is_ok());
+        assert!(validate_image_path(None, "marknote-images/shot%201.png", &cache).is_ok());
+        assert!(validate_image_path(None, "marknote-cache/shot%201.png", &cache).is_ok());
     }
 
     #[test]

@@ -101,9 +101,8 @@ document path plus source, and clears the cache on document change.
 | `save_attachment` | `(docPath, fileName, data)` → `{ src, path, cached }` |
 | `save_attachment_from_path` | `(docPath, sourcePath)` → `{ src, path, cached }` |
 | `resolve_image` | `(docPath, src)` → `string` |
-| `promote_attachments` | `(docPath, srcs)` → `[{ from, to }]` |
-| `attachment_cache_stats` | `()` → `{ files, bytes, path }` |
-| `clear_attachment_cache` | `()` → `{ files, bytes }` |
+| `attachment_cache_stats` | `()` → `{ files, bytes, path }` of the image folder |
+| `move_attachments_folder` | `(folder)` → `{ files, bytes, path, skipped }`: moves the images from the current image folder to `folder` (empty = the default folder) without overwriting; the caller then saves `attachments.folder` |
 | `reveal_attachment_cache` | `()` → `()` |
 | `export_markdown_zip` | `(docPath, text, suggestedName)` → `{ path, embedded, skipped } | null`: asks where to save, writes a ZIP with `<name>.md` whose local images are embedded as data URIs plus the originals in `images/`; null when cancelled |
 | `open_image` | `(docPath, src)` → `()`: opens an http(s) image, or an image file inside the document folder or the attachment cache, in the default Windows program; anything else is refused |

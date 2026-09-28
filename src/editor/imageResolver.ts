@@ -15,8 +15,9 @@ function isAbsolutePath(src: string): boolean {
   return /^(?:[A-Za-z]:[\\/]|[\\/]{2}|\/)/u.test(src);
 }
 
+/** Links into the image folder, which does not depend on the document's path. */
 function isCacheSource(src: string): boolean {
-  return /^marknote-cache[\\/]/u.test(src) || src === "marknote-cache";
+  return /^marknote-(?:images|cache)[\\/]/u.test(src);
 }
 
 function errorMessage(error: unknown): string {
