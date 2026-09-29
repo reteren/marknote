@@ -78,6 +78,23 @@ describe("attachments utility functions", () => {
     );
   });
 
+  it("keeps an image inside a list item so the list and its numbering continue", () => {
+    const doc = EditorState.create({ doc: "1. first\n2. text\n3. third\n4. " }).doc;
+    const endOfText = doc.line(2).to;
+    expect(computeBlockPlacement(doc, endOfText, endOfText, "![a](x.png)")).toEqual({
+      insertText: " ![a](x.png)",
+      from: endOfText,
+      to: endOfText,
+    });
+    const emptyItem = doc.line(4).to;
+    expect(computeBlockPlacement(doc, emptyItem, emptyItem, "![a](x.png)\n![b](y.png)").insertText).toBe("![a](x.png) ![b](y.png)");
+    const middle = doc.line(2).from + 5;
+    expect(computeBlockPlacement(doc, middle, middle, "![a](x.png)").insertText).toBe(" ![a](x.png) ");
+    // Before the marker the image still gets a line of its own.
+    const lineStart = doc.line(2).from;
+    expect(computeBlockPlacement(doc, lineStart, lineStart, "![a](x.png)").insertText).toBe("![a](x.png)\n");
+  });
+
   it("computes block newline placement to keep image on its own line", () => {
     // Empty line
     const emptyDoc = EditorState.create({ doc: "" }).doc;

@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import type { Extension } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { translate as t } from "../i18n";
+import { parseListLine } from "./listCommands";
 
 export const ACCEPTED_IMAGE_EXTENSIONS = [
   "png",
@@ -95,6 +96,20 @@ export function computeBlockPlacement(
   blockContent: string,
 ): { insertText: string; from: number; to: number } {
   const line = doc.lineAt(from);
+
+  // Inside a list item the image stays in the item's own line, as Obsidian
+  // does: a line of its own at the margin would end the list, restart its
+  // numbering below and stop Enter from continuing it.
+  const item = parseListLine(line.text);
+  if (item && from - line.from >= item.contentStart && doc.lineAt(to).from === line.from) {
+    const before = line.text.slice(0, from - line.from);
+    const after = line.text.slice(to - line.from);
+    const inline = blockContent.split("\n").join(" ");
+    const lead = before.length > item.contentStart && !/\s$/u.test(before) ? " " : "";
+    const trail = after.length > 0 && !/^\s/u.test(after) ? " " : "";
+    return { insertText: `${lead}${inline}${trail}`, from, to };
+  }
+
   const isAtLineStart = from === line.from;
   const isAtLineEnd = to === line.to;
   const isEmptyLine = line.text.length === 0;
