@@ -178,3 +178,49 @@ describe("TabBar UI component", () => {
     expect(onCloseTab).toHaveBeenCalledWith("tab-1");
   });
 });
+
+describe("dragging a tab out of the window", () => {
+  function twoTabs(): void {
+    openTab(createDocumentState({ path: "C:\notes\b.md", text: "b" }));
+    activateTab("tab-1");
+  }
+
+  function pointer(target: Element, type: string, init: { clientX: number; clientY: number; screenX?: number; screenY?: number; button?: number }) {
+    const event = new MouseEvent(type, { bubbles: true, cancelable: true, button: init.button ?? 0, clientX: init.clientX, clientY: init.clientY, screenX: init.screenX ?? 0, screenY: init.screenY ?? 0 });
+    Object.defineProperty(event, "pointerId", { value: 1 });
+    target.dispatchEvent(event);
+  }
+
+  it("moves a tab dropped well below the tab strip into a new window", () => {
+    twoTabs();
+    const onTearOffTab = vi.fn();
+    const onSelectTab = vi.fn();
+    const { container } = render(TabBar, { props: { onTearOffTab, onSelectTab } });
+    const second = container.querySelectorAll('.tab[role="tab"]')[1];
+    const id = workspace.tabs[1].id;
+    pointer(second, "pointerdown", { clientX: 50, clientY: 10 });
+    pointer(second, "pointerup", { clientX: 300, clientY: 400, screenX: 900, screenY: 700 });
+    second.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    expect(onTearOffTab).toHaveBeenCalledWith(id, 900, 700);
+    expect(onSelectTab).not.toHaveBeenCalled();
+  });
+
+  it("treats a short drag inside the strip as an ordinary click", () => {
+    twoTabs();
+    const onTearOffTab = vi.fn();
+    const { container } = render(TabBar, { props: { onTearOffTab } });
+    const second = container.querySelectorAll('.tab[role="tab"]')[1];
+    pointer(second, "pointerdown", { clientX: 50, clientY: 10 });
+    pointer(second, "pointerup", { clientX: 70, clientY: 20 });
+    expect(onTearOffTab).not.toHaveBeenCalled();
+  });
+
+  it("never tears off the only tab", () => {
+    const onTearOffTab = vi.fn();
+    const { container } = render(TabBar, { props: { onTearOffTab } });
+    const only = container.querySelector('.tab[role="tab"]')!;
+    pointer(only, "pointerdown", { clientX: 50, clientY: 10 });
+    pointer(only, "pointerup", { clientX: 300, clientY: 400 });
+    expect(onTearOffTab).not.toHaveBeenCalled();
+  });
+});

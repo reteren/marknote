@@ -77,6 +77,8 @@ pub fn run() {
             commands::take_pending_file,
             commands::acknowledge_pending_file,
             commands::take_pending_format,
+            commands::take_pending_tab,
+            commands::tear_off_tab,
             commands::respond_to_close,
             commands::save_file,
             commands::save_as,

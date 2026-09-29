@@ -36,6 +36,7 @@ pub struct AppState {
     pending_files: Mutex<HashMap<String, VecDeque<PendingFileRequest>>>,
     pending_open_data: Mutex<HashMap<String, PendingOpenData>>,
     pending_formats: Mutex<HashMap<String, String>>,
+    pending_tabs: Mutex<HashMap<String, TornTab>>,
     file_snapshots: Mutex<HashMap<PathBuf, FileSnapshot>>,
     pending_closes: Mutex<HashMap<String, u64>>,
     approved_closes: Mutex<HashSet<String>>,
@@ -88,6 +89,7 @@ impl AppState {
             pending_files: Mutex::new(HashMap::new()),
             pending_open_data: Mutex::new(HashMap::new()),
             pending_formats: Mutex::new(HashMap::new()),
+            pending_tabs: Mutex::new(HashMap::new()),
             file_snapshots: Mutex::new(HashMap::new()),
             pending_closes: Mutex::new(HashMap::new()),
             approved_closes: Mutex::new(HashSet::new()),
@@ -237,6 +239,10 @@ impl AppState {
         if let Ok(mut pending) = self.pending_formats.lock() {
             pending.insert(label.to_owned(), format_id);
         }
+    }
+
+    pub(crate) fn take_pending_tab(&self, label: &str) -> Option<TornTab> {
+        self.pending_tabs.lock().ok()?.remove(label)
     }
 
     pub(crate) fn take_pending_format(&self, label: &str) -> Option<String> {
@@ -471,9 +477,16 @@ pub fn handle_single_instance(app: &tauri::AppHandle, argv: Vec<String>) {
                 }
             }
 
+            // Starting MarkNote again without a file opens another window,
+            // as Notepad does, instead of only raising the first one.
             if !opened {
-                if let Some(window) = handle.get_webview_window(MAIN_WINDOW_LABEL) {
-                    raise_window(&window);
+                let requested = handle.state::<SettingsState>().get().files.new_document_format;
+                let format_id = crate::formats::by_id(&requested)
+                    .filter(|format| format.creatable && format.editable)
+                    .map(|format| format.id.to_string())
+                    .unwrap_or_else(|| "markdown".to_owned());
+                if let Err(error) = open_empty_window(&handle, format_id) {
+                    eprintln!("Could not open a new window: {error}");
                 }
             }
         });
@@ -664,6 +677,54 @@ pub fn open_empty_window(app: &tauri::AppHandle, format_id: String) -> Result<()
         }
         Err(error) => {
             app.state::<AppState>().forget_window(&label);
+            Err(error)
+        }
+    }
+}
+
+/// A tab dragged out of its window: everything the new window needs to show
+/// it exactly as it was, unsaved text included.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TornTab {
+    pub path: Option<String>,
+    pub text: String,
+    pub format_id: String,
+    pub dirty: bool,
+}
+
+/// Moves a tab into a new window near `position` (screen coordinates). The
+/// file, if any, is released from the source window first, so the new window
+/// owns it and a later double-click finds it there.
+pub fn tear_off_tab(
+    app: &tauri::AppHandle,
+    source_label: &str,
+    tab: TornTab,
+    position: Option<(f64, f64)>,
+) -> Result<(), String> {
+    let state = app.state::<AppState>();
+    if let Some(path) = tab.path.as_deref() {
+        if let Ok(canonical) = canonical_path(Path::new(path)) {
+            state.forget_file(&registry_key(&canonical), source_label);
+        }
+    }
+    let label = state.allocate_window_label();
+    if let Ok(mut pending) = state.pending_tabs.lock() {
+        pending.insert(label.clone(), tab);
+    }
+    match create_window(app, &label) {
+        Ok(window) => {
+            if let Some((x, y)) = position {
+                let _ = window.set_position(tauri::LogicalPosition::new((x - 120.0).max(0.0), (y - 16.0).max(0.0)));
+            }
+            raise_window(&window);
+            Ok(())
+        }
+        Err(error) => {
+            if let Ok(mut pending) = state.pending_tabs.lock() {
+                pending.remove(&label);
+            }
+            state.forget_window(&label);
             Err(error)
         }
     }

@@ -48,6 +48,9 @@ optional path. new_document returns NewDocument. list_creatable_formats and
 format_for_extension expose the format registry. read_image(docPath, src)
 returns a validated local-image URL. open_in_new_window, reveal_in_explorer, and
 respond_to_close return unit. take_pending_file returns queued startup paths.
+tear_off_tab(tab, screenX, screenY) opens a new window near that point for a tab
+dragged out of this one ({ path, text, formatId, dirty }), releasing its file from
+this window first; the new window reads it once with take_pending_tab.
 take_recovery_entries returns journal snapshots to the first window;
 write_recovery_snapshot atomically persists one dirty tab; delete_recovery_snapshot
 removes a clean or closed tab; delete_recovery_entry removes a restored source

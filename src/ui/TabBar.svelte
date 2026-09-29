@@ -14,13 +14,62 @@
     onNewTab?: () => void;
     onSelectTab?: (id: TabId) => void;
     onCloseTab?: (id: TabId) => void;
+    /** A tab dropped well away from the tab strip moves into a new window. */
+    onTearOffTab?: (id: TabId, screenX: number, screenY: number) => void;
   };
 
-  let { onNewTab, onSelectTab, onCloseTab }: Props = $props();
+  let { onNewTab, onSelectTab, onCloseTab, onTearOffTab }: Props = $props();
 
   let tabListElement: HTMLElement | undefined = $state();
 
+  /** How far past the tab strip a tab must be dropped to leave the window. */
+  const TEAR_OFF_DISTANCE = 60;
+  let drag: { id: TabId; pointerId: number; startX: number; startY: number } | null = null;
+  let tearingId = $state<TabId | null>(null);
+  let suppressClick = false;
+
+  function isTornAway(event: PointerEvent): boolean {
+    const strip = tabListElement?.getBoundingClientRect();
+    if (!strip) return false;
+    const outsideWindow = event.clientX < 0 || event.clientY < 0 || event.clientX > window.innerWidth || event.clientY > window.innerHeight;
+    return outsideWindow || event.clientY > strip.bottom + TEAR_OFF_DISTANCE;
+  }
+
+  function handlePointerDown(event: PointerEvent, id: TabId): void {
+    if (event.button !== 0 || !onTearOffTab || workspace.tabs.length < 2) return;
+    if ((event.target as Element | null)?.closest(".tab-close-btn")) return;
+    drag = { id, pointerId: event.pointerId, startX: event.clientX, startY: event.clientY };
+    (event.currentTarget as HTMLElement).setPointerCapture?.(event.pointerId);
+  }
+
+  function handlePointerMove(event: PointerEvent): void {
+    if (!drag || event.pointerId !== drag.pointerId) return;
+    tearingId = isTornAway(event) ? drag.id : null;
+  }
+
+  function handlePointerUp(event: PointerEvent): void {
+    if (!drag || event.pointerId !== drag.pointerId) return;
+    const { id } = drag;
+    drag = null;
+    tearingId = null;
+    if (isTornAway(event) && workspace.tabs.length > 1) {
+      // The click that follows this pointerup must not reselect the tab.
+      suppressClick = true;
+      setTimeout(() => (suppressClick = false), 300);
+      onTearOffTab?.(id, event.screenX, event.screenY);
+    }
+  }
+
+  function handlePointerCancel(): void {
+    drag = null;
+    tearingId = null;
+  }
+
   function handleSelect(id: TabId): void {
+    if (suppressClick) {
+      suppressClick = false;
+      return;
+    }
     if (onSelectTab) {
       onSelectTab(id);
     } else {
@@ -103,12 +152,17 @@
         <div
           class="tab"
           class:active={isActive}
+          class:tearing={tearingId === tab.id}
           role="tab"
           id={`workspace-tab-${tab.id}`}
           aria-selected={isActive}
           aria-controls="editor-stage"
           tabindex={isActive ? 0 : -1}
           onclick={() => handleSelect(tab.id)}
+          onpointerdown={(e) => handlePointerDown(e, tab.id)}
+          onpointermove={handlePointerMove}
+          onpointerup={handlePointerUp}
+          onpointercancel={handlePointerCancel}
           onkeydown={(e) => handleKeydown(e, index, tab.id)}
         >
           <span class="tab-title" title={info.name}>{info.name}</span>
@@ -136,6 +190,11 @@
   </div>
 
 <style>
+  .tab.tearing {
+    opacity: 0.55;
+    cursor: grabbing;
+  }
+
   .tab-bar-strip {
     height: 32px;
     background: var(--bg-secondary);

@@ -712,6 +712,11 @@ import { EditorView, type EditorView as EditorViewType } from "@codemirror/view"
       return;
     }
 
+    await removeTabWithoutPrompt(id);
+  }
+
+  /** Drops a tab whose content is safe elsewhere (saved, discarded or moved to another window). */
+  async function removeTabWithoutPrompt(id: TabId): Promise<void> {
     await autosaveController?.discardRecovery(id);
     tabEditorStates.delete(id);
     const wasActive = workspace.activeId === id;
@@ -729,6 +734,48 @@ import { EditorView, type EditorView as EditorViewType } from "@codemirror/view"
       }
       setEditorState(editorView, nextState);
       editorView.focus();
+    }
+  }
+
+  type TornTab = { path: string | null; text: string; formatId: string; dirty: boolean };
+
+  /** Moves a tab into a new window; the tab leaves this window only once that window exists. */
+  async function handleTearOffTab(id: TabId, screenX: number, screenY: number): Promise<void> {
+    const tab = workspace.tabs.find((candidate) => candidate.id === id);
+    if (!tab || workspace.tabs.length < 2) return;
+    const text = id === workspace.activeId && editorView
+      ? editorView.state.doc.toString()
+      : tabEditorStates.get(id)?.doc.toString() ?? tab.document.text;
+    const torn: TornTab = {
+      path: tab.document.path,
+      text,
+      formatId: tab.document.format.id,
+      dirty: tab.document.dirty || (tab.document.path === null && text.length > 0),
+    };
+    try {
+      await invoke("tear_off_tab", { tab: torn, screenX, screenY });
+    } catch (error) {
+      reportError(error);
+      return;
+    }
+    await removeTabWithoutPrompt(id);
+  }
+
+  /** Shows the tab another window handed over when it was dragged out of it. */
+  async function adoptTornTab(torn: TornTab): Promise<void> {
+    if (torn.path) {
+      await openFile(torn.path);
+      if (torn.dirty && editorView && editorView.state.doc.toString() !== torn.text) {
+        editorView.dispatch({ changes: { from: 0, to: editorView.state.doc.length, insert: torn.text } });
+      }
+    } else {
+      const created = await invoke<NewDocument>("new_document", { formatId: torn.formatId });
+      resetDocument(created.format, "");
+      startScreenDismissed = true;
+      rebuildEditor(true);
+      // Insert the text as an edit so the moved document counts as unsaved
+      // and the crash-recovery journal picks it up at once.
+      editorView?.dispatch({ changes: { from: 0, to: editorView.state.doc.length, insert: torn.text } });
     }
   }
 
@@ -1291,6 +1338,8 @@ import { EditorView, type EditorView as EditorViewType } from "@codemirror/view"
         for (const pending of pendingFiles ?? []) {
           if (pending?.path) queueOpenFileRequest(pending.path, pending.openInTab);
         }
+        const torn = await invoke<TornTab | null>("take_pending_tab");
+        if (torn) await adoptTornTab(torn);
         const pendingFormat = await invoke<string | null>("take_pending_format");
         if (pendingFormat) {
           try {
@@ -1371,6 +1420,7 @@ import { EditorView, type EditorView as EditorViewType } from "@codemirror/view"
     onNewTab={handleOpenNewTab}
     onSelectTab={handleSelectTab}
     onCloseTab={(id) => void handleCloseTab(id)}
+    onTearOffTab={(id, x, y) => void handleTearOffTab(id, x, y)}
   />
 
   <div class="notice-row">

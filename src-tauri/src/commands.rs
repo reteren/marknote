@@ -392,6 +392,30 @@ pub fn acknowledge_pending_file(
     state.acknowledge_pending_file(window.label(), Path::new(&path));
 }
 
+/// The tab this window was created for by dragging it out of another window.
+#[tauri::command]
+pub fn take_pending_tab(window: WebviewWindow, state: State<'_, AppState>) -> Option<windows::TornTab> {
+    state.take_pending_tab(window.label())
+}
+
+/// Moves a tab into a new window at the given screen position.
+#[allow(non_snake_case)]
+#[tauri::command]
+pub async fn tear_off_tab(
+    app: AppHandle,
+    window: WebviewWindow,
+    tab: windows::TornTab,
+    screenX: Option<f64>,
+    screenY: Option<f64>,
+) -> Result<(), CommandError> {
+    let source = window.label().to_owned();
+    let position = screenX.zip(screenY);
+    tauri::async_runtime::spawn_blocking(move || windows::tear_off_tab(&app, &source, tab, position))
+        .await
+        .map_err(|error| CommandError::WindowRouting(error.to_string()))?
+        .map_err(CommandError::WindowRouting)
+}
+
 #[tauri::command]
 pub fn take_pending_format(window: WebviewWindow, state: State<'_, AppState>) -> Option<String> {
     state.take_pending_format(window.label())
