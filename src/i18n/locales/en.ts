@@ -244,7 +244,6 @@ const en = {
   "settings.editor.autoPairsDescription": "In Markdown, typing ( [ * ` = ~ also types the closing pair and puts the cursor between them.",
   "settings.editor.showInvisibles": "Show invisible characters",
   "settings.editor.showInvisiblesDescription": "Make spaces, tabs, and line endings visible while editing.",
-  "settings.editor.softWrap": "Wrap long lines",
   "settings.editor.tabWidth": "Tab width",
   "settings.editor.tabWidthDescription": "Sets how wide tabs appear and how many spaces indentation inserts.",
   "settings.editor.zoom": "Editor zoom",

@@ -243,7 +243,6 @@ const ru = {
   "settings.editor.autoPairsDescription": "В Markdown при вводе ( [ * ` = ~ сразу ставится закрывающая пара, а курсор встаёт между ними.",
   "settings.editor.showInvisibles": "Показывать невидимые символы",
   "settings.editor.showInvisiblesDescription": "Показывает пробелы, табуляции и переводы строк при редактировании.",
-  "settings.editor.softWrap": "Переносить длинные строки",
   "settings.editor.tabWidth": "Ширина табуляции",
   "settings.editor.tabWidthDescription": "Задаёт ширину табуляции и число пробелов в отступе.",
   "settings.editor.zoom": "Масштаб редактора",

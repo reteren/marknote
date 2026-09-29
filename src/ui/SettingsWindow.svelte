@@ -79,7 +79,6 @@
     ] },
     { path: "editor.tabWidth", type: "number", titleKey: "settings.editor.tabWidth", descriptionKey: "settings.editor.tabWidthDescription", min: 1, max: 16, step: 1 },
     { path: "editor.insertSpaces", type: "toggle", titleKey: "settings.editor.insertSpaces", descriptionKey: "settings.editor.insertSpacesDescription" },
-    { path: "editor.softWrap", type: "toggle", titleKey: "settings.editor.softWrap" },
     { path: "editor.showInvisibles", type: "toggle", titleKey: "settings.editor.showInvisibles", descriptionKey: "settings.editor.showInvisiblesDescription" },
     { path: "editor.lineNumbers", type: "toggle", titleKey: "settings.editor.lineNumbers" },
     { path: "editor.autoPairs", type: "toggle", titleKey: "settings.editor.autoPairs", descriptionKey: "settings.editor.autoPairsDescription" },

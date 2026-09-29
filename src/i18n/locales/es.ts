@@ -243,7 +243,6 @@ const es = {
   "settings.editor.autoPairsDescription": "En Markdown, al escribir ( [ * ` = ~ también se escribe el cierre y el cursor queda en medio.",
   "settings.editor.showInvisibles": "Mostrar caracteres invisibles",
   "settings.editor.showInvisiblesDescription": "Hace visibles espacios, tabuladores y saltos de línea al editar.",
-  "settings.editor.softWrap": "Ajustar líneas largas",
   "settings.editor.tabWidth": "Ancho del tabulador",
   "settings.editor.tabWidthDescription": "Define el ancho del tabulador y los espacios por sangría.",
   "settings.editor.zoom": "Zoom del editor",

@@ -243,7 +243,6 @@ const pt = {
   "settings.editor.autoPairsDescription": "Em Markdown, ao escrever ( [ * ` = ~ o fecho também é escrito e o cursor fica no meio.",
   "settings.editor.showInvisibles": "Mostrar carateres invisíveis",
   "settings.editor.showInvisiblesDescription": "Torna visíveis espaços, tabulações e quebras de linha ao editar.",
-  "settings.editor.softWrap": "Quebrar linhas longas",
   "settings.editor.tabWidth": "Largura da tabulação",
   "settings.editor.tabWidthDescription": "Define a largura das tabulações e o número de espaços inseridos no avanço.",
   "settings.editor.zoom": "Zoom do editor",

@@ -22,6 +22,7 @@
         case "save_settings": return args?.settings ?? structuredClone(settings);
         case "save_attachment": return { src: "marknote-images/" + (args?.fileName || "image.png").replace(/\s+/g, ""), path: "C:/mock/image.png", cached: false };
         case "resolve_image": return "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+        case "take_pending_tab": return null;
         case "write_recovery_snapshot": return null;
         case "delete_recovery_snapshot": return null;
         case "take_recovery_entries": return [];

@@ -29,7 +29,6 @@ export type Settings = {
     columnWidth: ColumnWidth;
     tabWidth: number;
     insertSpaces: boolean;
-    softWrap: boolean;
     showInvisibles: boolean;
     lineNumbers: boolean;
     /** Typing ( [ * ` = ~ in Markdown also types the closing pair. */
@@ -110,7 +109,6 @@ export const defaultSettings: Settings = {
     columnWidth: "normal",
     tabWidth: 4,
     insertSpaces: true,
-    softWrap: true,
     showInvisibles: false,
     lineNumbers: false,
     autoPairs: true,

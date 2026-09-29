@@ -19,7 +19,9 @@ export const marknoteTheme: Extension = [
       minHeight: "100%",
     },
     ".cm-scroller": {
-      overflow: "auto",
+      // Everything wraps, so the text never needs a horizontal scrollbar.
+      overflowX: "hidden",
+      overflowY: "auto",
       padding: "var(--editor-padding) 0",
       fontFamily: "var(--font-text)",
       outline: "none",

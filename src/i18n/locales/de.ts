@@ -243,7 +243,6 @@ const de = {
   "settings.editor.autoPairsDescription": "In Markdown fügt die Eingabe von ( [ * ` = ~ auch das schließende Gegenstück ein und setzt den Cursor dazwischen.",
   "settings.editor.showInvisibles": "Unsichtbare Zeichen zeigen",
   "settings.editor.showInvisiblesDescription": "Macht Leerzeichen, Tabulatoren und Zeilenumbrüche beim Bearbeiten sichtbar.",
-  "settings.editor.softWrap": "Lange Zeilen umbrechen",
   "settings.editor.tabWidth": "Tabulatorbreite",
   "settings.editor.tabWidthDescription": "Legt Tabulatorbreite und Leerzeichen pro Einzug fest.",
   "settings.editor.zoom": "Editor-Zoom",

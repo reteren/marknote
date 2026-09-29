@@ -243,7 +243,6 @@ const fr = {
   "settings.editor.autoPairsDescription": "En Markdown, taper ( [ * ` = ~ ajoute aussi la fermeture et place le curseur entre les deux.",
   "settings.editor.showInvisibles": "Afficher les caractères invisibles",
   "settings.editor.showInvisiblesDescription": "Rend visibles les espaces, tabulations et sauts de ligne lors de l'édition.",
-  "settings.editor.softWrap": "Retour à la ligne automatique",
   "settings.editor.tabWidth": "Largeur de tabulation",
   "settings.editor.tabWidthDescription": "Définit la largeur des tabulations et le nombre d'espaces par indentation.",
   "settings.editor.zoom": "Zoom de l'éditeur",

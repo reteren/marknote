@@ -57,11 +57,8 @@ export function editorAppearanceExtensions(settings: Settings | null, formatHasS
     extensions.push(lineNumbers());
   }
 
-  // Soft wrapping: without it, horizontal scrolling appears. EditorView.lineWrapping
-  // used to be unconditional in createEditor, so a missing setting means enabled.
-  if (editor?.softWrap !== false) {
-    extensions.push(EditorView.lineWrapping);
-  }
+  // Lines always wrap: MarkNote has no horizontal scrolling, in any format.
+  extensions.push(EditorView.lineWrapping);
 
   // Invisible characters: spaces and trailing whitespace while editing.
   if (editor?.showInvisibles === true) {

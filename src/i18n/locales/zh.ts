@@ -243,7 +243,6 @@ const zh = {
   "settings.editor.autoPairsDescription": "在 Markdown 中输入 ( [ * ` = ~ 时会同时输入闭合符号，并把光标放在中间。",
   "settings.editor.showInvisibles": "显示不可见字符",
   "settings.editor.showInvisiblesDescription": "在编辑时显示空格、制表符和换行符。",
-  "settings.editor.softWrap": "自动换行",
   "settings.editor.tabWidth": "制表符宽度",
   "settings.editor.tabWidthDescription": "设置制表符显示的宽度以及每次缩进插入的空格数。",
   "settings.editor.zoom": "编辑器缩放",

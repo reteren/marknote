@@ -243,7 +243,6 @@ const it = {
   "settings.editor.autoPairsDescription": "In Markdown, digitando ( [ * ` = ~ viene inserita anche la chiusura e il cursore resta nel mezzo.",
   "settings.editor.showInvisibles": "Mostra caratteri invisibili",
   "settings.editor.showInvisiblesDescription": "Rende visibili spazi, tabulazioni e interruzioni di riga durante la modifica.",
-  "settings.editor.softWrap": "A capo automatico per le righe lunghe",
   "settings.editor.tabWidth": "Larghezza tabulazione",
   "settings.editor.tabWidthDescription": "Imposta la larghezza delle tabulazioni e il numero di spazi per il rientro.",
   "settings.editor.zoom": "Zoom dell'editor",

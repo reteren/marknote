@@ -243,7 +243,6 @@ const ja = {
   "settings.editor.autoPairsDescription": "Markdown で ( [ * ` = ~ を入力すると閉じ記号も入力され、カーソルがその間に置かれます。",
   "settings.editor.showInvisibles": "不可視文字を表示",
   "settings.editor.showInvisiblesDescription": "編集中にスペース、タブ、改行を表示します。",
-  "settings.editor.softWrap": "右端で折り返す",
   "settings.editor.tabWidth": "タブ幅",
   "settings.editor.tabWidthDescription": "タブの表示幅とインデント時に挿入するスペースの数を設定します。",
   "settings.editor.zoom": "エディタのズーム",

@@ -271,7 +271,6 @@ const ar = {
   "settings.editor.autoPairsDescription": "في Markdown، تؤدي كتابة ( [ * ` = ~ إلى كتابة الإغلاق أيضًا ووضع المؤشر بينهما.",
   "settings.editor.showInvisibles": "إظهار الأحرف غير المرئية",
   "settings.editor.showInvisiblesDescription": "إظهار المسافات وعلامات الجدولة ونهايات السطور أثناء التحرير.",
-  "settings.editor.softWrap": "التفاف الأسطر الطويلة",
   "settings.editor.tabWidth": "عرض علامة الجدولة",
   "settings.editor.tabWidthDescription": "يحدد عرض علامة الجدولة وعدد المسافات لكل إزاحة.",
   "settings.editor.zoom": "تكبير المحرر",

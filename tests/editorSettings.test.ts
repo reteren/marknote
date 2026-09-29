@@ -127,17 +127,11 @@ describe("editor appearance settings", () => {
     expect(view.dom.querySelector(".cm-lineNumbers")).not.toBeNull();
   });
 
-  it("applies softWrap to line wrapping", () => {
-    const view = createTestEditor({
-      ...defaultSettings,
-      editor: { ...defaultSettings.editor, softWrap: false },
-    });
-    expect(view.contentDOM.classList.contains("cm-lineWrapping")).toBe(false);
-
-    applyEditorSettings(view, {
-      ...defaultSettings,
-      editor: { ...defaultSettings.editor, softWrap: true },
-    });
+  it("always wraps lines, even when an old settings file turned wrapping off", () => {
+    const legacy = { ...defaultSettings.editor, softWrap: false } as unknown as typeof defaultSettings.editor;
+    const view = createTestEditor({ ...defaultSettings, editor: legacy });
+    expect(view.contentDOM.classList.contains("cm-lineWrapping")).toBe(true);
+    applyEditorSettings(view, { ...defaultSettings, editor: legacy });
     expect(view.contentDOM.classList.contains("cm-lineWrapping")).toBe(true);
   });
 });

@@ -247,7 +247,9 @@ export const codeBlockTheme = EditorView.theme({
     fontFamily: "var(--font-mono)",
     fontSize: "var(--font-size-mono)",
     lineHeight: "var(--line-height-text)",
-    whiteSpace: "pre",
+    // Long code lines wrap like everything else; long tokens break anywhere.
+    whiteSpace: "pre-wrap",
+    overflowWrap: "anywhere",
   },
   ".cm-marknote-code-token": {
     fontFamily: "var(--font-mono)",
