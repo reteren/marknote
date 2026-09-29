@@ -188,3 +188,36 @@ describe("ImageWidget", () => {
     expect(state.doc.toString()).toBe("note\n![one](one.png)\n![two|280](two.png \"title\")");
   });
 });
+
+describe("typing before an image", () => {
+  it("keeps the same image element instead of rebuilding and reloading it", async () => {
+    const { EditorView } = await import("@codemirror/view");
+    const { livePreview } = await import("../src/editor/livePreview");
+    const resolveImage = vi.fn().mockResolvedValue("data:image/png;base64,iVBORw0KGgo=");
+    const parent = document.createElement("div");
+    document.body.appendChild(parent);
+    const view = new EditorView({
+      state: EditorState.create({
+        doc: "text before\n\n![shot](marknote-images/shot.png)\n",
+        selection: { anchor: 0 },
+        extensions: [language.extension, livePreview({ resolveImage })],
+      }),
+      parent,
+    });
+    try {
+      await Promise.resolve();
+      const before = parent.querySelector(".cm-marknote-image img");
+      expect(before).not.toBeNull();
+      for (const character of "hello") {
+        const head = view.state.selection.main.head;
+        view.dispatch({ changes: { from: head, insert: character }, selection: { anchor: head + 1 } });
+      }
+      await Promise.resolve();
+      expect(parent.querySelector(".cm-marknote-image img")).toBe(before);
+      expect(resolveImage).toHaveBeenCalledTimes(1);
+    } finally {
+      view.destroy();
+      parent.remove();
+    }
+  });
+});

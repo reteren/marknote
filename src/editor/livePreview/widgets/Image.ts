@@ -5,6 +5,9 @@ import type { ImageSize } from "../../imageSize";
 
 export type ImageResolver = (src: string) => Promise<string>;
 
+/** The widget currently shown by an image element; updateDOM swaps it in place. */
+const currentWidget = new WeakMap<HTMLElement, ImageWidget>();
+
 export class ImageWidget extends WidgetType {
   constructor(
     readonly src: string,
@@ -24,8 +27,31 @@ export class ImageWidget extends WidgetType {
       widget.from === this.from && widget.to === this.to;
   }
 
+  /** Same picture: only its place in the text or its selection differs. */
+  private samePicture(widget: ImageWidget): boolean {
+    return widget.src === this.src && widget.alt === this.alt && widget.resolveImage === this.resolveImage &&
+      widget.size?.width === this.size?.width && widget.size?.height === this.size?.height;
+  }
+
+  /**
+   * Typing before an image moves it, which makes a new widget on every key.
+   * Rebuilding its element reloaded the picture each time and made it blink,
+   * so the element is kept and only told where it is now.
+   */
+  updateDOM(dom: HTMLElement, _view: EditorView, from?: WidgetType): boolean {
+    const previous = from instanceof ImageWidget ? from : currentWidget.get(dom);
+    if (!previous || !this.samePicture(previous)) return false;
+    currentWidget.set(dom, this);
+    dom.classList.toggle("is-selected", this.selected);
+    return true;
+  }
+
   toDOM(view: EditorView): HTMLElement {
     const wrapper = document.createElement("span");
+    currentWidget.set(wrapper, this);
+    // Handlers read the widget through the element, so a reused element acts
+    // on the image's current place in the text, not the one it was built at.
+    const current = (): ImageWidget => currentWidget.get(wrapper) ?? this;
     wrapper.className = `cm-marknote-image is-loading${this.selected ? " is-selected" : ""}`;
     wrapper.setAttribute("role", "img");
     wrapper.setAttribute("aria-label", this.alt || this.src);
@@ -99,7 +125,8 @@ export class ImageWidget extends WidgetType {
       if (event.target === handle) return;
       event.preventDefault();
       event.stopPropagation();
-      if (!this.selected) selectImage(view, this.from, this.to);
+      const widget = current();
+      if (!widget.selected) selectImage(view, widget.from, widget.to);
     };
     // CodeMirror treats an atomic widget's mousedown as a text selection. Stop
     // both mouse event families so clicking the frame never fights the widget.
