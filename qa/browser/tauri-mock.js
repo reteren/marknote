@@ -20,6 +20,8 @@
           return { text: "", format: md };
         case "get_settings": return structuredClone(settings);
         case "save_settings": return args?.settings ?? structuredClone(settings);
+        case "save_attachment": return { src: "marknote-images/" + (args?.fileName || "image.png").replace(/\s+/g, ""), path: "C:/mock/image.png", cached: false };
+        case "resolve_image": return "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
         case "write_recovery_snapshot": return null;
         case "delete_recovery_snapshot": return null;
         case "take_recovery_entries": return [];
