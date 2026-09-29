@@ -82,6 +82,7 @@
     { path: "editor.softWrap", type: "toggle", titleKey: "settings.editor.softWrap" },
     { path: "editor.showInvisibles", type: "toggle", titleKey: "settings.editor.showInvisibles", descriptionKey: "settings.editor.showInvisiblesDescription" },
     { path: "editor.lineNumbers", type: "toggle", titleKey: "settings.editor.lineNumbers" },
+    { path: "editor.autoPairs", type: "toggle", titleKey: "settings.editor.autoPairs", descriptionKey: "settings.editor.autoPairsDescription" },
     { path: "livePreview.enabled", type: "toggle", titleKey: "settings.preview.enabled" },
     { path: "livePreview.revealMarkup", type: "select", titleKey: "settings.preview.revealMarkup", descriptionKey: "settings.preview.revealMarkupDescription", options: [
       { value: "cursor", labelKey: "settings.preview.reveal.cursor" },
@@ -100,14 +101,12 @@
     { path: "autoCorrect.doubleHyphenToEmDash", type: "toggle", titleKey: "settings.spelling.doubleHyphenToEmDash" },
     { path: "autoCorrect.capitalizeAfterPeriod", type: "toggle", titleKey: "settings.spelling.capitalizeAfterPeriod" },
     { path: "autoCorrect.threeDotsToEllipsis", type: "toggle", titleKey: "settings.spelling.threeDotsToEllipsis" },
-    { path: "files.autosave", type: "toggle", titleKey: "settings.files.autosave" },
     { path: "files.autosaveDelayMs", type: "select", titleKey: "settings.files.autosaveDelay", descriptionKey: "settings.files.autosaveDelayDescription", options: [
       { value: "2000", labelKey: "settings.files.autosaveDelay.2s" },
       { value: "10000", labelKey: "settings.files.autosaveDelay.10s" },
       { value: "30000", labelKey: "settings.files.autosaveDelay.30s" },
       { value: "60000", labelKey: "settings.files.autosaveDelay.1m" },
     ] },
-    { path: "files.saveOnWindowBlur", type: "toggle", titleKey: "settings.files.saveOnWindowBlur" },
     { path: "files.newDocumentFormat", type: "select", titleKey: "settings.files.newDocumentFormat", descriptionKey: "settings.files.newDocumentFormatDescription", options: [] },
     { path: "files.newDocumentEncoding", type: "fixed", titleKey: "settings.files.newDocumentEncoding", display: "settings.files.utf8NoBom" },
     { path: "files.newDocumentLineEnding", type: "select", titleKey: "settings.files.newDocumentLineEnding", options: [
@@ -288,10 +287,7 @@
     setZoomPercent(editorView, target);
   }
 
-  function isRowDisabled(descriptor: Descriptor): boolean {
-    if (descriptor.path === "files.autosaveDelayMs") {
-      return !settingsState.settings.files.autosave;
-    }
+  function isRowDisabled(_descriptor: Descriptor): boolean {
     return false;
   }
 

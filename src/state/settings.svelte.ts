@@ -32,6 +32,8 @@ export type Settings = {
     softWrap: boolean;
     showInvisibles: boolean;
     lineNumbers: boolean;
+    /** Typing ( [ * ` = ~ in Markdown also types the closing pair. */
+    autoPairs: boolean;
   };
   livePreview: {
     enabled: boolean;
@@ -42,9 +44,7 @@ export type Settings = {
     disableAboveBytes: number;
   };
   files: {
-    autosave: boolean;
     autosaveDelayMs: number;
-    saveOnWindowBlur: boolean;
     newDocumentFormat: string;
     newDocumentEncoding: NewDocumentEncoding;
     newDocumentLineEnding: NewDocumentLineEnding;
@@ -113,6 +113,7 @@ export const defaultSettings: Settings = {
     softWrap: true,
     showInvisibles: false,
     lineNumbers: false,
+    autoPairs: true,
   },
   livePreview: {
     enabled: true,
@@ -123,9 +124,7 @@ export const defaultSettings: Settings = {
     disableAboveBytes: 5 * 1024 * 1024,
   },
   files: {
-    autosave: true,
     autosaveDelayMs: 2_000,
-    saveOnWindowBlur: true,
     newDocumentFormat: "markdown",
     newDocumentEncoding: "utf8",
     newDocumentLineEnding: "system",

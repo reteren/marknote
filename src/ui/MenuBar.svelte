@@ -2,7 +2,7 @@
   import { onMount, tick } from "svelte";
   import type { SaveStatus } from "../state/document.svelte";
   import type { FormatCapabilities } from "../state/formats.svelte";
-  import { formatTime, interfaceLanguage, translate as t } from "../i18n";
+  import { interfaceLanguage, translate as t } from "../i18n";
   import { createMenuModel, type MenuItem, type MenuSection, type MenuState } from "./menuModel";
 
   export type MenuAction = (id: string) => void;
@@ -47,9 +47,7 @@
     saveStatus === "pending"
       ? t("save.saving")
       : saveStatus === "saved"
-        ? lastSavedAt
-          ? t("save.savedAt", { time: formatTime(lastSavedAt) })
-          : t("save.saved")
+        ? t("save.saved")
         : saveStatus === "readonly"
           ? t("save.readOnly")
           : t("save.unsaved"),

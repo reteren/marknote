@@ -97,20 +97,21 @@ describe("files settings wiring", () => {
     vi.useRealTimers();
   });
 
-  it("files.autosave: disables automatic timer saving when false", async () => {
+  it("autosave cannot be switched off: an old settings file with autosave false still saves on the timer", async () => {
     replaceDocument(opened());
     setDocumentText("unsaved change");
     tauri.invoke.mockResolvedValue(result());
 
-    const settings = createSettings({ autosave: false });
+    const legacy = { autosave: false, saveOnWindowBlur: false } as unknown as Partial<Settings["files"]>;
+    const settings = createSettings(legacy);
     const controller = createAutosave({ getSettings: () => settings });
 
     controller.schedule();
     vi.advanceTimersByTime(10_000);
     await settle();
 
-    expect(tauri.invoke).not.toHaveBeenCalled();
-    expect(documentState.dirty).toBe(true);
+    expect(tauri.invoke).toHaveBeenCalledWith("save_file", expect.anything());
+    expect(documentState.dirty).toBe(false);
     controller.dispose();
   });
 
@@ -119,7 +120,7 @@ describe("files settings wiring", () => {
     setDocumentText("unsaved change");
     tauri.invoke.mockResolvedValue(result());
 
-    const settings = createSettings({ autosave: true, autosaveDelayMs: 4_000 });
+    const settings = createSettings({ autosaveDelayMs: 4_000 });
     const controller = createAutosave({ getSettings: () => settings });
 
     controller.schedule();
@@ -133,20 +134,20 @@ describe("files settings wiring", () => {
     controller.dispose();
   });
 
-  it("files.saveOnWindowBlur: ignores blur when saveOnWindowBlur is false", async () => {
+  it("leaving the window always saves, whatever an old settings file said", async () => {
     replaceDocument(opened());
     setDocumentText("unsaved change");
     tauri.invoke.mockResolvedValue(result());
 
-    const settings = createSettings({ saveOnWindowBlur: false });
+    const legacy = { saveOnWindowBlur: false } as unknown as Partial<Settings["files"]>;
+    const settings = createSettings(legacy);
     const controller = createAutosave({ getSettings: () => settings });
     await controller.start();
 
     tauri.focusHandler?.({ payload: false });
     await settle();
 
-    expect(tauri.invoke).not.toHaveBeenCalled();
-    expect(documentState.dirty).toBe(true);
+    expect(tauri.invoke).toHaveBeenCalledWith("save_file", expect.anything());
     controller.dispose();
   });
 

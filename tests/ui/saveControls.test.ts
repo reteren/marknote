@@ -2,7 +2,7 @@ import { cleanup, fireEvent, render } from "@testing-library/svelte";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import SaveControls from "../../src/ui/SaveControls.svelte";
 import { format } from "./helpers";
-import { formatTime, translate as t } from "../../src/i18n";
+import { translate as t } from "../../src/i18n";
 
 afterEach(() => cleanup());
 
@@ -16,10 +16,11 @@ describe("SaveControls state and actions", () => {
     expect(document.body.textContent).toContain(label);
   });
 
-  it("shows Saved with the last-save time", () => {
+  it("shows Saved without the time of the last save", () => {
     const timestamp = new Date(2025, 0, 2, 13, 4);
     render(SaveControls, { props: { saveStatus: "saved", lastSavedAt: timestamp } });
-    expect(document.body.textContent).toContain(t("save.savedAt", { time: formatTime(timestamp) }));
+    expect(document.body.textContent).toContain(t("save.saved"));
+    expect(document.body.textContent).not.toMatch(/\d{1,2}:\d{2}/u);
   });
 
   it("blocks Save but keeps Save as Markdown available for a read-only format", () => {

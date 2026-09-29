@@ -190,12 +190,12 @@ describe("settings are not a facade (settings wiring)", () => {
   const sourceFiles = collectSourceFiles(SRC_ROOT);
   const exceptionMap = new Map(SETTINGS_EXCEPTIONS.map((item) => [item.path, item.reason]));
 
-  it("finds all defaultSettings leaf fields (33 fields)", () => {
-    expect(leafPaths.length).toBeGreaterThanOrEqual(33);
+  it("finds all defaultSettings leaf fields (32 fields)", () => {
+    expect(leafPaths.length).toBeGreaterThanOrEqual(32);
     expect(leafPaths).toContain("language");
     expect(leafPaths).toContain("editor.fontSize");
     expect(leafPaths).toContain("livePreview.enabled");
-    expect(leafPaths).toContain("files.autosave");
+    expect(leafPaths).toContain("files.autosaveDelayMs");
     expect(leafPaths).toContain("windows.startupAction");
     expect(leafPaths).toContain("windows.openFilesInTabs");
   });

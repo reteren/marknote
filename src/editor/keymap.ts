@@ -10,7 +10,7 @@ import {
 } from "@codemirror/commands";
 import { EditorSelection, EditorState, type Extension } from "@codemirror/state";
 import { keymap, EditorView, type Command, type KeyBinding } from "@codemirror/view";
-import { editorMarkdownCommandsStateField } from "./settings";
+import { editorMarkdownCommandsStateField, editorSettingsStateField } from "./settings";
 import {
   continueMarkdownList,
   removeIndentUnit,
@@ -111,11 +111,16 @@ function pairInputHandler(
   text: string,
   _insert: (from: number, to: number, text: string) => void,
 ): boolean {
+  const state = view.state;
+  // Pairs are a Markdown convenience: other formats type exactly what is pressed,
+  // and the owner can switch it off in Settings -> Editor.
+  if (!(state.field(editorMarkdownCommandsStateField, false) ?? true)) return false;
+  if (state.field(editorSettingsStateField, false)?.editor?.autoPairs === false) return false;
+
   const openingPair = autoPairs[text];
   const pair = openingPair ?? Object.values(autoPairs).find((candidate) => candidate.close === text);
   if (!pair || text.length !== 1) return false;
 
-  const state = view.state;
   const selected = state.sliceDoc(from, to);
   if (from !== to) {
     if (!openingPair) return false;
@@ -451,6 +456,9 @@ function createBindings(options: MarknoteKeymapOptions): KeyBinding[] {
     isMarkdownCommands(view.state) ? run(view) : false;
   const local: KeyBinding[] = [
     commandBinding("Mod-z", undo),
+    // Windows turns Alt+Backspace into the browser's own undo, which bypasses
+    // the editor's history and scrambles the text. Swallow it.
+    { key: "Alt-Backspace", run: () => true, preventDefault: true },
     commandBinding("Mod-Shift-z", redo),
     commandBinding("Mod-y", redo),
     commandBinding("Tab", (view) => indent(view, isInTable)),

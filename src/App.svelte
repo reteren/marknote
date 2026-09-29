@@ -698,8 +698,7 @@ import { EditorView, type EditorView as EditorViewType } from "@codemirror/view"
       tab.document.path !== null &&
       tab.document.dirty &&
       tab.document.format.autosave &&
-      !tab.document.readonly &&
-      settingsState.settings?.files?.autosave !== false
+      !tab.document.readonly
     ) {
       await autosaveController?.flush(true, id);
     }

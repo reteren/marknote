@@ -49,6 +49,7 @@ const labels: Record<string, string> = {
   "settings.windows.openFilesInTabsDescription": "Files opened from outside MarkNote become tabs in the most recently focused window.",
   "settings.section.other": "Other",
   "settings.editor.lineNumbers": "Line numbers",
+  "settings.editor.autoPairs": "Auto-close brackets and markup",
   "settings.editor.tabWidth": "Tab width",
   "settings.editor.tabWidthDescription": "Number of spaces per indentation level",
   "settings.language.name.en": "English",
@@ -72,7 +73,6 @@ const labels: Record<string, string> = {
   "settings.other.version": "Version",
   "settings.other.versionDescription": "Application version.",
   "settings.other.copyVersion": "Copy version",
-  "settings.files.autosave": "Autosave",
   "settings.files.autosaveDelay": "Autosave delay",
   "settings.files.autosaveDelay.1m": "1 minute",
   "settings.files.autosaveDelay.2s": "2 seconds",
@@ -308,26 +308,21 @@ describe("SettingsWindow", () => {
     expect(typeof settingsState.settings.files.autosaveDelayMs).toBe("number");
   });
 
-  it("disables autosave delay when autosave is toggled off", async () => {
+  it("offers no way to switch autosave off, only its delay", async () => {
     mount();
     await selectSection("Files");
+    expect(screen.queryByRole("checkbox", { name: "Autosave" })).toBeNull();
+    expect(screen.queryByRole("checkbox", { name: "Save when the window loses focus" })).toBeNull();
+    expect(screen.getByRole("combobox", { name: "Autosave delay" })).not.toBeDisabled();
+  });
 
-    const autosaveCheckbox = screen.getByRole("checkbox", { name: "Autosave" });
-    const delaySelect = screen.getByRole("combobox", { name: "Autosave delay" });
-
-    expect(delaySelect).not.toBeDisabled();
-
-    await fireEvent.click(autosaveCheckbox);
-    expect(settingsState.settings.files.autosave).toBe(false);
-    expect(delaySelect).toBeDisabled();
-
-    const row = delaySelect.closest(".setting-row");
-    expect(row).toHaveClass("row-disabled");
-
-    await fireEvent.click(autosaveCheckbox);
-    expect(settingsState.settings.files.autosave).toBe(true);
-    expect(delaySelect).not.toBeDisabled();
-    expect(row).not.toHaveClass("row-disabled");
+  it("switches auto-closing of brackets and markup in the Editor section", async () => {
+    mount();
+    await selectSection("Editor");
+    const toggle = screen.getByRole("checkbox", { name: "Auto-close brackets and markup" });
+    expect(toggle).toBeChecked();
+    await fireEvent.click(toggle);
+    expect(settingsState.settings.editor.autoPairs).toBe(false);
   });
 
   it("handles arbitrary legacy autosave delay without crashing", async () => {

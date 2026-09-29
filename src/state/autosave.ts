@@ -142,19 +142,12 @@ export function createAutosave(options: AutosaveOptions = {}): AutosaveControlle
     const settings = getSettings();
     const runtime = runtimeFor(tabId);
 
-    const autosaveAllowed =
-      force ||
-      (source === "blur"
-        ? settings?.files?.saveOnWindowBlur !== false
-        : settings?.files?.autosave !== false);
-
     // path === null is the only unconditional way to disable autosave.
     if (
       current.path === null ||
       current.readonly ||
       current.externalChange === "changed" ||
       (!current.format.autosave && !force) ||
-      !autosaveAllowed ||
       !current.dirty
     ) {
       return Promise.resolve(null);
@@ -212,7 +205,6 @@ export function createAutosave(options: AutosaveOptions = {}): AutosaveControlle
   const schedule = (tabId = workspaceMode ? workspace.activeId : legacyKey): void => {
     clearTimer(tabId);
     const settings = getSettings();
-    if (settings?.files?.autosave === false) return;
     const current = stateFor(tabId);
     if (!current) return;
     if (current.path === null || current.readonly || !current.dirty) return;
@@ -235,16 +227,13 @@ export function createAutosave(options: AutosaveOptions = {}): AutosaveControlle
     }
   };
 
+  // Leaving the window always saves: saving is not optional in MarkNote.
   const handleBlur = (): void => {
-    const settings = getSettings();
-    if (settings?.files?.saveOnWindowBlur === false) return;
     for (const tabId of tabIds()) void save(false, "blur", tabId);
   };
 
   const handleFocus = (focused: boolean): void => {
     if (!focused) {
-      const settings = getSettings();
-      if (settings?.files?.saveOnWindowBlur === false) return;
       for (const tabId of tabIds()) void save(false, "blur", tabId);
     }
   };
@@ -362,8 +351,7 @@ export function createAutosave(options: AutosaveOptions = {}): AutosaveControlle
           afterSave.path === null ||
           afterSave.readonly ||
           afterSave.externalChange === "changed" ||
-          (!afterSave.format.autosave && !force) ||
-          (getSettings()?.files?.autosave === false && !force)
+          (!afterSave.format.autosave && !force)
         ) return null;
       }
     },

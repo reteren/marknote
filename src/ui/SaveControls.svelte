@@ -1,6 +1,6 @@
 <script lang="ts">
   import { invoke } from "@tauri-apps/api/core";
-  import { formatTime, translate as t } from "../i18n";
+  import { translate as t } from "../i18n";
   import type { FormatCapabilities } from "../state/formats.svelte";
   import type { LineEnding, SaveStatus, SaveResult } from "../state/document.svelte";
 
@@ -63,11 +63,8 @@
     if (isReadOnly) return t("save.readOnly");
     if (isPending) return t("save.saving");
     if (format.lossy && dirty) return `● ${t("save.unsavedChanges")}`;
-    if (saveStatus === "saved") {
-      if (!lastSavedAt) return t("save.saved");
-      const parsed = typeof lastSavedAt === "string" ? new Date(lastSavedAt) : lastSavedAt;
-      return t("save.savedAt", { time: formatTime(parsed) });
-    }
+    // Saving is continuous, so the moment of the last save is not shown.
+    if (saveStatus === "saved") return t("save.saved");
     return `● ${t("save.unsaved")}`;
   });
 

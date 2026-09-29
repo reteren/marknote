@@ -149,6 +149,9 @@ pub struct EditorSettings {
     pub show_invisibles: bool,
     #[serde(default)]
     pub line_numbers: bool,
+    /// Typing an opening bracket or Markdown marker also types its closing pair.
+    #[serde(default = "default_true")]
+    pub auto_pairs: bool,
 }
 
 impl Default for EditorSettings {
@@ -163,6 +166,7 @@ impl Default for EditorSettings {
             soft_wrap: true,
             show_invisibles: false,
             line_numbers: false,
+            auto_pairs: true,
         }
     }
 }
@@ -815,6 +819,7 @@ mod tests {
                 soft_wrap: false,
                 show_invisibles: true,
                 line_numbers: true,
+                auto_pairs: false,
             },
             live_preview: LivePreviewSettings {
                 enabled: false,
