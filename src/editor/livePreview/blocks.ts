@@ -255,7 +255,7 @@ export const livePreviewTheme = EditorView.theme({
   ".cm-marknote-math": { color: "var(--text-normal)" },
   ".cm-marknote-math-display": { display: "block", textAlign: "center", padding: "0.4em 0" },
   ".cm-marknote-math-error": { color: "var(--text-error)" },
-  ".cm-marknote-image": { display: "inline-block", maxWidth: "100%", verticalAlign: "middle" },
+  ".cm-marknote-image": { display: "inline-block", maxWidth: "100%", verticalAlign: "bottom" },
   ".cm-marknote-image img": { display: "block", maxWidth: "100%", height: "auto" },
   ".cm-marknote-image.is-broken": { border: "1px solid var(--text-error)", color: "var(--text-error)", padding: "0.25em 0.5em" },
   ".cm-marknote-hr": { display: "block", width: "100%", borderTop: "1px solid var(--bg-modifier-border)", margin: "0.75em 0" },

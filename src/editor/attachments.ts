@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import type { Extension } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { translate as t } from "../i18n";
+import { getIndentUnit, indentString } from "@codemirror/language";
 import { parseListLine } from "./listCommands";
 
 export const ACCEPTED_IMAGE_EXTENSIONS = [
@@ -94,40 +95,22 @@ export function computeBlockPlacement(
   from: number,
   to: number,
   blockContent: string,
+  indentUnit = "    ",
 ): { insertText: string; from: number; to: number } {
   const line = doc.lineAt(from);
+  const before = line.text.slice(0, from - line.from);
 
-  // Inside a list item the image stays in the item's own line, as Obsidian
-  // does: a line of its own at the margin would end the list, restart its
-  // numbering below and stop Enter from continuing it.
+  // An image always gets a line of its own, and a fresh line follows it for
+  // the caret. Inside a list item that line is indented one unit under the
+  // item, so it belongs to the item and the list and its numbering go on.
   const item = parseListLine(line.text);
-  if (item && from - line.from >= item.contentStart && doc.lineAt(to).from === line.from) {
-    const before = line.text.slice(0, from - line.from);
-    const after = line.text.slice(to - line.from);
-    const inline = blockContent.split("\n").join(" ");
-    const lead = before.length > item.contentStart && !/\s$/u.test(before) ? " " : "";
-    const trail = after.length > 0 && !/^\s/u.test(after) ? " " : "";
-    return { insertText: `${lead}${inline}${trail}`, from, to };
-  }
-
-  const isAtLineStart = from === line.from;
-  const isAtLineEnd = to === line.to;
-  const isEmptyLine = line.text.length === 0;
-
-  let prefix = "";
-  let suffix = "";
-
-  if (isEmptyLine) {
-    suffix = "\n";
-  } else {
-    if (!isAtLineStart) {
-      prefix = "\n";
-    }
-    suffix = "\n";
-  }
-
+  const indent = item && from - line.from >= item.contentStart
+    ? item.indent + indentUnit
+    : /^[ \t]*/u.exec(line.text)?.[0] ?? "";
+  const images = blockContent.split("\n").join(`\n${indent}`);
+  const prefix = before.trim() === "" ? "" : `\n${indent}`;
   return {
-    insertText: `${prefix}${blockContent}${suffix}`,
+    insertText: `${prefix}${images}\n${indent}`,
     from,
     to,
   };
@@ -226,6 +209,7 @@ export async function insertImage(
     from,
     to,
     markdownLines,
+    indentString(state, Math.max(1, getIndentUnit(state))),
   );
 
   view.dispatch({
