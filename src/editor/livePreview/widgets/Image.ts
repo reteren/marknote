@@ -5,6 +5,29 @@ import type { ImageSize } from "../../imageSize";
 
 export type ImageResolver = (src: string) => Promise<string>;
 
+export type ResizeEdge = "n" | "e" | "s" | "w" | "ne" | "se" | "sw" | "nw";
+
+/**
+ * The width an image takes when `edge` is dragged by (dx, dy). Height follows
+ * the proportions, so the top and bottom edges resize too: a vertical drag is
+ * turned into the width that gives that height. A corner follows whichever
+ * direction moved further.
+ */
+export function resizedWidth(
+  edge: ResizeEdge,
+  startWidth: number,
+  startHeight: number,
+  dx: number,
+  dy: number,
+  limits: { minimum: number; maximum: number },
+): number {
+  const ratio = startHeight > 0 ? startWidth / startHeight : 1;
+  const fromX = edge.includes("e") ? dx : edge.includes("w") ? -dx : 0;
+  const fromY = (edge.includes("s") ? dy : edge.includes("n") ? -dy : 0) * ratio;
+  const change = Math.abs(fromX) >= Math.abs(fromY) ? fromX : fromY;
+  return Math.min(limits.maximum, Math.max(limits.minimum, startWidth + change));
+}
+
 /** The widget currently shown by an image element; updateDOM swaps it in place. */
 const currentWidget = new WeakMap<HTMLElement, ImageWidget>();
 
@@ -116,13 +139,22 @@ export class ImageWidget extends WidgetType {
 
     wrapper.appendChild(image);
 
-    const handle = document.createElement("span");
-    handle.className = "cm-marknote-image-resize-handle";
-    handle.setAttribute("aria-hidden", "true");
-    wrapper.appendChild(handle);
+    // A selected image shows an accent frame; every edge and corner of it
+    // resizes the picture, keeping its proportions.
+    const frame = document.createElement("span");
+    frame.className = "cm-marknote-image-frame";
+    frame.setAttribute("aria-hidden", "true");
+    const edges: ResizeEdge[] = ["n", "e", "s", "w", "ne", "se", "sw", "nw"];
+    for (const edge of edges) {
+      const grip = document.createElement("span");
+      grip.className = `cm-marknote-image-resize-handle is-${edge}`;
+      grip.dataset.edge = edge;
+      frame.appendChild(grip);
+    }
+    wrapper.appendChild(frame);
 
     const selectOnPress = (event: Event) => {
-      if (event.target === handle) return;
+      if ((event.target as Element | null)?.closest?.(".cm-marknote-image-resize-handle")) return;
       event.preventDefault();
       event.stopPropagation();
       const widget = current();
@@ -135,25 +167,29 @@ export class ImageWidget extends WidgetType {
 
     const startResize = (event: Event) => {
       if (!("pointerId" in event)) return;
+      const grip = (event.target as Element | null)?.closest?.(".cm-marknote-image-resize-handle") as HTMLElement | null;
+      const edge = grip?.dataset.edge as ResizeEdge | undefined;
+      if (!edge) return;
       event.preventDefault();
       event.stopPropagation();
       const pointerEvent = event as PointerEvent;
 
       const naturalWidth = image.naturalWidth > 0 ? image.naturalWidth : Number.POSITIVE_INFINITY;
-      const measuredWidth = image.getBoundingClientRect().width || image.clientWidth || this.size?.width || image.naturalWidth;
-      if (!measuredWidth || !Number.isFinite(measuredWidth)) return;
+      const rect = image.getBoundingClientRect();
+      const startWidth = rect.width || image.clientWidth || this.size?.width || image.naturalWidth;
+      const startHeight = rect.height || image.clientHeight;
+      if (!startWidth || !Number.isFinite(startWidth)) return;
 
       const startX = pointerEvent.clientX;
-      const startWidth = measuredWidth;
-      const minimumWidth = 24;
-      const maximumWidth = Math.max(minimumWidth, naturalWidth);
+      const startY = pointerEvent.clientY;
+      const limits = { minimum: 24, maximum: Math.max(24, naturalWidth) };
       let currentWidth = startWidth;
       const pointerId = pointerEvent.pointerId;
       wrapper.classList.add("is-resizing");
 
       const move = (moveEvent: PointerEvent) => {
         if (moveEvent.pointerId !== pointerId) return;
-        currentWidth = Math.min(maximumWidth, Math.max(minimumWidth, startWidth + moveEvent.clientX - startX));
+        currentWidth = resizedWidth(edge, startWidth, startHeight, moveEvent.clientX - startX, moveEvent.clientY - startY, limits);
         image.style.width = `${currentWidth}px`;
         image.style.height = "auto";
       };
@@ -168,8 +204,9 @@ export class ImageWidget extends WidgetType {
       window.addEventListener("pointermove", move);
       window.addEventListener("pointerup", finish);
     };
-    handle.addEventListener("pointerdown", startResize);
-    handle.addEventListener("mousedown", (event) => {
+    frame.addEventListener("pointerdown", startResize);
+    frame.addEventListener("mousedown", (event) => {
+      if (!(event.target as Element | null)?.closest?.(".cm-marknote-image-resize-handle")) return;
       event.preventDefault();
       event.stopPropagation();
     });

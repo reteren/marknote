@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { EditorState } from "@codemirror/state";
 import { defineLanguageFacet, Language, syntaxTree } from "@codemirror/language";
 import { parser } from "@lezer/markdown";
-import { ImageWidget } from "../src/editor/livePreview/widgets/Image";
+import { ImageWidget, resizedWidth } from "../src/editor/livePreview/widgets/Image";
 import { imageSelectionEffect, imageSelectionField } from "../src/editor/imageResize";
 import { marknoteMarkdown } from "../src/editor/markdownExtensions";
 import { translate as t } from "../src/i18n";
@@ -170,7 +170,7 @@ describe("ImageWidget", () => {
     const widget = new ImageWidget("two.png", "two", vi.fn().mockResolvedValue("two.png"), undefined, true, node.from, node.to);
     const dom = widget.toDOM(view);
     const image = dom.querySelector("img")!;
-    const handle = dom.querySelector(".cm-marknote-image-resize-handle")!;
+    const handle = dom.querySelector(".cm-marknote-image-resize-handle.is-e")!;
     Object.defineProperty(image, "naturalWidth", { configurable: true, value: 400 });
     Object.defineProperty(image, "naturalHeight", { configurable: true, value: 300 });
     vi.spyOn(image, "getBoundingClientRect").mockReturnValue({ width: 200 } as DOMRect);
@@ -219,5 +219,36 @@ describe("typing before an image", () => {
       view.destroy();
       parent.remove();
     }
+  });
+});
+
+describe("resizing from any edge of the frame", () => {
+  const limits = { minimum: 24, maximum: 1000 };
+
+  it("grows from the right and bottom, and from the left and top when dragged outwards", () => {
+    // A 200x100 picture: one pixel of height is worth two of width.
+    expect(resizedWidth("e", 200, 100, 50, 0, limits)).toBe(250);
+    expect(resizedWidth("w", 200, 100, -50, 0, limits)).toBe(250);
+    expect(resizedWidth("s", 200, 100, 0, 25, limits)).toBe(250);
+    expect(resizedWidth("n", 200, 100, 0, -25, limits)).toBe(250);
+  });
+
+  it("ignores movement along an edge and follows the larger move at a corner", () => {
+    expect(resizedWidth("e", 200, 100, 0, 80, limits)).toBe(200);
+    expect(resizedWidth("n", 200, 100, 80, 0, limits)).toBe(200);
+    expect(resizedWidth("se", 200, 100, 10, 30, limits)).toBe(260);
+    expect(resizedWidth("nw", 200, 100, -40, -5, limits)).toBe(240);
+  });
+
+  it("stays within the minimum and the natural width", () => {
+    expect(resizedWidth("e", 200, 100, -500, 0, limits)).toBe(24);
+    expect(resizedWidth("e", 200, 100, 5000, 0, { minimum: 24, maximum: 400 })).toBe(400);
+  });
+
+  it("draws a frame with grips on all four edges and corners", () => {
+    const widget = new ImageWidget("a.png", "a", vi.fn().mockResolvedValue("a.png"), undefined, true, 0, 10);
+    const dom = widget.toDOM({ state: EditorState.create({ doc: "" }), dispatch: () => undefined } as any);
+    const edges = [...dom.querySelectorAll<HTMLElement>(".cm-marknote-image-frame .cm-marknote-image-resize-handle")].map((grip) => grip.dataset.edge);
+    expect(edges.sort()).toEqual(["e", "n", "ne", "nw", "s", "se", "sw", "w"]);
   });
 });
