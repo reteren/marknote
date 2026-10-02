@@ -86,6 +86,47 @@ function enclosingImage(view: EditorView, element: HTMLElement): SyntaxNode | nu
 
 export function selectImage(view: EditorView, from: number, to: number): void {
   view.dispatch({ effects: imageSelectionEffect.of({ from, to }) });
+  // Keys such as Delete must reach the editor while the image is selected.
+  view.focus();
+}
+
+/**
+ * Removes the selected image (Delete or Backspace). An image alone on its line
+ * takes the whole line with it, so no empty gap is left; an image beside text
+ * leaves the text. Returns false when no image is selected.
+ */
+export function deleteSelectedImage(view: EditorView): boolean {
+  const selected = view.state.field(imageSelectionField, false);
+  if (!selected) return false;
+  const { doc } = view.state;
+  const from = Math.max(0, Math.min(selected.from, doc.length));
+  const to = Math.max(from, Math.min(selected.to, doc.length));
+  const line = doc.lineAt(from);
+  const aloneOnLine = doc.lineAt(to).number === line.number
+    && line.text.slice(0, from - line.from).trim() === ""
+    && line.text.slice(to - line.from).trim() === "";
+  let deleteFrom = from;
+  let deleteTo = to;
+  if (aloneOnLine) {
+    if (line.number < doc.lines) {
+      deleteFrom = line.from;
+      deleteTo = doc.line(line.number + 1).from;
+    } else if (line.number > 1) {
+      deleteFrom = doc.line(line.number - 1).to;
+      deleteTo = line.to;
+    } else {
+      deleteFrom = line.from;
+      deleteTo = line.to;
+    }
+  }
+  view.dispatch({
+    changes: { from: deleteFrom, to: deleteTo },
+    selection: { anchor: deleteFrom },
+    effects: imageSelectionEffect.of(null),
+    userEvent: "delete",
+    scrollIntoView: true,
+  });
+  return true;
 }
 
 export function clearImageSelection(view: EditorView): void {

@@ -252,3 +252,47 @@ describe("resizing from any edge of the frame", () => {
     expect(edges.sort()).toEqual(["e", "n", "ne", "nw", "s", "se", "sw", "w"]);
   });
 });
+
+describe("deleting a selected image", () => {
+  async function setup(doc: string, image: string) {
+    const { history, undo } = await import("@codemirror/commands");
+    const { deleteSelectedImage, imageSelectionEffect: select } = await import("../src/editor/imageResize");
+    let state = EditorState.create({ doc, extensions: [language.extension, imageSelectionField, history()] });
+    const view = {
+      get state() { return state; },
+      dispatch(spec: Parameters<EditorState["update"]>[0]) { state = state.update(spec).state; },
+      focus: () => undefined,
+    } as any;
+    const from = doc.indexOf(image);
+    if (from >= 0) view.dispatch({ effects: select.of({ from, to: from + image.length }) });
+    return { view, deleteSelectedImage, undo: () => undo({ state, dispatch: (tr) => { state = tr.state; } }), text: () => state.doc.toString() };
+  }
+
+  it("removes an image that stands alone on its line together with the line", async () => {
+    const { view, deleteSelectedImage, text } = await setup("before\n![a](x.png)\nafter", "![a](x.png)");
+    expect(deleteSelectedImage(view)).toBe(true);
+    expect(text()).toBe("before\nafter");
+    expect(view.state.field(imageSelectionField)).toBeNull();
+  });
+
+  it("removes the last line's image without leaving an empty line", async () => {
+    const { view, deleteSelectedImage, text } = await setup("before\n    ![a](x.png)", "![a](x.png)");
+    deleteSelectedImage(view);
+    expect(text()).toBe("before");
+  });
+
+  it("keeps the text when the image shares its line", async () => {
+    const { view, deleteSelectedImage, text } = await setup("look ![a](x.png) here", "![a](x.png)");
+    deleteSelectedImage(view);
+    expect(text()).toBe("look  here");
+  });
+
+  it("does nothing without a selected image, and one undo brings the image back", async () => {
+    const none = await setup("text", "missing");
+    expect(none.deleteSelectedImage(none.view)).toBe(false);
+    const { view, deleteSelectedImage, undo, text } = await setup("a\n![a](x.png)\nb", "![a](x.png)");
+    deleteSelectedImage(view);
+    undo();
+    expect(text()).toBe("a\n![a](x.png)\nb");
+  });
+});

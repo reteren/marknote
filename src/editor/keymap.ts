@@ -11,6 +11,7 @@ import {
 import { EditorSelection, EditorState, type Extension } from "@codemirror/state";
 import { keymap, EditorView, type Command, type KeyBinding } from "@codemirror/view";
 import { editorMarkdownCommandsStateField, editorSettingsStateField } from "./settings";
+import { deleteSelectedImage } from "./imageResize";
 import {
   continueMarkdownList,
   removeIndentUnit,
@@ -464,6 +465,10 @@ function createBindings(options: MarknoteKeymapOptions): KeyBinding[] {
     commandBinding("Tab", (view) => indent(view, isInTable)),
     commandBinding("Shift-Tab", (view) => outdent(view, isInTable)),
     commandBinding("Shift-Enter", markdownCommand(softBreak)),
+    // A selected image is removed by Delete or Backspace before any text
+    // command runs, or the key would edit the text at the caret instead.
+    commandBinding("Delete", deleteSelectedImage),
+    commandBinding("Backspace", deleteSelectedImage),
     commandBinding("Backspace", markdownCommand(removeIndentUnit)),
     commandBinding("Enter", markdownCommand(continueMarkdownList)),
     commandBinding("Mod-b", markdownCommand((view) => toggleWrapper(view, "**", "**"))),
