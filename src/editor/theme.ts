@@ -1,6 +1,18 @@
 import type { Extension } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 
+/**
+ * The text never moves sideways. overflow-x: hidden removes the scrollbar but
+ * still lets the browser shift the content when a selection or a jump to the
+ * caret reaches past the edge, so any horizontal offset is put straight back.
+ */
+const noHorizontalScroll = EditorView.domEventHandlers({
+  scroll(_event, view) {
+    if (view.scrollDOM.scrollLeft !== 0) view.scrollDOM.scrollLeft = 0;
+    return false;
+  },
+});
+
 /** CodeMirror uses only tokens from MarkNote's shared dark theme. */
 export const marknoteTheme: Extension = [
   EditorView.theme({
@@ -37,6 +49,9 @@ export const marknoteTheme: Extension = [
       lineHeight: "var(--line-height-text)",
       unicodeBidi: "plaintext",
       outline: "none",
+      // The text column may shrink to the window: nothing inside it, a table
+      // included, can make it wider than the editor.
+      minWidth: "0",
     },
     ".cm-content:focus, .cm-content:focus-visible": {
       outline: "none",
@@ -84,4 +99,5 @@ export const marknoteTheme: Extension = [
     },
   }, { dark: true }),
   EditorView.contentAttributes.of({ dir: "auto" }),
+  noHorizontalScroll,
 ];

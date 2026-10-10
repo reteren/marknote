@@ -600,6 +600,7 @@ export class TableAddRowWidget extends WidgetType {
     trackTableEdgeProximity(container, "bottom");
     if (this.totalWidthEm > 0) {
       container.style.width = `${this.totalWidthEm}em`;
+      container.style.maxWidth = "100%";
     }
 
     const line = document.createElement("div");
@@ -660,7 +661,7 @@ export class TableAddColWidget extends WidgetType {
     container.title = "Add column to the right";
     container.setAttribute("aria-label", "Add column to the right");
     if (this.totalWidthEm > 0) {
-      container.style.left = `calc(${this.totalWidthEm}em - 8px)`;
+      container.style.left = `min(calc(${this.totalWidthEm}em - 8px), calc(100% - 16px))`;
     }
 
     const line = document.createElement("div");
@@ -1046,9 +1047,6 @@ export const tableTheme = [
     position: "relative",
     overflow: "visible",
   },
-  ".cm-line.cm-marknote-table-last-row": {
-    flexWrap: "wrap",
-  },
   ".cm-line.cm-marknote-table-delimiter-row": {
     display: "none",
     height: "0 !important",
@@ -1062,8 +1060,12 @@ export const tableTheme = [
   ".cm-marknote-table-cell": {
     display: "inline-block",
     boxSizing: "border-box",
-    width: "var(--marknote-table-column-width)",
-    minWidth: "var(--marknote-table-column-width)",
+    // The column controls inside a header cell measure themselves against it.
+    position: "relative",
+    // A column wants its measured width but shrinks with the others when the
+    // table would not fit, so a table never gets wider than the text column.
+    flex: "0 1 var(--marknote-table-column-width)",
+    minWidth: "3em",
     minHeight: "1.75em",
     padding: "0.25em 0.5em",
     verticalAlign: "top",
@@ -1158,7 +1160,7 @@ export const tableTheme = [
   ".cm-marknote-table-add-col-bar": {
     position: "absolute",
     top: "0",
-    left: "calc(100% - 8px)",
+    left: "calc(100% - 16px)",
     width: "16px",
     display: "flex",
     alignItems: "center",
@@ -1273,7 +1275,7 @@ export const tableTheme = [
     padding: "0 !important",
   },
   ".cm-marknote-table-col-controls": {
-    position: "relative",
+    position: "static",
     width: "0 !important",
     minWidth: "0 !important",
     maxWidth: "0 !important",
@@ -1292,8 +1294,9 @@ export const tableTheme = [
   ".cm-marknote-table-col-hitarea": {
     position: "absolute",
     top: "-10px",
-    left: "-4px",
-    width: "calc(var(--marknote-col-ctrl-width, 8em) + 8px)",
+    left: "0",
+    // As wide as the cell really is: columns shrink when the table is narrowed.
+    width: "100%",
     height: "20px",
     display: "flex",
     alignItems: "center",
