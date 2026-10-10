@@ -1221,6 +1221,8 @@ import { EditorView, type EditorView as EditorViewType } from "@codemirror/view"
   const DEFAULT_MIN_WINDOW_WIDTH = 500;
   const DEFAULT_MIN_WINDOW_HEIGHT = 400;
 
+  let appliedMinimumWidth = 0;
+
   function syncMinimumWindowSize(): void {
     const view = editorView;
     if (!view || !editorHost) return;
@@ -1236,8 +1238,18 @@ import { EditorView, type EditorView as EditorViewType } from "@codemirror/view"
         const cap = Math.floor((window.screen?.availWidth ?? 1920) * 0.9);
         width = Math.min(cap, Math.max(DEFAULT_MIN_WINDOW_WIDTH, Math.ceil(column + chrome)));
       }
-      void getCurrentWindow()
-        .setMinSize(new LogicalSize(width, DEFAULT_MIN_WINDOW_HEIGHT))
+      if (width === appliedMinimumWidth) return;
+      const appWindow = getCurrentWindow();
+      // Setting a minimum re-applies the window's current size, which takes a
+      // maximized window out of its maximized state. So it is set only when the
+      // value changes, and never while maximized: restoring the window resizes
+      // the text, and this runs again then.
+      void appWindow.isMaximized()
+        .then((maximized) => {
+          if (maximized) return;
+          appliedMinimumWidth = width;
+          return appWindow.setMinSize(new LogicalSize(width, DEFAULT_MIN_WINDOW_HEIGHT));
+        })
         .catch(() => undefined);
     });
   }
