@@ -4,7 +4,7 @@
   import type { Command } from "@codemirror/view";
   import { invoke } from "@tauri-apps/api/core";
   import type { UnlistenFn } from "@tauri-apps/api/event";
-  import { getCurrentWindow } from "@tauri-apps/api/window";
+  import { getCurrentWindow, LogicalSize } from "@tauri-apps/api/window";
   import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
   import { getCurrentWebview } from "@tauri-apps/api/webview";
   import { open as openFileDialog } from "@tauri-apps/plugin-dialog";
@@ -1216,6 +1216,43 @@ import { EditorView, type EditorView as EditorViewType } from "@codemirror/view"
       handleDroppedPaths(paths);
     }
   }
+
+  /** The window can't be narrowed past the text column (except in full-width mode). */
+  const DEFAULT_MIN_WINDOW_WIDTH = 500;
+  const DEFAULT_MIN_WINDOW_HEIGHT = 400;
+
+  function syncMinimumWindowSize(): void {
+    const view = editorView;
+    if (!view || !editorHost) return;
+    requestAnimationFrame(() => {
+      const column = Number.parseFloat(getComputedStyle(view.dom).maxWidth);
+      let width = DEFAULT_MIN_WINDOW_WIDTH;
+      if (Number.isFinite(column) && column > 0) {
+        // What sits beside the column at any window width: the editor host's
+        // own inset within the window and the vertical scrollbar.
+        const hostInset = Math.max(0, window.innerWidth - (editorHost?.clientWidth ?? window.innerWidth));
+        const scrollbar = Math.max(0, view.scrollDOM.offsetWidth - view.scrollDOM.clientWidth);
+        const chrome = hostInset + scrollbar;
+        const cap = Math.floor((window.screen?.availWidth ?? 1920) * 0.9);
+        width = Math.min(cap, Math.max(DEFAULT_MIN_WINDOW_WIDTH, Math.ceil(column + chrome)));
+      }
+      void getCurrentWindow()
+        .setMinSize(new LogicalSize(width, DEFAULT_MIN_WINDOW_HEIGHT))
+        .catch(() => undefined);
+    });
+  }
+
+  $effect(() => {
+    // Font, size, zoom and the column setting all change the text's pixel
+    // width, so the minimum follows the rendered text instead of each setting.
+    void settingsState.settings.editor.columnWidth;
+    const view = editorView;
+    if (!view || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(() => syncMinimumWindowSize());
+    observer.observe(view.contentDOM);
+    syncMinimumWindowSize();
+    return () => observer.disconnect();
+  });
 
   $effect(() => {
     const currentTitle = title;
