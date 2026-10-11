@@ -108,6 +108,9 @@ export class ImageWidget extends WidgetType {
     const image = document.createElement("img");
     image.alt = this.alt;
     image.loading = "lazy";
+    // The rendered src is a webview-only address; the context menu needs the
+    // link as written in the document to open the picture outside the app.
+    image.dataset.markdownSrc = this.src;
 
     const applyImageSize = () => {
       const naturalWidth = image.naturalWidth;

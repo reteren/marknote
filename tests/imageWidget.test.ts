@@ -85,6 +85,7 @@ describe("ImageWidget", () => {
 
     await Promise.resolve(); // Wait for promise resolution
     expect(img?.src).toBe("http://marknote.localhost/stream/pic.png");
+    expect(img?.dataset.markdownSrc).toBe("pic.png");
 
     // Simulate img load event
     img?.dispatchEvent(new Event("load"));

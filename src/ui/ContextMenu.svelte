@@ -443,7 +443,7 @@
         linkUrl = anchor.href;
       } else if (img?.src) {
         targetType = "image";
-        imageSrc = img.src;
+        imageSrc = img.dataset.markdownSrc ?? img.src;
       } else if (hasTextSelection) {
         targetType = "selection";
       } else {

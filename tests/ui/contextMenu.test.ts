@@ -216,6 +216,22 @@ describe("ContextMenu user interactions", () => {
     expect(document.body.textContent).not.toContain(t("contextMenu.openLink"));
   });
 
+  it("opens an image by its Markdown link, not the webview-only address it renders from", async () => {
+    const onSelect = vi.fn();
+    const target = document.createElement("div");
+    document.body.append(target);
+    render(ContextMenu, { props: { targetElement: target, onSelect } });
+    const image = document.createElement("img");
+    image.src = "http://marknote-attachment.localhost/4f2a";
+    image.dataset.markdownSrc = "marknote-images/photo.png";
+    target.append(image);
+
+    image.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true, button: 2 }));
+    await settle();
+    await fireEvent.click(Array.from(document.querySelectorAll("button")).find((button) => button.textContent?.includes(t("contextMenu.openImage")))!);
+    expect(onSelect).toHaveBeenCalledWith("open-image", "marknote-images/photo.png");
+  });
+
   it("routes existing format action IDs from the context submenu into the document", async () => {
     resetDocument(markdownFormat, "");
     tauri.handlers.clear();
