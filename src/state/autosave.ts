@@ -378,7 +378,7 @@ export function createAutosave(options: AutosaveOptions = {}): AutosaveControlle
 }
 
 export async function saveAs(
-  state: Pick<DocumentState, "text" | "format">,
+  state: Pick<DocumentState, "text" | "format"> & { path?: string | null },
   suggestedName: string,
   settingsOrFiles?: Settings | Settings["files"] | null,
 ): Promise<SaveResult | null> {
@@ -388,5 +388,6 @@ export async function saveAs(
     text: textToSave,
     formatId: state.format.id,
     suggestedName,
+    docPath: state.path ?? null,
   });
 }

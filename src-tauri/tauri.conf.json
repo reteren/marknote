@@ -66,6 +66,13 @@
         "mimeType": "text/markdown"
       },
       {
+        "ext": ["mdz"],
+        "name": "Markdown with Images",
+        "description": "Markdown Document with Images",
+        "role": "Editor",
+        "mimeType": "application/zip"
+      },
+      {
         "ext": ["txt", "log", "ini", "cfg", "conf", "env", "csv", "tsv"],
         "name": "Plain Text Document",
         "description": "Plain Text Document",

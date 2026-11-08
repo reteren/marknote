@@ -41,6 +41,8 @@ export type MenuState = {
   imagesAllowed?: boolean;
   /** Whether "Export as ZIP" applies: a Markdown document that contains images. */
   canExportZip?: boolean;
+  /** Whether "Save as Markdown with Images" applies: a Markdown document that is not one yet. */
+  canSaveAsPackage?: boolean;
   zoomPercent?: number;
 };
 
@@ -125,6 +127,7 @@ export function createMenuModel(
         separator("file.separator.save"),
         item("file.save", t("menu.save"), "Ctrl+S", state.canSave === false),
         item("file.saveAs", t("menu.saveAs"), "Ctrl+Shift+S"),
+        ...(state.canSaveAsPackage ? [item("file.saveAsPackage", t("menu.saveAsPackage"))] : []),
         ...(state.canExportZip ? [item("file.exportZip", t("menu.exportZip"))] : []),
         separator("file.separator.close"),
         item("file.close", t("menu.close"), "Ctrl+W"),

@@ -18,18 +18,52 @@ pub struct FormatCapabilities {
     pub template: String,
 }
 
+/// The shared image folder, as seen by a format that carries its own images.
+/// Implemented outside this module, so the format code needs no file system
+/// policy of its own (and stays testable without the application).
+pub trait ImageStore {
+    /// Reads the image a link in the document points to: its file name and bytes.
+    fn load(&self, src: &str) -> Option<(String, Vec<u8>)>;
+    /// Puts an image into the folder and returns the link the text should use.
+    fn store(&self, file_name: &str, bytes: &[u8]) -> anyhow::Result<String>;
+}
+
+/// What an adapter may need besides the bytes: where the document lives and
+/// the image folder. Only container formats look at it.
+pub struct FormatContext<'a> {
+    pub doc_path: Option<&'a Path>,
+    pub images: &'a dyn ImageStore,
+}
+
 pub trait FormatAdapter: Send + Sync {
     fn caps(&self) -> FormatCapabilities;
     fn decode(&self, bytes: &[u8]) -> anyhow::Result<crate::encoding::Decoded>;
     fn encode(&self, text: &str, src: &crate::encoding::Decoded) -> anyhow::Result<Vec<u8>>;
+
+    /// Opening a file: the commands always call this one.
+    fn decode_in(&self, bytes: &[u8], _context: &FormatContext<'_>) -> anyhow::Result<crate::encoding::Decoded> {
+        self.decode(bytes)
+    }
+
+    /// Saving a file: the commands always call this one.
+    fn encode_in(
+        &self,
+        text: &str,
+        src: &crate::encoding::Decoded,
+        _context: &FormatContext<'_>,
+    ) -> anyhow::Result<Vec<u8>> {
+        self.encode(text, src)
+    }
 }
 
 pub mod code;
 pub mod docx;
 pub mod epub;
 pub mod extra;
+pub mod image_links;
 pub mod json;
 pub mod markdown;
+pub mod package;
 pub mod pdf;
 pub mod plain;
 pub mod rtf;
@@ -46,6 +80,9 @@ fn adapters() -> &'static [Box<dyn FormatAdapter>] {
                 Box::new(plain::PlainAdapter),
             ];
             list.extend(extra::adapters());
+            // Markdown with its images packed into one file comes last, so
+            // the long-standing order of the other tiles does not move.
+            list.push(Box::new(package::PackageAdapter));
             list
         })
         .as_slice()

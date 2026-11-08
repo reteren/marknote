@@ -26,9 +26,10 @@ export function supportsMarkdownCommands(format: Pick<FormatCapabilities, "edita
   return Boolean(format?.editable && format.livePreview && format.syntaxMode === null);
 }
 
-/** Only Markdown documents can hold images: every insertion path and ZIP export check this. */
+/** Only Markdown documents can hold images: every insertion path and ZIP export check this.
+ *  A Markdown package (.mdz) is Markdown that carries its images inside. */
 export function acceptsImages(format: Pick<FormatCapabilities, "id" | "editable"> | null | undefined): boolean {
-  return Boolean(format?.editable && format.id === "markdown");
+  return Boolean(format?.editable && (format.id === "markdown" || format.id === markdownPackageFormat.id));
 }
 
 /** Whether Markdown text references at least one image. */
@@ -41,6 +42,21 @@ export const markdownFormat: FormatCapabilities = {
   label: "Markdown",
   defaultExtension: "md",
   extensions: ["md", "markdown", "mdown", "mkd"],
+  editable: true,
+  creatable: true,
+  livePreview: true,
+  autosave: true,
+  lossy: false,
+  syntaxMode: null,
+  template: "",
+};
+
+/** Markdown with its images packed into one file; mirrors the Rust adapter. */
+export const markdownPackageFormat: FormatCapabilities = {
+  id: "mdz",
+  label: "Markdown with Images",
+  defaultExtension: "mdz",
+  extensions: ["mdz"],
   editable: true,
   creatable: true,
   livePreview: true,

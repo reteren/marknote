@@ -28,6 +28,15 @@ describe("menu model", () => {
     expect(ids({})).not.toContain("file.exportZip");
   });
 
+  it("offers Save as Markdown with Images right after Save As, only where it applies", () => {
+    const fileIds = (state: Parameters<typeof createMenuModel>[1]) =>
+      createMenuModel([], state).find((section) => section.id === "file")!.items.map((item) => item.id);
+    const withPackage = fileIds({ imagesAllowed: true, canSaveAsPackage: true });
+    expect(withPackage.indexOf("file.saveAsPackage")).toBe(withPackage.indexOf("file.saveAs") + 1);
+    expect(fileIds({ imagesAllowed: true, canSaveAsPackage: false })).not.toContain("file.saveAsPackage");
+    expect(fileIds({})).not.toContain("file.saveAsPackage");
+  });
+
   it("hides Insert → Image where images are not allowed", () => {
     const ids = (state: Parameters<typeof createMenuModel>[1]) => allItems(createMenuModel([], state).flatMap((section) => section.items)).map((item) => item.id);
     expect(ids({ imagesAllowed: true })).toContain("insert.image");

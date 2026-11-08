@@ -36,6 +36,10 @@ the program.
   window or tab that already has it comes up instead.
 - markdown-only commands are hidden in .py or .json. there is nothing to make
   bold there, so the menu doesn't pretend otherwise.
+- file ▸ save as markdown with images (.mdz) packs the note and every picture
+  in it into one file, so it can be sent on like a pdf. it opens back in
+  marknote as a normal note; renamed to .zip, it is a plain folder with the
+  .md and an images/ folder.
 - formulas load katex on the first `$$` in a document, not at startup. code
   highlighting for each language is loaded the same way, on demand.
 - the installer is 3.1 MB and there is no chromium inside: windows already

@@ -9,7 +9,7 @@ use serde::{
     ser::{SerializeMap, Serializer},
     Serialize,
 };
-use tauri::{AppHandle, State, WebviewWindow};
+use tauri::{AppHandle, Manager, State, WebviewWindow};
 use tauri_plugin_dialog::DialogExt;
 use thiserror::Error;
 
@@ -224,6 +224,11 @@ pub struct SaveResult {
     pub base_fingerprint: Option<FileFingerprint>,
     pub format: FormatCapabilities,
     pub lossy_warning: bool,
+    /// The text as the saved file now holds it, when that differs in form from
+    /// what was sent: a `.mdz` package points image links at the image folder,
+    /// so later saves no longer depend on where the text lived before.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub text: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -233,7 +238,7 @@ pub struct NewDocument {
     pub format: FormatCapabilities,
 }
 
-fn prepare_open_file(path: &str) -> Result<PendingOpenData, CommandError> {
+fn prepare_open_file(path: &str, images_root: &Path) -> Result<PendingOpenData, CommandError> {
     startup_trace::mark("validate-open-file-start");
     let input_path = PathBuf::from(path);
     let canonical = windows::canonical_path(&input_path).map_err(CommandError::InvalidPath)?;
@@ -248,7 +253,9 @@ fn prepare_open_file(path: &str) -> Result<PendingOpenData, CommandError> {
         ));
     }
     let metadata = fs::metadata(&canonical)?;
-    let decoded = adapter.decode(&bytes).map_err(CommandError::Format)?;
+    let images = crate::attachments::SharedImageFolder::new(Some(&canonical), images_root);
+    let context = formats::FormatContext { doc_path: Some(&canonical), images: &images };
+    let decoded = adapter.decode_in(&bytes, &context).map_err(CommandError::Format)?;
     startup_trace::mark("validate-open-file-done");
     Ok(PendingOpenData {
         path: canonical,
@@ -288,7 +295,10 @@ pub fn open_file(
                 canonical.to_string_lossy().into_owned(),
             ));
         }
-        let decoded = adapter.decode(&bytes).map_err(CommandError::Format)?;
+        let images_root = crate::attachments::cache_dir(window.app_handle())?;
+        let images = crate::attachments::SharedImageFolder::new(Some(&canonical), &images_root);
+        let context = formats::FormatContext { doc_path: Some(&canonical), images: &images };
+        let decoded = adapter.decode_in(&bytes, &context).map_err(CommandError::Format)?;
         startup_trace::mark("open-file-decoded");
         (format, decoded)
     };
@@ -480,8 +490,11 @@ pub fn save_file(
         bom,
         line_ending: lineEnding,
     };
+    let images_root = crate::attachments::cache_dir(window.app_handle())?;
+    let images = crate::attachments::SharedImageFolder::new(Some(&path), &images_root);
+    let context = formats::FormatContext { doc_path: Some(&path), images: &images };
     let bytes = adapter
-        .encode(&text, &source)
+        .encode_in(&text, &source, &context)
         .map_err(CommandError::Format)?;
     atomic_write::write_atomic(&path, &bytes).map_err(CommandError::AtomicWrite)?;
     state.track_file(&path, window.label());
@@ -504,6 +517,7 @@ pub async fn save_as(
     text: String,
     formatId: String,
     suggestedName: String,
+    docPath: Option<String>,
 ) -> Result<Option<SaveResult>, CommandError> {
     let (requested_format, export_as_markdown) = resolve_save_as_format(&formatId)?;
 
@@ -545,8 +559,15 @@ pub async fn save_as(
         bom: false,
         line_ending: text_encoding::LineEnding::Lf,
     };
+    // Relative image links are written relative to where the text was until
+    // now; a package resolves them there before it moves to the new place.
+    let images_root = crate::attachments::cache_dir(&app)?;
+    let source_document = docPath.as_deref().map(Path::new).unwrap_or(&path);
+    let images = crate::attachments::SharedImageFolder::new(Some(source_document), &images_root);
+    // The archive's inner document is named after the new file, not the old one.
+    let context = formats::FormatContext { doc_path: Some(&path), images: &images };
     let bytes = adapter
-        .encode(&text, &source)
+        .encode_in(&text, &source, &context)
         .map_err(CommandError::Format)?;
     atomic_write::write_atomic(&path, &bytes).map_err(CommandError::AtomicWrite)?;
     state.watcher.watch(window.label(), &path);
@@ -557,7 +578,16 @@ pub async fn save_as(
     });
     let _ = recent_files.add(&path.to_string_lossy());
 
-    Ok(Some(save_result(path, format, base_fingerprint)))
+    let mut result = save_result(path.clone(), format, base_fingerprint);
+    if result.format.id == formats::package::ID {
+        // Read the package back exactly as opening it would: relative links
+        // that pointed next to the old file now point at the image folder.
+        let reopened = adapter
+            .decode_in(&bytes, &context)
+            .map_err(CommandError::Format)?;
+        result.text = Some(reopened.text);
+    }
+    Ok(Some(result))
 }
 
 #[tauri::command]
@@ -623,7 +653,8 @@ pub fn read_image(
 pub async fn open_in_new_window(app: AppHandle, path: String) -> Result<(), CommandError> {
     startup_trace::mark("open-in-new-window-start");
     tauri::async_runtime::spawn_blocking(move || {
-        let prepared = prepare_open_file(&path)?;
+        let images_root = crate::attachments::cache_dir(&app)?;
+        let prepared = prepare_open_file(&path, &images_root)?;
         windows::route_file_in_new_window_with_data(&app, path, prepared)
             .map_err(CommandError::WindowRouting)
     })
@@ -757,6 +788,7 @@ fn save_result(
         base_fingerprint,
         lossy_warning: format.lossy,
         format,
+        text: None,
     }
 }
 
@@ -993,13 +1025,13 @@ mod tests {
         let directory = tempfile::tempdir().expect("temporary directory");
         let text_path = directory.path().join("note.md");
         fs::write(&text_path, "# Note\n").expect("write text file");
-        prepare_open_file(text_path.to_str().expect("utf-8 path"))
+        prepare_open_file(text_path.to_str().expect("utf-8 path"), directory.path())
             .expect("supported text file should be accepted");
 
         let binary_path = directory.path().join("payload.bin");
         fs::write(&binary_path, b"header\0payload").expect("write binary file");
         assert!(matches!(
-            prepare_open_file(binary_path.to_str().expect("utf-8 path")),
+            prepare_open_file(binary_path.to_str().expect("utf-8 path"), directory.path()),
             Err(CommandError::BinaryFile(path)) if path.ends_with("payload.bin")
         ));
     }

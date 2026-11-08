@@ -102,10 +102,10 @@ mod tests {
         let all = crate::formats::all();
         let creatable = crate::formats::creatable();
 
-        // 2 built-in (markdown, plain) + 19 extra = 21 formats.
-        assert_eq!(all.len(), 21);
+        // 2 built-in (markdown, plain) + 19 extra + the Markdown package = 22 formats.
+        assert_eq!(all.len(), 22);
         // PDF, DOCX, and RTF are not created from scratch: they are absent from the start screen.
-        assert_eq!(creatable.len(), 17);
+        assert_eq!(creatable.len(), 18);
 
         // Markdown must be first, plain second, and JSON third.
         assert_eq!(all[0].id, "markdown");

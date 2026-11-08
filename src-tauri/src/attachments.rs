@@ -749,6 +749,74 @@ fn is_legacy_url(src: &str) -> bool {
     src.starts_with("data:") || src.starts_with("http://") || src.starts_with("https://")
 }
 
+/// The image folder as a container format sees it: reading the pictures a
+/// document links to, and adding the pictures a package brings with it.
+pub(crate) struct SharedImageFolder<'a> {
+    doc_path: Option<&'a str>,
+    root: &'a Path,
+}
+
+impl<'a> SharedImageFolder<'a> {
+    pub(crate) fn new(doc_path: Option<&'a Path>, root: &'a Path) -> Self {
+        Self { doc_path: doc_path.and_then(Path::to_str), root }
+    }
+}
+
+impl crate::formats::ImageStore for SharedImageFolder<'_> {
+    fn load(&self, src: &str) -> Option<(String, Vec<u8>)> {
+        let (path, bytes, _) = crate::export_zip::load_image(self.doc_path, src, self.root)?;
+        let name = path.file_name()?.to_str()?.to_owned();
+        Some((name, bytes))
+    }
+
+    /// Opening the same package again finds the copy made last time instead
+    /// of adding another; a different picture under a taken name gets a name
+    /// derived from its content, so it is never written over the other one.
+    fn store(&self, file_name: &str, bytes: &[u8]) -> anyhow::Result<String> {
+        if bytes.len() as u64 > commands::MAX_IMAGE_BYTES {
+            anyhow::bail!("image is too large");
+        }
+        let (stem, extension) = sanitized_name(file_name).map_err(|error| anyhow::anyhow!("{error}"))?;
+        fs::create_dir_all(self.root)?;
+        let hash = fnv1a(bytes);
+        for attempt in 0u32.. {
+            let candidate = match attempt {
+                0 => format!("{stem}.{extension}"),
+                1 => format!("{stem}-{hash:016x}.{extension}"),
+                n => format!("{stem}-{hash:016x}-{n}.{extension}"),
+            };
+            let target = self.root.join(&candidate);
+            match OpenOptions::new().write(true).create_new(true).open(&target) {
+                Ok(mut file) => {
+                    if let Err(error) = file.write_all(bytes) {
+                        drop(file);
+                        let _ = fs::remove_file(&target);
+                        return Err(error.into());
+                    }
+                    return Ok(format!("{IMAGES_PREFIX}{candidate}"));
+                }
+                Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {
+                    if fs::read(&target).is_ok_and(|existing| existing == bytes) {
+                        return Ok(format!("{IMAGES_PREFIX}{candidate}"));
+                    }
+                }
+                Err(error) => return Err(error.into()),
+            }
+        }
+        unreachable!("the attempt counter is unbounded")
+    }
+}
+
+/// A stable 64-bit FNV-1a hash: names copies by content without a new dependency.
+fn fnv1a(bytes: &[u8]) -> u64 {
+    let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
+    for byte in bytes {
+        hash ^= u64::from(*byte);
+        hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
+    }
+    hash
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1011,5 +1079,29 @@ mod tests {
             validate_image_path(Some(document.to_str().unwrap()), &escaped, &cache),
             Err(CommandError::InvalidPath(_))
         ));
+    }
+
+    #[test]
+    fn package_images_are_restored_once_and_never_overwrite_another_picture() {
+        use crate::formats::ImageStore;
+        let dir = tempfile::tempdir().expect("temp dir");
+        let root = dir.path().join("images");
+        let folder = SharedImageFolder::new(None, &root);
+
+        let first = folder.store("ü shot.png", &[1, 2, 3]).expect("store");
+        assert_eq!(first, "marknote-images/shot.png");
+        assert_eq!(folder.store("ü shot.png", &[1, 2, 3]).expect("again"), first);
+        assert_eq!(fs::read_dir(&root).expect("dir").count(), 1);
+
+        let other = folder.store("shot.png", &[9, 9]).expect("other");
+        assert_ne!(other, first);
+        assert_eq!(fs::read(root.join("shot.png")).expect("first kept"), [1, 2, 3]);
+        let other_name = other.trim_start_matches("marknote-images/");
+        assert_eq!(fs::read(root.join(other_name)).expect("other copy"), [9, 9]);
+        assert_eq!(folder.store("shot.png", &[9, 9]).expect("other again"), other);
+
+        assert!(folder.store("payload.exe", b"MZ").is_err());
+        let (name, bytes) = folder.load(&first).expect("load");
+        assert_eq!((name.as_str(), bytes), ("shot.png", vec![1, 2, 3]));
     }
 }

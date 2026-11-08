@@ -20,7 +20,7 @@ use tauri::{AppHandle, Runtime};
 use tauri_plugin_dialog::DialogExt;
 use zip::{write::SimpleFileOptions, CompressionMethod, ZipWriter};
 
-use crate::{attachments, atomic_write, commands::CommandError};
+use crate::{attachments, atomic_write, commands::CommandError, formats::image_links::image_refs};
 
 #[derive(Debug, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -29,63 +29,6 @@ pub struct ZipExportResult {
     pub embedded: usize,
     /// Image references that could not be read and were left unchanged.
     pub skipped: Vec<String>,
-}
-
-/// One `![alt](src)` found in the text: byte range of `src` and its value.
-#[derive(Debug, PartialEq, Eq)]
-pub(crate) struct ImageRef {
-    pub start: usize,
-    pub end: usize,
-    pub src: String,
-}
-
-/// Finds Markdown image destinations, including `<angle bracket>` ones and an
-/// optional title. Code spans and fenced blocks are not excluded: an image
-/// written inside code is rare, and embedding it there is harmless.
-pub(crate) fn image_refs(text: &str) -> Vec<ImageRef> {
-    let bytes = text.as_bytes();
-    let mut refs = Vec::new();
-    let mut index = 0;
-    while let Some(offset) = text[index..].find("![") {
-        let open = index + offset;
-        let Some(close_alt) = text[open + 2..].find("](").map(|value| open + 2 + value) else {
-            break;
-        };
-        if text[open + 2..close_alt].contains('\n') {
-            index = open + 2;
-            continue;
-        }
-        let mut start = close_alt + 2;
-        while start < bytes.len() && bytes[start] == b' ' {
-            start += 1;
-        }
-        let (src_start, src_end, after) = if bytes.get(start) == Some(&b'<') {
-            match text[start + 1..].find('>') {
-                Some(length) => (start + 1, start + 1 + length, start + 2 + length),
-                None => {
-                    index = start;
-                    continue;
-                }
-            }
-        } else {
-            let length = text[start..]
-                .find(|character: char| character == ')' || character.is_whitespace())
-                .unwrap_or(text.len() - start);
-            (start, start + length, start + length)
-        };
-        let Some(close) = text[after..].find(')').map(|value| after + value) else {
-            break;
-        };
-        if src_end > src_start && !text[after..close].contains('\n') {
-            refs.push(ImageRef {
-                start: src_start,
-                end: src_end,
-                src: text[src_start..src_end].to_owned(),
-            });
-        }
-        index = close + 1;
-    }
-    refs
 }
 
 fn percent_decode(value: &str) -> String {
@@ -144,7 +87,7 @@ struct Embedded {
     data_uri: String,
 }
 
-fn load_image(doc_path: Option<&str>, src: &str, cache_root: &Path) -> Option<(PathBuf, Vec<u8>, &'static str)> {
+pub(crate) fn load_image(doc_path: Option<&str>, src: &str, cache_root: &Path) -> Option<(PathBuf, Vec<u8>, &'static str)> {
     let candidates = [src.to_owned(), percent_decode(src)];
     for candidate in candidates.iter() {
         if let Ok(path) = attachments::validate_image_path(doc_path, candidate, cache_root) {
@@ -156,7 +99,7 @@ fn load_image(doc_path: Option<&str>, src: &str, cache_root: &Path) -> Option<(P
     None
 }
 
-fn unique_name(name: &str, used: &mut HashSet<String>) -> String {
+pub(crate) fn unique_name(name: &str, used: &mut HashSet<String>) -> String {
     let path = Path::new(name);
     let stem = path.file_stem().and_then(|value| value.to_str()).unwrap_or("image");
     let extension = path.extension().and_then(|value| value.to_str()).unwrap_or("png");
@@ -273,13 +216,6 @@ pub fn export_markdown_zip<R: Runtime>(
 mod tests {
     use super::*;
     use std::io::Read;
-
-    #[test]
-    fn finds_plain_angle_and_titled_image_destinations() {
-        let text = "a ![x|400](note.assets/a%20b.png) b ![y](<note.assets/c d.gif> \"t\") ![z](https://e/f.png)\n![broken\nline](g.png)";
-        let srcs: Vec<String> = image_refs(text).into_iter().map(|item| item.src).collect();
-        assert_eq!(srcs, ["note.assets/a%20b.png", "note.assets/c d.gif", "https://e/f.png"]);
-    }
 
     #[test]
     fn embeds_local_images_and_packs_the_originals() {

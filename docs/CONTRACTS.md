@@ -43,7 +43,9 @@ a path string.
 
 open_file(path) returns OpenedFile. save_file(path, text, encoding, bom,
 lineEnding) returns SaveResult and rejects non-editable formats. save_as(text,
-formatId, suggestedName) returns an optional SaveResult. pick_file returns an
+formatId, suggestedName, docPath?) returns an optional SaveResult; docPath is
+where the text lived until now, so a `.mdz` package can still read images
+linked relative to it. pick_file returns an
 optional path. new_document returns NewDocument. list_creatable_formats and
 format_for_extension expose the format registry. read_image(docPath, src)
 returns a validated local-image URL. open_in_new_window, reveal_in_explorer, and

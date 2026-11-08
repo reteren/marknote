@@ -18,6 +18,30 @@ and reports it honestly in the status bar.
 Live preview, autosave, and everything in [SPEC.md](SPEC.md). This is the main
 scenario; everything else is an addition.
 
+### A+ · Markdown with images
+
+`.mdz`
+
+One file that carries a Markdown document and every picture it shows, so it
+can be sent on like a PDF. It is an ordinary ZIP archive: `<name>.md` at the
+root, the pictures in `images/`, links in the text pointing there
+(`![alt|400](images/shot.png)`). Unpacked by hand, it is a normal Markdown
+folder any editor shows with its pictures.
+
+Opening copies the pictures into the shared image folder (Settings ->
+Attachments) and points the links at it, so editing is plain class A: paste,
+resize, delete. Opening the same package again reuses the copies it made; a
+different picture under a taken name gets a content-derived name and never
+overwrites the other one. Saving, including autosave, packs every local image
+the text references; remote and `data:` images stay links, and an image that
+cannot be read keeps its link. Entries outside `images/`, nested folders and
+non-image files are ignored.
+
+`File -> Save as Markdown with Images (.mdz)…` turns an open Markdown
+document into a package; the tab continues in the new file. Unlike
+`Export as ZIP`, which writes a one-off copy with images as data URIs, a
+package is a working document. Adapter: `src-tauri/src/formats/package.rs`.
+
 ### B · Plain text
 
 `.txt` `.log` `.ini` `.cfg` `.conf` `.env` `.csv` `.tsv`
@@ -82,6 +106,7 @@ than pretend otherwise.
 | Class | Extensions | Preview | Editing | Create from scratch | Autosave | Losses |
 | --- | --- | --- | --- | --- | --- | --- |
 | A | md, markdown, mdown, mkd | Markdown | yes | yes | yes | no |
+| A+ | mdz | Markdown | yes | yes | yes | no |
 | B | txt, log, ini, cfg, env, csv, tsv | none | yes | yes | yes | no |
 | C | json, yaml, toml, xml, html, css, js, ts, rs, py, … | code highlighting | yes | yes | yes | no |
 | D | rtf | Markdown | yes | yes | no | yes |
@@ -117,18 +142,25 @@ bar; the text is preserved and only the rules change. Details are in
 The Rust-side trait is in `src-tauri/src/formats/mod.rs`:
 
 ~~~rust
-pub trait FormatAdapter {
-    fn capabilities(&self) -> FormatCapabilities;
-    fn load(&self, path: &Path) -> Result<LoadedDocument>;
-    fn save(&self, path: &Path, doc: &LoadedDocument) -> Result<()>;
+pub trait FormatAdapter: Send + Sync {
+    fn caps(&self) -> FormatCapabilities;
+    fn decode(&self, bytes: &[u8]) -> anyhow::Result<Decoded>;
+    fn encode(&self, text: &str, src: &Decoded) -> anyhow::Result<Vec<u8>>;
+    // The commands call these; by default they forward to decode/encode.
+    fn decode_in(&self, bytes: &[u8], context: &FormatContext) -> anyhow::Result<Decoded>;
+    fn encode_in(&self, text: &str, src: &Decoded, context: &FormatContext) -> anyhow::Result<Vec<u8>>;
 }
 
-pub struct LoadedDocument {
-    pub text: String,
-    pub encoding: Encoding,   // UTF-8, UTF-8 BOM, UTF-16LE, CP1251
-    pub line_ending: LineEnding, // CRLF or LF
+pub struct FormatContext<'a> {
+    pub doc_path: Option<&'a Path>,
+    pub images: &'a dyn ImageStore, // the shared image folder
 }
 ~~~
+
+`Decoded` (in `encoding.rs`) holds the text, its encoding (UTF-8, UTF-8 BOM,
+UTF-16LE, CP1251, …) and line ending (CRLF or LF). Only container formats such
+as `.mdz` use the context; `ImageStore` is implemented in `attachments.rs`, so
+the format code has no file system policy of its own.
 
 The dispatcher chooses an adapter by extension. For an unknown extension, a
 text-like file uses class B; a binary file produces a rejection message.

@@ -17,7 +17,7 @@
 import { onMount, tick } from "svelte";
   import { installZoom, resetZoom, zoomIn, zoomOut } from "./editor/zoom";
   import { safeLinkHref } from "./editor/livePreview/inline";
-  import { createActions } from "./state/actions";
+  import { adoptSavedText, createActions } from "./state/actions";
   import {
     createEditor,
     createEditorState,
@@ -45,7 +45,7 @@ import { onMount, tick } from "svelte";
     type OpenedFile,
     type SaveResult,
   } from "./state/document.svelte";
-  import { acceptsImages, containsImages, formatsState, loadCreatableFormats, markdownFormat, type FormatCapabilities } from "./state/formats.svelte";
+  import { acceptsImages, containsImages, formatsState, loadCreatableFormats, markdownFormat, markdownPackageFormat, type FormatCapabilities } from "./state/formats.svelte";
   import MenuBar from "./ui/MenuBar.svelte";
   import SaveControls from "./ui/SaveControls.svelte";
   import StartScreen from "./ui/StartScreen.svelte";
@@ -161,10 +161,12 @@ import { EditorView, type EditorView as EditorViewType } from "@codemirror/view"
   /** Images can be inserted and exported only in an editable Markdown document. */
   const imagesAllowed = $derived(!isReadOnly && acceptsImages(documentState.format));
   const canExportZip = $derived(imagesAllowed && containsImages(documentState.text));
+  const canSaveAsPackage = $derived(imagesAllowed && documentState.format.id !== markdownPackageFormat.id);
 
   const menuState = $derived({
     imagesAllowed,
     canExportZip,
+    canSaveAsPackage,
     editable: !isReadOnly,
     readOnly: isReadOnly,
     hasSelection: stats.selection !== null,
@@ -345,22 +347,34 @@ import { EditorView, type EditorView as EditorViewType } from "@codemirror/view"
     });
   }
 
-  async function saveDocumentAsMarkdown(): Promise<boolean> {
+  function saveDocumentAsMarkdown(): Promise<boolean> {
+    return saveDocumentInFormat(markdownFormat);
+  }
+
+  /** Save As into one file with the pictures inside (.mdz); the tab continues in it. */
+  function saveDocumentAsPackage(): Promise<boolean> {
+    if (!canSaveAsPackage) return Promise.resolve(false);
+    const format = formatsState.items.find((item) => item.id === markdownPackageFormat.id) ?? markdownPackageFormat;
+    return saveDocumentInFormat(format);
+  }
+
+  async function saveDocumentInFormat(format: FormatCapabilities): Promise<boolean> {
     const currentName = documentState.path?.split(/[\\/]/u).pop() ?? "Untitled";
     const stem = currentName.replace(/\.[^.]*$/u, "") || "Untitled";
-    const suggestedName = `${stem}.md`;
+    const suggestedName = `${stem}.${format.defaultExtension}`;
     try {
       // Use the shared saveAs path rather than IPC directly: it is the only
       // path that applies the write-time text policy — trimming trailing
       // whitespace and adding a final newline. A direct call would save
       // differently from Ctrl+S.
       const result = await saveAsFile(
-        { text: documentState.text, format: markdownFormat },
+        { text: documentState.text, format, path: documentState.path },
         suggestedName,
       );
       if (!result) return false;
       const formatChanged = result.format.id !== documentState.format.id;
       markSaved(result, documentState.text);
+      adoptSavedText(documentState, result, editorView);
       if (editorView) {
         setEditorDocumentPath(editorView, result.path);
         if (formatChanged) void setEditorFormat(editorView, result.format);
@@ -992,6 +1006,7 @@ import { EditorView, type EditorView as EditorViewType } from "@codemirror/view"
       case "file.open": void pickFile(); break;
       case "file.save": void saveNow(); break;
       case "file.saveAs": void saveDocumentAs(); break;
+      case "file.saveAsPackage": void saveDocumentAsPackage(); break;
       case "file.exportZip": void exportAsZip(); break;
       case "file.close":
         if (workspace.tabs.length > 1) {

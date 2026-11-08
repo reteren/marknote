@@ -32,6 +32,8 @@ export type SaveResult = {
   savedAt: string;
   baseFingerprint?: FileFingerprint | null;
   format: FormatCapabilities;
+  /** The text as the file now holds it, when saving changed its form (a .mdz package relinks images). */
+  text?: string;
 };
 
 export type NewDocument = {

@@ -240,6 +240,7 @@ describe("application actions", () => {
       text: "draft",
       formatId: "plain",
       suggestedName: "Untitled.txt",
+      docPath: null,
     });
     expect(documentState.path).toBe("C:/notes/draft.txt");
   });

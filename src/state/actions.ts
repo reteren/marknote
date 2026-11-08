@@ -242,6 +242,34 @@ function replaceEditorText(view: EditorView | null | undefined, text: string): v
   });
 }
 
+/**
+ * Takes over the text a save handed back (a .mdz package points its image
+ * links at the image folder). Only the span that differs is replaced, so the
+ * caret and scroll position stay where they were, and the result counts as saved.
+ */
+export function adoptSavedText(
+  state: DocumentState,
+  result: SaveResult,
+  view: EditorView | null | undefined,
+): void {
+  const text = result.text;
+  if (text === undefined || text === state.text) return;
+  const current = view ? view.state.doc.toString() : state.text;
+  let start = 0;
+  while (start < current.length && start < text.length && current[start] === text[start]) start += 1;
+  let end = 0;
+  while (
+    end < current.length - start &&
+    end < text.length - start &&
+    current[current.length - 1 - end] === text[text.length - 1 - end]
+  ) end += 1;
+  view?.dispatch({
+    changes: { from: start, to: current.length - end, insert: text.slice(start, text.length - end) },
+  });
+  state.text = text;
+  markSaved(result, text, state);
+}
+
 function selectedText(view: EditorView): { from: number; to: number; text: string } {
   const range = view.state.selection.main;
   return { from: range.from, to: range.to, text: view.state.sliceDoc(range.from, range.to) };
@@ -707,6 +735,7 @@ export function createActions(dependencies: ActionsDependencies = {}): AppAction
       const result = await saveAsFile(state, suggestedName);
       if (!result) return false;
       markSaved(result, beforeText);
+      adoptSavedText(state, result, getView());
       return true;
     } catch (error) {
       notify(error instanceof Error ? error.message : String(error));
