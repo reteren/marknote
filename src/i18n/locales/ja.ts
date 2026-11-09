@@ -22,7 +22,7 @@ const ja = {
   "menu.open": "開く…",
   "menu.save": "保存",
   "menu.saveAs": "名前を付けて保存…",
-  "menu.exportMdz": "MDZ としてエクスポート（画像付き）…",
+  "menu.exportMdz": ".mdz としてエクスポート（画像付き）…",
   "menu.close": "閉じる",
   "menu.undo": "元に戻す",
   "menu.redo": "やり直す",

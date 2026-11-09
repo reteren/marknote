@@ -1,5 +1,5 @@
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     fs::{self, File, OpenOptions},
     io::{self, Write},
     path::{Path, PathBuf},
@@ -24,6 +24,11 @@ pub(crate) const ATTACHMENT_SCHEME: &str = "marknote-attachment";
 const IMAGES_PREFIX: &str = "marknote-images/";
 /// Older prefix for images staged by unsaved documents; they live in the same folder.
 const CACHE_PREFIX: &str = "marknote-cache/";
+/// Link prefix for the pictures of a `.mdz` package: `images/image-1.png`,
+/// the same short link the archive holds, never a path on this computer.
+pub(crate) const PACKAGE_PREFIX: &str = "images/";
+/// Sub-folder of the image folder where opened packages keep their pictures.
+const PACKAGES_DIR: &str = "packages";
 const MAX_REGISTRY_ID: u64 = u64::MAX;
 
 #[derive(Clone, Default)]
@@ -461,6 +466,9 @@ fn save_bytes_in_roots(
     }
     let file_name = file_name.unwrap_or("image.png");
     let (stem, extension) = sanitized_name(file_name)?;
+    if let Some(package) = doc_path.filter(|path| is_package(path)) {
+        return save_in_package(package, cache_root, &extension, data);
+    }
     let (root, src_prefix, cached) = destination_root(doc_path, cache_root)?;
     fs::create_dir_all(&root)?;
     let root = windows::canonical_path(&root).map_err(CommandError::InvalidPath)?;
@@ -481,11 +489,98 @@ fn copy_source_in_roots(
             source.to_string_lossy().into_owned(),
         ));
     }
+    if let Some(package) = doc_path.filter(|path| is_package(path)) {
+        return save_in_package(package, cache_root, &extension, &data);
+    }
     let (root, src_prefix, cached) = destination_root(doc_path, cache_root)?;
     fs::create_dir_all(&root)?;
     let root = windows::canonical_path(&root).map_err(CommandError::InvalidPath)?;
     let target = create_unique(&root, &stem, &extension, |file| file.write_all(&data))?;
     Ok(attachment_ref(target, src_prefix, cached))
+}
+
+/// A picture added to a `.mdz` document goes to that package's own folder as
+/// `image-<n>`, and the text gets the short link the archive will hold.
+fn save_in_package(
+    package: &Path,
+    cache_root: &Path,
+    extension: &str,
+    data: &[u8],
+) -> Result<AttachmentRef, CommandError> {
+    let root = package_dir(cache_root, package);
+    fs::create_dir_all(&root)?;
+    // One number per picture, whatever its type: no image-1.png beside image-1.gif.
+    let numbered: HashSet<String> = fs::read_dir(&root)?
+        .flatten()
+        .filter_map(|entry| entry.file_name().to_str().map(str::to_lowercase))
+        .filter_map(|name| Some(name.rsplit_once('.')?.0.to_owned()))
+        .collect();
+    for number in 1u32.. {
+        if numbered.contains(&format!("image-{number}")) {
+            continue;
+        }
+        let name = format!("image-{number}.{extension}");
+        let target = root.join(&name);
+        match OpenOptions::new().write(true).create_new(true).open(&target) {
+            Ok(mut file) => {
+                if let Err(error) = file.write_all(data) {
+                    drop(file);
+                    let _ = fs::remove_file(&target);
+                    return Err(CommandError::Io(error));
+                }
+                return Ok(AttachmentRef {
+                    src: format!("{PACKAGE_PREFIX}{name}"),
+                    path: target.to_string_lossy().into_owned(),
+                    cached: false,
+                });
+            }
+            Err(error) if error.kind() == io::ErrorKind::AlreadyExists => continue,
+            Err(error) => return Err(CommandError::Io(error)),
+        }
+    }
+    unreachable!("the image counter is unbounded")
+}
+
+/// A `.mdz` document: its pictures are linked as `images/<name>`.
+pub(crate) fn is_package(doc_path: &Path) -> bool {
+    doc_path
+        .extension()
+        .and_then(|value| value.to_str())
+        .is_some_and(|value| value.eq_ignore_ascii_case(crate::formats::package::EXTENSION))
+}
+
+/// Where the pictures of one opened package live: a folder per package file,
+/// named by a hash of its path, inside the image folder.
+pub(crate) fn package_dir(cache_root: &Path, package: &Path) -> PathBuf {
+    let canonical = windows::canonical_path(package).unwrap_or_else(|_| package.to_path_buf());
+    let key = image_link(&canonical).to_lowercase();
+    cache_root.join(PACKAGES_DIR).join(format!("{:016x}", fnv1a(key.as_bytes())))
+}
+
+/// The text of a package with each `images/` link replaced by the real path
+/// of that picture, for a copy saved in another format.
+pub(crate) fn unpackaged_links(text: &str, package: &Path, cache_root: &Path) -> String {
+    let root = package_dir(cache_root, package);
+    crate::formats::image_links::rewrite_image_links(text, |src| {
+        let decoded = percent_decode(src);
+        let name = decoded.strip_prefix(PACKAGE_PREFIX)?;
+        if name.is_empty() || name.contains(['/', '\\']) {
+            return None;
+        }
+        let path = windows::canonical_path(&root.join(name)).ok()?;
+        let mut link = String::new();
+        for value in image_link(&path).chars() {
+            match value {
+                ' ' => link.push_str("%20"),
+                '(' => link.push_str("%28"),
+                ')' => link.push_str("%29"),
+                '<' => link.push_str("%3C"),
+                '>' => link.push_str("%3E"),
+                other => link.push(other),
+            }
+        }
+        Some(link)
+    })
 }
 
 fn attachment_ref(path: PathBuf, _src_prefix: String, cached: bool) -> AttachmentRef {
@@ -594,7 +689,19 @@ fn validate_image_path_exact(
         ));
     }
     let store_relative = src.strip_prefix(IMAGES_PREFIX).or_else(|| src.strip_prefix(CACHE_PREFIX));
-    let (root, candidate) = if is_drive_path(src) {
+    let package_relative = doc_path
+        .map(Path::new)
+        .filter(|path| is_package(path))
+        .and_then(|path| Some((path, src.strip_prefix(PACKAGE_PREFIX)?)));
+    let (root, candidate) = if let Some((package, name)) = package_relative {
+        if name.is_empty() {
+            return Err(CommandError::Message(UserMessage::InvalidPath));
+        }
+        let root = ensure_cache_root(&package_dir(cache_root, package))?;
+        let candidate =
+            windows::canonical_path(&root.join(name)).map_err(CommandError::InvalidPath)?;
+        (root, candidate)
+    } else if is_drive_path(src) {
         // An absolute link is accepted only into the image folder. When it
         // points elsewhere - the folder was moved in Settings, or the note
         // came from another computer - the same file name in the current
@@ -813,41 +920,43 @@ impl crate::formats::ImageStore for SharedImageFolder<'_> {
         Some((name, bytes))
     }
 
-    /// Opening the same package again finds the copy made last time instead
-    /// of adding another; a different picture under a taken name gets a name
-    /// derived from its content, so it is never written over the other one.
-    fn store(&self, file_name: &str, bytes: &[u8]) -> anyhow::Result<String> {
+    /// Puts a picture of an opened package into that package's folder. The
+    /// package is the original, so a stale copy under the same name is replaced.
+    fn store(&self, package: Option<&Path>, file_name: &str, bytes: &[u8]) -> anyhow::Result<()> {
+        let package = package.ok_or_else(|| anyhow::anyhow!("the package has no path"))?;
         if bytes.len() as u64 > commands::MAX_IMAGE_BYTES {
             anyhow::bail!("image is too large");
         }
-        let (stem, extension) = sanitized_name(file_name).map_err(|error| anyhow::anyhow!("{error}"))?;
-        fs::create_dir_all(self.root)?;
-        let hash = fnv1a(bytes);
-        for attempt in 0u32.. {
-            let candidate = match attempt {
-                0 => format!("{stem}.{extension}"),
-                1 => format!("{stem}-{hash:016x}.{extension}"),
-                n => format!("{stem}-{hash:016x}-{n}.{extension}"),
-            };
-            let target = self.root.join(&candidate);
-            match OpenOptions::new().write(true).create_new(true).open(&target) {
-                Ok(mut file) => {
-                    if let Err(error) = file.write_all(bytes) {
-                        drop(file);
-                        let _ = fs::remove_file(&target);
-                        return Err(error.into());
-                    }
-                    return Ok(image_link(&windows::canonical_path(&target).map_err(|error| anyhow::anyhow!(error))?));
-                }
-                Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {
-                    if fs::read(&target).is_ok_and(|existing| existing == bytes) {
-                        return Ok(image_link(&windows::canonical_path(&target).map_err(|error| anyhow::anyhow!(error))?));
-                    }
-                }
-                Err(error) => return Err(error.into()),
-            }
+        // The archive's own name is kept, so the link in the text still finds
+        // it; only a plain file name with an image extension is accepted.
+        sanitized_name(file_name).map_err(|error| anyhow::anyhow!("{error}"))?;
+        let plain = !file_name.starts_with('.')
+            && !file_name.ends_with(['.', ' '])
+            && !file_name.chars().any(|value| value.is_control() || r#"<>:"/\|?*"#.contains(value));
+        if !plain {
+            anyhow::bail!("not a plain image file name");
         }
-        unreachable!("the attempt counter is unbounded")
+        let root = package_dir(self.root, package);
+        fs::create_dir_all(&root)?;
+        let target = root.join(file_name);
+        if fs::read(&target).is_ok_and(|existing| existing == bytes) {
+            return Ok(());
+        }
+        fs::write(&target, bytes)?;
+        Ok(())
+    }
+
+    fn taken(&self, package: Option<&Path>, file_name: &str) -> bool {
+        // Compared by name without the extension: image-2.png takes number 2
+        // from a GIF as well.
+        let Some(package) = package else { return false };
+        let stem = |name: &str| name.rsplit_once('.').map_or(name, |(stem, _)| stem).to_lowercase();
+        let wanted = stem(file_name);
+        fs::read_dir(package_dir(self.root, package)).is_ok_and(|entries| {
+            entries
+                .flatten()
+                .any(|entry| entry.file_name().to_str().is_some_and(|name| stem(name) == wanted))
+        })
     }
 }
 
@@ -1173,26 +1282,45 @@ mod tests {
     }
 
     #[test]
-    fn package_images_are_restored_once_and_never_overwrite_another_picture() {
+    fn a_package_keeps_its_pictures_in_its_own_folder_under_short_links() {
         use crate::formats::ImageStore;
         let dir = tempfile::tempdir().expect("temp dir");
         let root = dir.path().join("images");
-        let folder = SharedImageFolder::new(None, &root);
+        let package = dir.path().join("Trip.mdz");
+        fs::write(&package, b"").expect("package");
+        let package_text = package.to_str().unwrap();
 
-        let first = folder.store("ü shot.png", &[1, 2, 3]).expect("store");
-        assert_eq!(first, image_link(&windows::canonical_path(&root).unwrap().join("shot.png")));
-        assert_eq!(folder.store("ü shot.png", &[1, 2, 3]).expect("again"), first);
-        assert_eq!(fs::read_dir(&root).expect("dir").count(), 1);
+        // Pasting into the package: numbered, short link, its own folder.
+        let first = save_bytes_in_roots(Some(&package), &root, Some("shot.png"), b"one").expect("paste");
+        let second = save_bytes_in_roots(Some(&package), &root, Some("x.gif"), b"two").expect("paste");
+        assert_eq!(first.src, "images/image-1.png");
+        assert_eq!(second.src, "images/image-2.gif");
+        assert_eq!(fs::read(package_dir(&root, &package).join("image-1.png")).expect("file"), b"one");
+        assert_eq!(fs::read_dir(&root).expect("root").count(), 1, "only the packages folder");
 
-        let other = folder.store("shot.png", &[9, 9]).expect("other");
-        assert_ne!(other, first);
-        assert_eq!(fs::read(root.join("shot.png")).expect("first kept"), [1, 2, 3]);
-        let other_name = other.rsplit('/').next().unwrap();
-        assert_eq!(fs::read(root.join(other_name)).expect("other copy"), [9, 9]);
-        assert_eq!(folder.store("shot.png", &[9, 9]).expect("other again"), other);
+        // The short link resolves for this package only.
+        let resolved = validate_image_path(Some(package_text), "images/image-1.png", &root).expect("resolve");
+        assert_eq!(fs::read(resolved).expect("read"), b"one");
+        let other = dir.path().join("Other.mdz");
+        assert!(validate_image_path(other.to_str(), "images/image-1.png", &root).is_err());
+        assert!(validate_image_path(Some(package_text), "images/../../x.png", &root).is_err());
 
-        assert!(folder.store("payload.exe", b"MZ").is_err());
-        let (name, bytes) = folder.load(&first).expect("load");
-        assert_eq!((name.as_str(), bytes), ("shot.png", vec![1, 2, 3]));
+        // Opening a package restores its pictures under their archive names.
+        let folder = SharedImageFolder::new(Some(&package), &root);
+        folder.store(Some(&package), "café 1.png", &[1, 2, 3]).expect("store");
+        assert!(folder.taken(Some(&package), "café 1.png"));
+        assert!(folder.taken(Some(&package), "image-2.png"), "a GIF holds number 2");
+        assert!(!folder.taken(Some(&other), "café 1.png"));
+        assert!(folder.store(Some(&package), "payload.exe", b"MZ").is_err());
+        assert!(folder.store(Some(&package), "a:b.png", &[1]).is_err());
+        let (name, bytes) = folder.load("images/caf%C3%A9%201.png").expect("load");
+        assert_eq!((name.as_str(), bytes), ("café 1.png", vec![1, 2, 3]));
+
+        // A copy in another format links the pictures by their real path.
+        let text = unpackaged_links("![a](images/caf%C3%A9%201.png) ![b](images/gone.png)", &package, &root);
+        assert!(text.starts_with("![a](") && text.contains("/packages/") && text.contains("café%201.png)"), "{text}");
+        assert!(text.ends_with("![b](images/gone.png)"), "{text}");
+        let link = text.trim_start_matches("![a](").split(')').next().unwrap();
+        assert!(validate_image_path(None, link, &root).is_ok(), "{link}");
     }
 }

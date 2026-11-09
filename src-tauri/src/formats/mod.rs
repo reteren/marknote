@@ -24,8 +24,10 @@ pub struct FormatCapabilities {
 pub trait ImageStore {
     /// Reads the image a link in the document points to: its file name and bytes.
     fn load(&self, src: &str) -> Option<(String, Vec<u8>)>;
-    /// Puts an image into the folder and returns the link the text should use.
-    fn store(&self, file_name: &str, bytes: &[u8]) -> anyhow::Result<String>;
+    /// Keeps a picture of the package at `package` under its archive name.
+    fn store(&self, package: Option<&Path>, file_name: &str, bytes: &[u8]) -> anyhow::Result<()>;
+    /// Whether that package already keeps a picture under this name, with any extension.
+    fn taken(&self, package: Option<&Path>, file_name: &str) -> bool;
 }
 
 /// What an adapter may need besides the bytes: where the document lives and

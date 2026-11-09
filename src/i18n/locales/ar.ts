@@ -22,7 +22,7 @@ const ar = {
   "menu.open": "فتح…",
   "menu.save": "حفظ",
   "menu.saveAs": "حفظ باسم…",
-  "menu.exportMdz": "تصدير بصيغة MDZ (مع الصور)…",
+  "menu.exportMdz": "تصدير بصيغة .mdz (مع الصور)…",
   "menu.close": "إغلاق",
   "menu.undo": "تراجع",
   "menu.redo": "إعادة",

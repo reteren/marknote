@@ -22,7 +22,7 @@ const it = {
   "menu.open": "Apri…",
   "menu.save": "Salva",
   "menu.saveAs": "Salva con nome…",
-  "menu.exportMdz": "Esporta come MDZ (con immagini)…",
+  "menu.exportMdz": "Esporta come .mdz (con immagini)…",
   "menu.close": "Chiudi",
   "menu.settings": "Impostazioni…",
   "menu.undo": "Annulla",

@@ -22,7 +22,7 @@ const ru = {
   "menu.open": "Открыть…",
   "menu.save": "Сохранить",
   "menu.saveAs": "Сохранить как…",
-  "menu.exportMdz": "Экспорт в MDZ (с картинками)…",
+  "menu.exportMdz": "Экспорт в .mdz (с картинками)…",
   "menu.close": "Закрыть",
   "menu.undo": "Отменить",
   "menu.redo": "Повторить",

@@ -23,7 +23,7 @@ const en = {
   "menu.open": "Open…",
   "menu.save": "Save",
   "menu.saveAs": "Save As…",
-  "menu.exportMdz": "Export as MDZ (with images)…",
+  "menu.exportMdz": "Export as .mdz (with images)…",
   "menu.close": "Close",
   "menu.settings": "Settings…",
   "menu.undo": "Undo",

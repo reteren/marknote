@@ -28,28 +28,34 @@ root, the pictures in `images/`, links in the text pointing there
 (`![alt|400](images/shot.png)`). Unpacked by hand, it is a normal Markdown
 folder any editor shows with its pictures.
 
-Opening copies the pictures into the shared image folder (Settings ->
-Attachments) and points the links at it, so editing is plain class A: paste,
-resize, delete. Opening the same package again reuses the copies it made; a
-different picture under a taken name gets a content-derived name and never
-overwrites the other one. Saving, including autosave, packs every local image
-the text references; remote and `data:` images stay links, and an image that
-cannot be read keeps its link. Entries outside `images/`, nested folders and
-non-image files are ignored.
+The text keeps the archive's short links, `images/image-1.png`, never a path
+on this computer. Opening copies the pictures into a folder of that package's
+own, `<image folder>/packages/<hash of the file's path>/`, where the editor
+resolves `images/…` links for that document; editing is plain class A: paste,
+resize, delete. A picture pasted into a package goes there as the next free
+`image-<n>` (one number per picture, whatever its type). Saving, including
+autosave, packs every local image the text references: package pictures keep
+their names, a picture linked by a real path is packed as the next free
+`image-<n>`; remote and `data:` images stay links, and an image that cannot be
+read keeps its link. Entries outside `images/`, nested folders and non-image
+files are ignored.
 
-`File -> Export as MDZ (with images)…` turns an open Markdown document into a
-package; the tab continues in the new file. Adapter:
-`src-tauri/src/formats/package.rs`.
+`File -> Export as .mdz (with images)…` turns an open Markdown document into a
+package; the text the tab continues with is read back from the new file, so
+every real path becomes a short `images/` link. Save As from a package to any
+other format does the opposite: the short links become real paths of the
+package's pictures. Adapter: `src-tauri/src/formats/package.rs`.
 
 ### Image links
 
-A pasted or dropped image is stored in the image folder and linked by its real
-path with forward slashes, for example
-`![image](C:/Users/me/AppData/Roaming/dev.marknote.app/attachments/image-000091.png)`,
-in `.md` and `.mdz` alike. An absolute link resolves only inside the image
-folder; when it no longer exists there (the folder was moved in Settings, or
-the note came from another computer) the same file name in the current folder
-is used. Older `marknote-images/…` and `marknote-cache/…` links keep working.
+A pasted or dropped image in a `.md` document is stored in the image folder
+and linked by its real path with forward slashes, for example
+`![image](C:/Users/me/AppData/Roaming/dev.marknote.app/attachments/image-000091.png)`;
+in a `.mdz` it gets a short `images/image-<n>` link (above). An absolute link
+resolves only inside the image folder; when it no longer exists there (the
+folder was moved in Settings, or the note came from another computer) the same
+file name in the current folder is used. Older `marknote-images/…` and
+`marknote-cache/…` links keep working.
 
 ### B · Plain text
 

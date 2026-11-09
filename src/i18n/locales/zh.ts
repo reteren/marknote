@@ -22,7 +22,7 @@ const zh = {
   "menu.open": "打开…",
   "menu.save": "保存",
   "menu.saveAs": "另存为…",
-  "menu.exportMdz": "导出为 MDZ（含图片）…",
+  "menu.exportMdz": "导出为 .mdz（含图片）…",
   "menu.close": "关闭",
   "menu.undo": "撤销",
   "menu.redo": "重做",

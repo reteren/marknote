@@ -12,14 +12,16 @@
 //! ```
 //!
 //! Unpacked by hand, it is a normal Markdown folder that any editor shows with
-//! its pictures. Opened in MarkNote, the images are copied into the shared
-//! image folder (Settings -> Attachments) and the links are pointed at it, so
-//! the editor works on the document exactly like on any other Markdown file:
-//! pasting, resizing and deleting images need nothing special. Saving packs
-//! every local image the text references back into the archive.
+//! its pictures. Opened in MarkNote, the text keeps the archive's short links
+//! (`images/image-1.png`, never a path on this computer); the pictures are
+//! copied into a folder of their own inside the image folder (Settings ->
+//! Attachments), where the editor finds them. A picture pasted into the
+//! document goes there too as the next `image-<n>`. Saving packs every local
+//! image the text references back into the archive; one linked from elsewhere
+//! (a real path) is packed under the next free `image-<n>` name.
 
 use std::{
-    collections::{HashMap, HashSet},
+    collections::HashSet,
     io::{Cursor, Read, Write},
     path::Path,
 };
@@ -73,7 +75,7 @@ impl FormatAdapter for PackageAdapter {
     }
 
     fn decode_in(&self, bytes: &[u8], context: &FormatContext<'_>) -> anyhow::Result<encoding::Decoded> {
-        unpack(bytes, context.images)
+        unpack(bytes, context.doc_path, context.images)
     }
 
     fn encode_in(
@@ -86,9 +88,9 @@ impl FormatAdapter for PackageAdapter {
     }
 }
 
-/// Reads the archive: copies its images into the image folder and returns the
-/// text with every link to them pointed at that folder.
-fn unpack(bytes: &[u8], images: &dyn ImageStore) -> anyhow::Result<encoding::Decoded> {
+/// Reads the archive: copies its images into the package's folder and returns
+/// the text as it is, with its short `images/` links.
+fn unpack(bytes: &[u8], doc_path: Option<&Path>, images: &dyn ImageStore) -> anyhow::Result<encoding::Decoded> {
     // A file made empty outside the program opens as an empty document
     // rather than as a broken archive.
     if bytes.is_empty() {
@@ -102,7 +104,6 @@ fn unpack(bytes: &[u8], images: &dyn ImageStore) -> anyhow::Result<encoding::Dec
         .ok_or_else(|| anyhow!("the package has no Markdown document inside"))?;
     let text_bytes = read_limited(&mut archive.by_name(&markdown_name)?, MAX_TEXT_BYTES)?;
 
-    let mut relinked: HashMap<String, String> = HashMap::new();
     for index in 0..archive.len() {
         let mut entry = archive.by_index(index)?;
         if !entry.is_file() {
@@ -120,19 +121,12 @@ fn unpack(bytes: &[u8], images: &dyn ImageStore) -> anyhow::Result<encoding::Dec
             continue;
         }
         let image = read_limited(&mut entry, MAX_IMAGE_BYTES)?;
-        // An entry that is not a supported picture is skipped: its link stays
-        // as written and simply shows nothing, as a missing file would.
-        if let Ok(src) = images.store(file_name, &image) {
-            relinked.insert(name, src);
-        }
+        // An entry that is not a supported picture is skipped: its link
+        // simply shows nothing, as a missing file would.
+        let _ = images.store(doc_path, file_name, &image);
     }
 
     let mut decoded = encoding::decode(&text_bytes);
-    decoded.text = rewrite_image_links(&decoded.text, |src| {
-        let decoded_src = percent_decode(src);
-        let key = decoded_src.strip_prefix("./").unwrap_or(&decoded_src);
-        relinked.get(key).cloned()
-    });
     // The archive is always written as UTF-8 without a BOM.
     decoded.encoding = "utf-8".to_owned();
     decoded.bom = false;
@@ -141,20 +135,35 @@ fn unpack(bytes: &[u8], images: &dyn ImageStore) -> anyhow::Result<encoding::Dec
 
 /// Writes the archive: the text with its local images packed into `images/`.
 fn pack(text: &str, line_ending: encoding::LineEnding, context: &FormatContext<'_>) -> anyhow::Result<Vec<u8>> {
+    let is_remote = |src: &str| src.starts_with("data:") || src.starts_with("http://") || src.starts_with("https://");
+    // Pictures already in the package keep their names, so their links stay
+    // as they are; they are reserved before any new picture is numbered.
     let mut used = HashSet::new();
-    let mut packed: Vec<(String, String, Vec<u8>)> = Vec::new();
+    let _ = rewrite_image_links(text, |src| {
+        if let Some(name) = percent_decode(src).strip_prefix(IMAGES_DIR) {
+            used.insert(name.to_lowercase());
+        }
+        None
+    });
 
+    let mut packed: Vec<(String, String, Vec<u8>)> = Vec::new();
+    let mut named: HashSet<String> = HashSet::new();
     let rewritten = rewrite_image_links(text, |src| {
-        if src.starts_with("data:") || src.starts_with("http://") || src.starts_with("https://") {
+        if is_remote(src) {
             return None;
         }
         if let Some((_, name, _)) = packed.iter().find(|(known, _, _)| known == src) {
             return Some(link_to(name));
         }
-        // An image that cannot be read keeps its link, as ZIP export does:
-        // the text is never changed into something that points nowhere.
+        // An image that cannot be read keeps its link: the text is never
+        // changed into something that points nowhere.
         let (original, bytes) = context.images.load(src)?;
-        let name = unique_name(&original, &mut used);
+        let decoded = percent_decode(src);
+        let name = match decoded.strip_prefix(IMAGES_DIR) {
+            Some(own) if named.insert(own.to_lowercase()) => own.to_owned(),
+            _ => next_number(&original, &mut used, |name| context.images.taken(context.doc_path, name)),
+        };
+        named.insert(name.to_lowercase());
         let link = link_to(&name);
         packed.push((src.to_owned(), name, bytes));
         Some(link)
@@ -203,19 +212,22 @@ fn read_limited(reader: &mut impl Read, limit: u64) -> anyhow::Result<Vec<u8>> {
     Ok(bytes)
 }
 
-/// A file name not yet used in this archive (compared case-insensitively,
-/// as Windows would when the archive is unpacked).
-fn unique_name(name: &str, used: &mut HashSet<String>) -> String {
-    let path = Path::new(name);
-    let stem = path.file_stem().and_then(|value| value.to_str()).unwrap_or("image");
-    let extension = path.extension().and_then(|value| value.to_str()).unwrap_or("png");
-    let mut candidate = format!("{stem}.{extension}");
-    let mut counter = 2;
-    while !used.insert(candidate.to_lowercase()) {
-        candidate = format!("{stem}-{counter}.{extension}");
-        counter += 1;
+/// The next `image-<n>` number free in this archive under any extension, and
+/// free in the package's folder (compared case-insensitively, as Windows would).
+fn next_number(original: &str, used: &mut HashSet<String>, taken: impl Fn(&str) -> bool) -> String {
+    let extension = Path::new(original)
+        .extension()
+        .and_then(|value| value.to_str())
+        .map_or_else(|| "png".to_owned(), str::to_ascii_lowercase);
+    for number in 1u32.. {
+        let candidate = format!("image-{number}.{extension}");
+        let stem = format!("image-{number}.");
+        if !used.iter().any(|name| name.starts_with(&stem)) && !taken(&candidate) {
+            used.insert(candidate.clone());
+            return candidate;
+        }
     }
-    candidate
+    unreachable!("the image counter is unbounded")
 }
 
 #[cfg(test)]
@@ -225,36 +237,48 @@ mod tests {
 
     const PNG: [u8; 4] = [0x89, b'P', b'N', b'G'];
 
-    /// An image folder in memory: links are `marknote-images/<name>`.
+    /// The image folder in memory: `marknote-images/<name>` is the shared
+    /// folder, `images/<name>` the folder of the package being worked on.
     #[derive(Default)]
-    struct Folder(RefCell<BTreeMap<String, Vec<u8>>>);
+    struct Folder {
+        shared: RefCell<BTreeMap<String, Vec<u8>>>,
+        package: RefCell<BTreeMap<String, Vec<u8>>>,
+    }
 
     impl Folder {
         fn with(files: &[(&str, &[u8])]) -> Self {
             let folder = Self::default();
             for (name, bytes) in files {
-                folder.0.borrow_mut().insert((*name).to_owned(), bytes.to_vec());
+                folder.shared.borrow_mut().insert((*name).to_owned(), bytes.to_vec());
             }
             folder
         }
 
         fn get(&self, name: &str) -> Option<Vec<u8>> {
-            self.0.borrow().get(name).cloned()
+            self.package.borrow().get(name).cloned()
         }
     }
 
     impl ImageStore for Folder {
         fn load(&self, src: &str) -> Option<(String, Vec<u8>)> {
-            let name = percent_decode(src.strip_prefix("marknote-images/")?);
-            self.get(&name).map(|bytes| (name.clone(), bytes))
+            let decoded = percent_decode(src);
+            let (map, name) = match decoded.strip_prefix("marknote-images/") {
+                Some(name) => (&self.shared, name),
+                None => (&self.package, decoded.strip_prefix("images/")?),
+            };
+            map.borrow().get(name).map(|bytes| (name.to_owned(), bytes.clone()))
         }
 
-        fn store(&self, file_name: &str, bytes: &[u8]) -> anyhow::Result<String> {
+        fn store(&self, _package: Option<&Path>, file_name: &str, bytes: &[u8]) -> anyhow::Result<()> {
             if !file_name.ends_with(".png") {
                 bail!("unsupported");
             }
-            self.0.borrow_mut().insert(file_name.to_owned(), bytes.to_vec());
-            Ok(format!("marknote-images/{file_name}"))
+            self.package.borrow_mut().insert(file_name.to_owned(), bytes.to_vec());
+            Ok(())
+        }
+
+        fn taken(&self, _package: Option<&Path>, file_name: &str) -> bool {
+            self.package.borrow().contains_key(file_name)
         }
     }
 
@@ -290,28 +314,51 @@ mod tests {
     }
 
     #[test]
-    fn saving_packs_the_images_and_points_links_into_the_archive() {
-        let folder = Folder::with(&[("shot.png", &PNG), ("café 1.png", &[1, 2])]);
+    fn pictures_from_elsewhere_are_numbered_and_package_pictures_keep_their_names() {
+        let folder = Folder::with(&[("shot.png", &PNG), ("café 1.gif", &[1, 2])]);
+        folder.package.borrow_mut().insert("image-1.png".to_owned(), vec![7]);
+        folder.package.borrow_mut().insert("café.png".to_owned(), vec![8]);
         let doc = Path::new("C:/notes/Note.mdz");
-        let text = "# T\n\n![a|400](marknote-images/shot.png)\n\n![b](marknote-images/shot.png)\n\n![c](marknote-images/caf%C3%A9%201.png)\n\n![web](https://e/f.png)\n\n![gone](marknote-images/missing.png)\n";
+        let text = "# T
+
+![a|400](marknote-images/shot.png)
+
+![b](marknote-images/shot.png)
+
+![c](marknote-images/caf%C3%A9%201.gif)
+
+![d](images/image-1.png)
+
+![e](images/caf%C3%A9.png)
+
+![web](https://e/f.png)
+
+![gone](marknote-images/missing.png)
+";
 
         let bytes = PackageAdapter
             .encode_in(text, &lf(), &FormatContext { doc_path: Some(doc), images: &folder })
             .expect("pack");
 
-        assert_eq!(entries(&bytes), ["Note.md", "images/shot.png", "images/café 1.png"]);
+        assert_eq!(
+            entries(&bytes),
+            ["Note.md", "images/image-2.png", "images/image-3.gif", "images/image-1.png", "images/café.png"]
+        );
         let markdown = entry_text(&bytes, "Note.md");
-        assert!(markdown.contains("![a|400](images/shot.png)"));
-        assert!(markdown.contains("![b](images/shot.png)"));
-        assert!(markdown.contains("![c](images/caf%C3%A9%201.png)"));
+        assert!(markdown.contains("![a|400](images/image-2.png)"));
+        assert!(markdown.contains("![b](images/image-2.png)"));
+        assert!(markdown.contains("![c](images/image-3.gif)"));
+        assert!(markdown.contains("![d](images/image-1.png)"));
+        assert!(markdown.contains("![e](images/caf%C3%A9.png)"));
         assert!(markdown.contains("![web](https://e/f.png)"));
         assert!(markdown.contains("![gone](marknote-images/missing.png)"));
     }
 
     #[test]
-    fn a_saved_package_opens_on_another_computer_with_its_images() {
-        let here = Folder::with(&[("shot.png", &PNG), ("café.png", &[1, 2])]);
-        let text = "![a|400](marknote-images/shot.png)\n\n![c](marknote-images/café.png)\n";
+    fn a_saved_package_opens_on_another_computer_with_short_links() {
+        let here = Folder::with(&[("shot.png", &PNG)]);
+        let text = "![a|400](marknote-images/shot.png)
+";
         let bytes = PackageAdapter
             .encode_in(text, &lf(), &FormatContext { doc_path: None, images: &here })
             .expect("pack");
@@ -321,9 +368,16 @@ mod tests {
         let opened = PackageAdapter
             .decode_in(&bytes, &FormatContext { doc_path: None, images: &there })
             .expect("unpack");
-        assert_eq!(opened.text, text);
-        assert_eq!(there.get("shot.png"), Some(PNG.to_vec()));
-        assert_eq!(there.get("café.png"), Some(vec![1, 2]));
+        assert_eq!(opened.text, "![a|400](images/image-1.png)
+");
+        assert_eq!(there.get("image-1.png"), Some(PNG.to_vec()));
+
+        // Saved again, nothing is renamed.
+        let again = PackageAdapter
+            .encode_in(&opened.text, &lf(), &FormatContext { doc_path: None, images: &there })
+            .expect("pack again");
+        assert_eq!(entries(&again), ["document.md", "images/image-1.png"]);
+        assert_eq!(entry_text(&again, "document.md"), opened.text);
     }
 
     #[test]
@@ -365,7 +419,7 @@ mod tests {
             opened.text,
             "![x](images/evil.exe)\n![y](images/../up.png)\n![z](images/a/b.png)\n"
         );
-        assert!(folder.0.borrow().is_empty());
+        assert!(folder.package.borrow().is_empty());
     }
 
     #[test]

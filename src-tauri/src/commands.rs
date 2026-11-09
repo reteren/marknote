@@ -548,6 +548,15 @@ pub async fn save_as(
     // now; a package resolves them there before it moves to the new place.
     let images_root = crate::attachments::cache_dir(&app)?;
     let source_document = docPath.as_deref().map(Path::new).unwrap_or(&path);
+    // The short `images/` links of a package mean nothing outside it: a copy
+    // in another format links its pictures by their real path instead.
+    let leaves_package = crate::attachments::is_package(source_document)
+        && format.id != formats::package::ID;
+    let text = if leaves_package {
+        crate::attachments::unpackaged_links(&text, source_document, &images_root)
+    } else {
+        text
+    };
     let images = crate::attachments::SharedImageFolder::new(Some(source_document), &images_root);
     // The archive's inner document is named after the new file, not the old one.
     let context = formats::FormatContext { doc_path: Some(&path), images: &images };
@@ -564,9 +573,11 @@ pub async fn save_as(
     let _ = recent_files.add(&path.to_string_lossy());
 
     let mut result = save_result(path.clone(), format, base_fingerprint);
-    if result.format.id == formats::package::ID {
-        // Read the package back exactly as opening it would: relative links
-        // that pointed next to the old file now point at the image folder.
+    if leaves_package {
+        result.text = Some(text);
+    } else if result.format.id == formats::package::ID {
+        // Read the package back exactly as opening it would: every picture
+        // now has its short `images/` link and sits in the new package's folder.
         let reopened = adapter
             .decode_in(&bytes, &context)
             .map_err(CommandError::Format)?;
