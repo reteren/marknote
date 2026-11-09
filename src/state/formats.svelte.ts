@@ -26,15 +26,10 @@ export function supportsMarkdownCommands(format: Pick<FormatCapabilities, "edita
   return Boolean(format?.editable && format.livePreview && format.syntaxMode === null);
 }
 
-/** Only Markdown documents can hold images: every insertion path and ZIP export check this.
+/** Only Markdown documents can hold images: every insertion path checks this.
  *  A Markdown package (.mdz) is Markdown that carries its images inside. */
 export function acceptsImages(format: Pick<FormatCapabilities, "id" | "editable"> | null | undefined): boolean {
   return Boolean(format?.editable && (format.id === "markdown" || format.id === markdownPackageFormat.id));
-}
-
-/** Whether Markdown text references at least one image. */
-export function containsImages(text: string): boolean {
-  return /!\[[^\]\n]*\]\([^)\n]+\)/u.test(text);
 }
 
 export const markdownFormat: FormatCapabilities = {

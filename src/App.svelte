@@ -45,7 +45,7 @@ import { onMount, tick } from "svelte";
     type OpenedFile,
     type SaveResult,
   } from "./state/document.svelte";
-  import { acceptsImages, containsImages, formatsState, loadCreatableFormats, markdownFormat, markdownPackageFormat, type FormatCapabilities } from "./state/formats.svelte";
+  import { acceptsImages, formatsState, loadCreatableFormats, markdownFormat, markdownPackageFormat, type FormatCapabilities } from "./state/formats.svelte";
   import MenuBar from "./ui/MenuBar.svelte";
   import SaveControls from "./ui/SaveControls.svelte";
   import StartScreen from "./ui/StartScreen.svelte";
@@ -160,13 +160,11 @@ import { EditorView, type EditorView as EditorViewType } from "@codemirror/view"
   );
   /** Images can be inserted and exported only in an editable Markdown document. */
   const imagesAllowed = $derived(!isReadOnly && acceptsImages(documentState.format));
-  const canExportZip = $derived(imagesAllowed && containsImages(documentState.text));
-  const canSaveAsPackage = $derived(imagesAllowed && documentState.format.id !== markdownPackageFormat.id);
+  const canExportMdz = $derived(imagesAllowed && documentState.format.id !== markdownPackageFormat.id);
 
   const menuState = $derived({
     imagesAllowed,
-    canExportZip,
-    canSaveAsPackage,
+    canExportMdz,
     editable: !isReadOnly,
     readOnly: isReadOnly,
     hasSelection: stats.selection !== null,
@@ -351,9 +349,9 @@ import { EditorView, type EditorView as EditorViewType } from "@codemirror/view"
     return saveDocumentInFormat(markdownFormat);
   }
 
-  /** Save As into one file with the pictures inside (.mdz); the tab continues in it. */
-  function saveDocumentAsPackage(): Promise<boolean> {
-    if (!canSaveAsPackage) return Promise.resolve(false);
+  /** Export as MDZ: one file with the pictures inside; the tab continues in it. */
+  function exportAsMdz(): Promise<boolean> {
+    if (!canExportMdz) return Promise.resolve(false);
     const format = formatsState.items.find((item) => item.id === markdownPackageFormat.id) ?? markdownPackageFormat;
     return saveDocumentInFormat(format);
   }
@@ -493,27 +491,6 @@ import { EditorView, type EditorView as EditorViewType } from "@codemirror/view"
       editorView.focus();
     } else {
       rebuildEditor(true);
-    }
-  }
-
-  /** Saves the Markdown and its images as one ZIP; images are embedded so the file works anywhere. */
-  async function exportAsZip(): Promise<void> {
-    if (!editorView || !canExportZip) return;
-    const currentName = documentState.path?.split(/[\\/]/u).pop() ?? "Untitled";
-    const stem = currentName.replace(/\.[^.]*$/u, "") || "Untitled";
-    try {
-      const result = await invoke<{ path: string; embedded: number; skipped: string[] } | null>("export_markdown_zip", {
-        docPath: documentState.path,
-        text: editorView.state.doc.toString(),
-        suggestedName: `${stem}.md`,
-      });
-      if (!result) return;
-      const name = result.path.split(/[\\/]/u).pop() ?? result.path;
-      attachmentNotice = result.skipped.length
-        ? { message: t("notice.zipExportedWithMissing", { name, count: result.skipped.length }), severity: "warning" }
-        : { message: t("notice.zipExported", { name }), severity: "info" };
-    } catch (error) {
-      reportError(error);
     }
   }
 
@@ -1006,8 +983,7 @@ import { EditorView, type EditorView as EditorViewType } from "@codemirror/view"
       case "file.open": void pickFile(); break;
       case "file.save": void saveNow(); break;
       case "file.saveAs": void saveDocumentAs(); break;
-      case "file.saveAsPackage": void saveDocumentAsPackage(); break;
-      case "file.exportZip": void exportAsZip(); break;
+      case "file.exportMdz": void exportAsMdz(); break;
       case "file.close":
         if (workspace.tabs.length > 1) {
           void handleCloseTab(workspace.activeId);

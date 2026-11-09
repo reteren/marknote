@@ -488,16 +488,35 @@ fn copy_source_in_roots(
     Ok(attachment_ref(target, src_prefix, cached))
 }
 
-fn attachment_ref(path: PathBuf, src_prefix: String, cached: bool) -> AttachmentRef {
-    let name = path
-        .file_name()
-        .and_then(|value| value.to_str())
-        .unwrap_or("image.png");
+fn attachment_ref(path: PathBuf, _src_prefix: String, cached: bool) -> AttachmentRef {
     AttachmentRef {
-        src: format!("{src_prefix}{name}"),
+        src: image_link(&path),
         path: path.to_string_lossy().into_owned(),
         cached,
     }
+}
+
+/// The link written into the text for an image in the image folder: its real
+/// path, so the owner sees where the picture lives (for example
+/// `C:/Users/me/AppData/Roaming/dev.marknote.app/attachments/shot.png`).
+/// Forward slashes, because a backslash before punctuation is an escape in
+/// Markdown and would corrupt the path in other editors; Windows accepts both.
+pub(crate) fn image_link(path: &Path) -> String {
+    let text = path.to_string_lossy();
+    let plain = if let Some(rest) = text.strip_prefix(r"\\?\UNC\") {
+        format!(r"\\{rest}")
+    } else if let Some(rest) = text.strip_prefix(r"\\?\") {
+        rest.to_owned()
+    } else {
+        text.into_owned()
+    };
+    plain.replace('\\', "/")
+}
+
+/// `C:\...` or `C:/...`: a path that names its drive.
+fn is_drive_path(src: &str) -> bool {
+    let bytes = src.as_bytes();
+    bytes.len() > 3 && bytes[0].is_ascii_alphabetic() && bytes[1] == b':' && matches!(bytes[2], b'/' | b'\\')
 }
 
 fn destination_root(
@@ -569,20 +588,40 @@ fn validate_image_path_exact(
     if src.is_empty() {
         return Err(CommandError::Message(UserMessage::InvalidPath));
     }
-    if src.bytes().any(|byte| byte == 0) || commands::has_uri_scheme(src) {
+    if src.bytes().any(|byte| byte == 0) {
         return Err(CommandError::InvalidPath(
             UserMessage::ImagePathMustBeRelative.to_string(),
         ));
     }
-    let source_path = PathBuf::from(src);
-    if source_path.is_absolute() || commands::is_windows_device_path(&source_path) {
+    let store_relative = src.strip_prefix(IMAGES_PREFIX).or_else(|| src.strip_prefix(CACHE_PREFIX));
+    let (root, candidate) = if is_drive_path(src) {
+        // An absolute link is accepted only into the image folder. When it
+        // points elsewhere - the folder was moved in Settings, or the note
+        // came from another computer - the same file name in the current
+        // folder is used, which is where a move or an opened .mdz put it.
+        let root = ensure_cache_root(cache_root)?;
+        let direct = windows::canonical_path(Path::new(src))
+            .ok()
+            .filter(|candidate| commands::path_is_within(&root, candidate));
+        let candidate = match direct {
+            Some(candidate) => candidate,
+            None => {
+                let name = Path::new(src)
+                    .file_name()
+                    .ok_or(CommandError::Message(UserMessage::InvalidPath))?;
+                windows::canonical_path(&root.join(name)).map_err(CommandError::InvalidPath)?
+            }
+        };
+        (root, candidate)
+    } else if commands::has_uri_scheme(src) {
+        return Err(CommandError::InvalidPath(
+            UserMessage::ImagePathMustBeRelative.to_string(),
+        ));
+    } else if PathBuf::from(src).is_absolute() || commands::is_windows_device_path(Path::new(src)) {
         return Err(CommandError::InvalidPath(
             UserMessage::ImagePathAbsoluteOrDevice.to_string(),
         ));
-    }
-
-    let store_relative = src.strip_prefix(IMAGES_PREFIX).or_else(|| src.strip_prefix(CACHE_PREFIX));
-    let (root, candidate) = if let Some(relative) = store_relative {
+    } else if let Some(relative) = store_relative {
         if relative.is_empty() {
             return Err(CommandError::Message(UserMessage::InvalidPath));
         }
@@ -598,7 +637,7 @@ fn validate_image_path_exact(
             .parent()
             .ok_or(CommandError::Message(UserMessage::DocumentFolderRequired))?;
         let candidate =
-            windows::canonical_path(&root.join(source_path)).map_err(CommandError::InvalidPath)?;
+            windows::canonical_path(&root.join(src)).map_err(CommandError::InvalidPath)?;
         (root.to_path_buf(), candidate)
     };
     if !commands::path_is_within(&root, &candidate) || commands::is_windows_device_path(&candidate)
@@ -764,8 +803,13 @@ impl<'a> SharedImageFolder<'a> {
 
 impl crate::formats::ImageStore for SharedImageFolder<'_> {
     fn load(&self, src: &str) -> Option<(String, Vec<u8>)> {
-        let (path, bytes, _) = crate::export_zip::load_image(self.doc_path, src, self.root)?;
+        let path = validate_image_path(self.doc_path, src, self.root).ok()?;
         let name = path.file_name()?.to_str()?.to_owned();
+        let (_, extension) = sanitized_name(&name).ok()?;
+        if !is_supported_extension(&extension) {
+            return None;
+        }
+        let bytes = fs::read(&path).ok()?;
         Some((name, bytes))
     }
 
@@ -793,11 +837,11 @@ impl crate::formats::ImageStore for SharedImageFolder<'_> {
                         let _ = fs::remove_file(&target);
                         return Err(error.into());
                     }
-                    return Ok(format!("{IMAGES_PREFIX}{candidate}"));
+                    return Ok(image_link(&windows::canonical_path(&target).map_err(|error| anyhow::anyhow!(error))?));
                 }
                 Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {
                     if fs::read(&target).is_ok_and(|existing| existing == bytes) {
-                        return Ok(format!("{IMAGES_PREFIX}{candidate}"));
+                        return Ok(image_link(&windows::canonical_path(&target).map_err(|error| anyhow::anyhow!(error))?));
                     }
                 }
                 Err(error) => return Err(error.into()),
@@ -913,7 +957,10 @@ mod tests {
             save_bytes_in_roots(Some(&document), &cache, Some("holiday picture.PNG"), b"png")
                 .expect("save attachment");
 
-        assert_eq!(result.src, "marknote-images/holidaypicture.png");
+        let expected = windows::canonical_path(&cache).unwrap().join("holidaypicture.png");
+        assert_eq!(result.src, image_link(&expected));
+        assert!(result.src.ends_with("/cache/holidaypicture.png"), "{}", result.src);
+        assert!(!result.src.contains('\\') && !result.src.starts_with("//?"), "{}", result.src);
         assert!(!result.cached);
         assert!(Path::new(&result.path).starts_with(windows::canonical_path(&cache).unwrap()));
         assert!(!directory.path().join("note.assets").exists());
@@ -937,7 +984,7 @@ mod tests {
         )
         .expect("copy attachment");
 
-        assert_eq!(result.src, "marknote-images/source.gif");
+        assert!(result.src.ends_with("/cache/source.gif"), "{}", result.src);
         assert_eq!(fs::read(&result.path).unwrap(), b"gif");
     }
 
@@ -947,7 +994,7 @@ mod tests {
         let cache = directory.path().join("cache");
         let result = save_bytes_in_roots(None, &cache, None, b"png").expect("save attachment");
 
-        assert!(result.src.starts_with(IMAGES_PREFIX));
+        assert!(is_drive_path(&result.src), "{}", result.src);
         assert!(!result.cached);
         assert!(Path::new(&result.path).is_file());
     }
@@ -1082,6 +1129,50 @@ mod tests {
     }
 
     #[test]
+    fn image_links_are_plain_paths_with_forward_slashes() {
+        assert_eq!(
+            image_link(Path::new(r"\\?\C:\Users\me\AppData\Roaming\dev.marknote.app\attachments\shot.png")),
+            "C:/Users/me/AppData/Roaming/dev.marknote.app/attachments/shot.png"
+        );
+        assert_eq!(image_link(Path::new(r"\\?\UNC\server\share\a.png")), "//server/share/a.png");
+        assert!(is_drive_path("C:/x/a.png") && is_drive_path(r"d:\x\a.png"));
+        assert!(!is_drive_path("marknote-images/a.png") && !is_drive_path("C:"));
+    }
+
+    #[test]
+    fn absolute_links_resolve_only_into_the_image_folder() {
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let cache = directory.path().join("cache");
+        let saved = save_bytes_in_roots(None, &cache, Some("shot.png"), b"png").expect("save");
+
+        // The link that was written into the text opens the file.
+        let resolved = validate_image_path(None, &saved.src, &cache).expect("own link");
+        assert_eq!(resolved, PathBuf::from(&saved.path));
+        // Percent-encoded spaces in a written link still resolve.
+        let spaced = save_bytes_in_roots(None, &cache, Some("a.png"), b"a").expect("save");
+        assert!(validate_image_path(None, &spaced.src.replace("a.png", "a%2Epng"), &cache).is_ok());
+
+        // An image outside the folder is refused even when it exists.
+        let outside = directory.path().join("outside.png");
+        fs::write(&outside, b"x").expect("outside");
+        let outside_link = image_link(&windows::canonical_path(&outside).unwrap());
+        assert!(validate_image_path(None, &outside_link, &cache).is_err());
+    }
+
+    #[test]
+    fn absolute_links_follow_a_moved_image_folder_by_file_name() {
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let old = directory.path().join("old");
+        let saved = save_bytes_in_roots(None, &old, Some("shot.png"), b"png").expect("save");
+        let new = directory.path().join("new");
+        fs::create_dir_all(&new).expect("new");
+        fs::rename(&saved.path, new.join("shot.png")).expect("move");
+
+        let resolved = validate_image_path(None, &saved.src, &new).expect("followed");
+        assert_eq!(resolved, windows::canonical_path(&new.join("shot.png")).unwrap());
+    }
+
+    #[test]
     fn package_images_are_restored_once_and_never_overwrite_another_picture() {
         use crate::formats::ImageStore;
         let dir = tempfile::tempdir().expect("temp dir");
@@ -1089,14 +1180,14 @@ mod tests {
         let folder = SharedImageFolder::new(None, &root);
 
         let first = folder.store("ü shot.png", &[1, 2, 3]).expect("store");
-        assert_eq!(first, "marknote-images/shot.png");
+        assert_eq!(first, image_link(&windows::canonical_path(&root).unwrap().join("shot.png")));
         assert_eq!(folder.store("ü shot.png", &[1, 2, 3]).expect("again"), first);
         assert_eq!(fs::read_dir(&root).expect("dir").count(), 1);
 
         let other = folder.store("shot.png", &[9, 9]).expect("other");
         assert_ne!(other, first);
         assert_eq!(fs::read(root.join("shot.png")).expect("first kept"), [1, 2, 3]);
-        let other_name = other.trim_start_matches("marknote-images/");
+        let other_name = other.rsplit('/').next().unwrap();
         assert_eq!(fs::read(root.join(other_name)).expect("other copy"), [9, 9]);
         assert_eq!(folder.store("shot.png", &[9, 9]).expect("other again"), other);
 

@@ -37,10 +37,19 @@ the text references; remote and `data:` images stay links, and an image that
 cannot be read keeps its link. Entries outside `images/`, nested folders and
 non-image files are ignored.
 
-`File -> Save as Markdown with Images (.mdz)…` turns an open Markdown
-document into a package; the tab continues in the new file. Unlike
-`Export as ZIP`, which writes a one-off copy with images as data URIs, a
-package is a working document. Adapter: `src-tauri/src/formats/package.rs`.
+`File -> Export as MDZ (with images)…` turns an open Markdown document into a
+package; the tab continues in the new file. Adapter:
+`src-tauri/src/formats/package.rs`.
+
+### Image links
+
+A pasted or dropped image is stored in the image folder and linked by its real
+path with forward slashes, for example
+`![image](C:/Users/me/AppData/Roaming/dev.marknote.app/attachments/image-000091.png)`,
+in `.md` and `.mdz` alike. An absolute link resolves only inside the image
+folder; when it no longer exists there (the folder was moved in Settings, or
+the note came from another computer) the same file name in the current folder
+is used. Older `marknote-images/…` and `marknote-cache/…` links keep working.
 
 ### B · Plain text
 

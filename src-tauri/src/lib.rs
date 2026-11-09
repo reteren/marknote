@@ -7,7 +7,6 @@ mod encoding;
 mod formats;
 mod messages;
 mod recent_files;
-mod export_zip;
 mod recovery;
 mod settings;
 pub mod spellcheck;
@@ -96,7 +95,6 @@ pub fn run() {
             commands::move_attachments_folder,
             commands::reveal_attachment_cache,
             commands::open_image,
-            commands::export_markdown_zip,
             commands::spellcheck_languages,
             commands::spellcheck_check,
             commands::spellcheck_suggest,

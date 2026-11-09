@@ -21,20 +21,14 @@ function allItems(items: MenuItem[]): MenuItem[] {
 }
 
 describe("menu model", () => {
-  it("offers Export as ZIP only for a Markdown document with images", () => {
-    const ids = (state: Parameters<typeof createMenuModel>[1]) => allItems(createMenuModel([], state).flatMap((section) => section.items)).map((item) => item.id);
-    expect(ids({ imagesAllowed: true, canExportZip: true })).toContain("file.exportZip");
-    expect(ids({ imagesAllowed: true, canExportZip: false })).not.toContain("file.exportZip");
-    expect(ids({})).not.toContain("file.exportZip");
-  });
-
-  it("offers Save as Markdown with Images right after Save As, only where it applies", () => {
+  it("offers Export as MDZ right after Save As, only where it applies, and no ZIP export", () => {
     const fileIds = (state: Parameters<typeof createMenuModel>[1]) =>
       createMenuModel([], state).find((section) => section.id === "file")!.items.map((item) => item.id);
-    const withPackage = fileIds({ imagesAllowed: true, canSaveAsPackage: true });
-    expect(withPackage.indexOf("file.saveAsPackage")).toBe(withPackage.indexOf("file.saveAs") + 1);
-    expect(fileIds({ imagesAllowed: true, canSaveAsPackage: false })).not.toContain("file.saveAsPackage");
-    expect(fileIds({})).not.toContain("file.saveAsPackage");
+    const withPackage = fileIds({ imagesAllowed: true, canExportMdz: true });
+    expect(withPackage.indexOf("file.exportMdz")).toBe(withPackage.indexOf("file.saveAs") + 1);
+    expect(withPackage).not.toContain("file.exportZip");
+    expect(fileIds({ imagesAllowed: true, canExportMdz: false })).not.toContain("file.exportMdz");
+    expect(fileIds({})).not.toContain("file.exportMdz");
   });
 
   it("hides Insert → Image where images are not allowed", () => {
