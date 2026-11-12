@@ -45,3 +45,10 @@ qa/shots/
 # Python leaves these next to the helper scripts.
 __pycache__/
 *.pyc
+
+# Throwaway browser profiles from CDP runs, and the measurement output of the qa/ scripts.
+/.qa-edge-*/
+/qa/*.json
+/qa/*.txt
+/qa/*-report.md
+/qa/*-REPORT.md
